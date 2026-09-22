@@ -1,0 +1,4 @@
+CompileFlags:
+  CompilationDatabase: build
+  Add: [-std=c++20, -DGL_SILENCE_DEPRECATION=1, -DHIFI_PLATFORM_MAC=1]
+
