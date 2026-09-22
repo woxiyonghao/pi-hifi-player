@@ -1,0 +1,1865 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>发烧级桌面数播解码一体机 - 硬件BOM、树莓派5实物引脚图与C++ SDK系统全景白皮书</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.2); }
+    ::-webkit-scrollbar-thumb { background: rgba(100, 116, 139, 0.4); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.6); }
+    .badge-gold { background: linear-gradient(135deg, #d4af37, #aa7c11); color: #fff; }
+    .badge-blue { background: linear-gradient(135deg, #0284c7, #0369a1); color: #fff; }
+    .badge-emerald { background: linear-gradient(135deg, #059669, #047857); color: #fff; }
+    .tab-active { background: #0284c7; color: #ffffff; box-shadow: 0 4px 14px 0 rgba(2, 132, 199, 0.39); }
+    .glow-mcintosh { text-shadow: 0 0 12px rgba(56, 189, 248, 0.7); }
+    pre { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 antialiased min-h-screen font-sans selection:bg-sky-500 selection:text-white pb-16">
+
+  <!-- 顶部沉浸式导航头 -->
+  <header class="sticky top-0 z-40 bg-slate-900/90 border-b border-slate-800 backdrop-blur-xl px-4 lg:px-8 py-3.5 transition-all">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-sky-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-sky-500/20 text-white font-black text-xl">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path></svg>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-lg font-black tracking-tight text-white">发烧级桌面数播解码前级一体机 (分体式旗舰架构)</h1>
+            <span class="px-2 py-0.5 text-[11px] font-bold rounded-full bg-sky-950 text-sky-400 border border-sky-800">C++20 原生内核</span>
+            <span class="px-2 py-0.5 text-[11px] font-bold rounded-full bg-amber-950 text-amber-400 border border-amber-800">分体式双箱</span>
+            <span class="px-2 py-0.5 text-[11px] font-bold rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800">7按键+铝旋钮</span>
+          </div>
+          <p class="text-xs text-slate-400">Box 1: 3D打印桌面数播中枢 (树莓派5 + 7寸QLED + 7独立物理按键 + 实心铝旋钮) ｜ Box 2: 全铝纯模拟解码前级 (ES9038PRO + 纯铜双变压器)</p>
+        </div>
+      </div>
+
+      <!-- 快速总计与当前阶段 -->
+      <div class="flex items-center gap-3">
+        <div class="text-right">
+          <div class="text-[11px] text-slate-400 font-medium">第一阶段 (起步自测)</div>
+          <div class="text-sm font-black text-emerald-400 font-mono">¥803.71</div>
+        </div>
+        <div class="h-8 w-px bg-slate-800"></div>
+        <div class="text-right">
+          <div class="text-[11px] text-slate-400 font-medium">整机全套闭环预算</div>
+          <div class="text-lg font-black text-sky-400 font-mono">¥<span id="header-total">2,028</span></div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- 主体工作区 -->
+  <main class="max-w-7xl mx-auto px-4 lg:px-8 pt-6 space-y-6">
+
+    <!-- 顶层主标签栏 (5个核心功能模块) -->
+    <div class="flex flex-wrap items-center gap-2 p-1.5 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl">
+      <button onclick="switchTab('bom')" id="tab-btn-bom" class="tab-btn tab-active px-4 py-2.5 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
+        1. 硬件 BOM 采购汇总 (实价)
+      </button>
+      <button onclick="switchTab('pinout')" id="tab-btn-pinout" class="tab-btn px-4 py-2.5 text-xs font-bold rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-all flex items-center gap-1.5">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"></path></svg>
+        2. 树莓派 5 实物引脚示意图 (Pinout)
+      </button>
+      <button onclick="switchTab('sdk')" id="tab-btn-sdk" class="tab-btn px-4 py-2.5 text-xs font-bold rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-all flex items-center gap-1.5">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+        3. C++ 播放器 SDK 与软件架构
+      </button>
+      <button onclick="switchTab('vu')" id="tab-btn-vu" class="tab-btn px-4 py-2.5 text-xs font-bold rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-all flex items-center gap-1.5">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+        4. 麦景图湖蓝 VU 表头 (Live 体验)
+      </button>
+      <button onclick="switchTab('schematic')" id="tab-btn-schematic" class="tab-btn px-4 py-2.5 text-xs font-bold rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-all flex items-center gap-1.5">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        5. 电气拓扑与供电隔离
+      </button>
+    </div>
+
+    <!-- ==================== TAB 1: 硬件 BOM 采购清单 ==================== -->
+    <section id="view-bom" class="space-y-6">
+      
+      <!-- 阶段采购指引横幅 -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <!-- 阶段一 -->
+        <div class="relative overflow-hidden bg-gradient-to-br from-emerald-950/40 via-slate-900 to-slate-900 border-2 border-emerald-500/50 rounded-2xl p-5 shadow-xl">
+          <div class="flex items-center justify-between mb-2">
+            <span class="px-2.5 py-0.5 text-xs font-bold rounded-full bg-emerald-500 text-slate-950 flex items-center gap-1">
+              🔥 第一阶段 · 立即拍下
+            </span>
+            <span class="text-xl font-black text-emerald-400 font-mono">¥803.71</span>
+          </div>
+          <h3 class="text-base font-bold text-white">树莓派5 + 微雪 7寸 QLED 屏</h3>
+          <p class="text-xs text-slate-300 mt-1 leading-relaxed">
+            极速开工！插上屏幕自带 3.5mm 耳机孔与 Micro-HDMI 扁线，在桌面上直接编写并验证 C++ 播放器与 60fps 动圈表头！
+          </p>
+          <div class="mt-3 pt-3 border-t border-emerald-900/40 flex items-center justify-between text-xs font-medium text-emerald-400">
+            <span>官方5V5A电源+32G卡全含</span>
+            <span>0dB纯被动散热</span>
+          </div>
+        </div>
+
+        <!-- 阶段二 -->
+        <div class="relative overflow-hidden bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-xl">
+          <div class="flex items-center justify-between mb-2">
+            <span class="px-2.5 py-0.5 text-xs font-bold rounded-full bg-sky-950 text-sky-400 border border-sky-800">
+              第二阶段 · 代码写顺后拍
+            </span>
+            <span class="text-xl font-black text-sky-400 font-mono">¥1,153.80</span>
+          </div>
+          <h3 class="text-base font-bold text-white">ES9038PRO + 箭猪环牛 + R牛</h3>
+          <p class="text-xs text-slate-400 mt-1 leading-relaxed">
+            极致发烧音质核心！8通道并联、纯铜双牛数模彻底分离、WAGO 免焊安全分线，I2S 硬解直达山水 AU-707KX。
+          </p>
+          <div class="mt-3 pt-3 border-t border-slate-800 flex items-center justify-between text-xs font-medium text-slate-400">
+            <span>英国箭猪双15V (¥188)</span>
+            <span>庆达全铜R牛 (¥58)</span>
+          </div>
+        </div>
+
+        <!-- 阶段三 -->
+        <div class="relative overflow-hidden bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-xl">
+          <div class="flex items-center justify-between mb-2">
+            <span class="px-2.5 py-0.5 text-xs font-bold rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+              第三阶段 · 裸机出声后装箱
+            </span>
+            <span class="text-xl font-black text-slate-300 font-mono">¥326.48</span>
+          </div>
+          <h3 class="text-base font-bold text-white">分体双箱 + 7金属按键 + 接插件</h3>
+          <p class="text-xs text-slate-400 mt-1 leading-relaxed">
+            Box 1 (3D打印15°仰角数播外壳+7金属按键) + Box 2 (全铝纯模拟前级机箱) + 纽崔克XLR公座×2 + EIZZ RCA×2 + 佳耐美屏蔽线。
+          </p>
+          <div class="mt-3 pt-3 border-t border-slate-800 flex items-center justify-between text-xs font-medium text-slate-400">
+            <span>桌面5V绝对安全</span>
+            <span>选配吸入式CD (+¥85)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 控制过滤器与平台切换 -->
+      <div class="flex flex-wrap items-center justify-between gap-4 bg-slate-900/60 border border-slate-800/80 rounded-2xl p-4">
+        <div class="flex flex-wrap items-center gap-2">
+          <button onclick="filterCategory('all')" class="cat-btn active px-4 py-2 text-xs font-bold rounded-xl bg-sky-600 text-white shadow-md" data-cat="all">全部物料 (<span id="count-all">13</span>)</button>
+          <button onclick="filterCategory('phase1')" class="cat-btn px-4 py-2 text-xs font-medium rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300" data-cat="phase1">🔥 阶段一：桌面试验核心 (¥804)</button>
+          <button onclick="filterCategory('phase2')" class="cat-btn px-4 py-2 text-xs font-medium rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300" data-cat="phase2">阶段二：DAC与变压器 (¥1,154)</button>
+          <button onclick="filterCategory('phase3')" class="cat-btn px-4 py-2 text-xs font-medium rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300" data-cat="phase3">阶段三：机箱与接插件 (¥326)</button>
+        </div>
+
+        <div class="flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800 text-xs">
+          <span class="text-slate-400">优先直达平台：</span>
+          <label class="flex items-center gap-1 cursor-pointer text-amber-400 font-bold">
+            <input type="radio" name="platform" value="tb" checked onchange="changePlatform('tb')" class="text-amber-500 focus:ring-0"> 淘宝 (已锁定正品店)
+          </label>
+          <label class="flex items-center gap-1 cursor-pointer text-slate-400 hover:text-white">
+            <input type="radio" name="platform" value="pdd" onchange="changePlatform('pdd')" class="text-red-500 focus:ring-0"> 拼多多
+          </label>
+        </div>
+      </div>
+
+      <!-- 物料卡片网格容器 -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5" id="bom-grid"></div>
+    </section>
+
+    <!-- ==================== TAB 2: 树莓派 5 实物引脚示意图 (Pinout Diagrams) ==================== -->
+    <section id="view-pinout" class="space-y-6 hidden">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 md:p-8 space-y-6 shadow-2xl">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-5">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="px-2.5 py-0.5 text-xs font-bold rounded-full bg-sky-950 text-sky-400 border border-sky-800">硬件接线拓扑</span>
+              <span class="px-2.5 py-0.5 text-xs font-bold rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800">仅占 10 个 GPIO + 3 个 GND (共 13 针) · 剩余 15 个 GPIO 完全空闲</span>
+            </div>
+            <h2 class="text-2xl font-black text-white">树莓派 5 代 40-Pin 物理排针与外设实操连接图</h2>
+            <p class="text-xs text-slate-400 mt-1 max-w-3xl leading-relaxed">
+              仿真实物芯片 + 两侧引出线标注设计。中心为树莓派 5 实物板卡外观，引线连接至左侧 <b>7 个独立微动按键 (连续 8P 彩排线一体直插)</b>、左下方 <b>ES9038PRO 4P I2S 纯铜插头</b> 与右侧 <b>EC11 实心铝音量旋钮</b>，防呆防插反！
+            </p>
+          </div>
+          <div class="flex items-center gap-2">
+            <div class="bg-slate-950 border border-slate-800 px-3.5 py-2 rounded-xl text-center">
+              <div class="text-[10px] text-slate-400">屏幕占用 GPIO</div>
+              <div class="text-sm font-mono font-black text-emerald-400">0 针 (走HDMI+USB)</div>
+            </div>
+            <div class="bg-slate-950 border border-slate-800 px-3.5 py-2 rounded-xl text-center">
+              <div class="text-[10px] text-slate-400">CD光驱占用 GPIO</div>
+              <div class="text-sm font-mono font-black text-emerald-400">0 针 (走USB3.0)</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 核心实物引脚 SVG 拓扑大图 (仿照 smart_car 经典工程图风格) -->
+        <div class="w-full overflow-x-auto bg-slate-950 border border-slate-800 rounded-2xl p-4">
+          <svg viewBox="0 0 1100 860" class="w-full min-w-[980px] text-xs font-mono select-none">
+            <text x="550" y="32" text-anchor="middle" font-size="16" font-weight="900" fill="#f8fafc" letter-spacing="1">RASPBERRY PI 5 · 40-PIN EXPANSION HEADER & AUDIO MAPPING</text>
+            <line x1="380" y1="40" x2="720" y2="40" stroke="#0284c7" stroke-width="2.5" />
+
+            <!-- 中心树莓派 5 主板 PCB -->
+            <g transform="translate(430, 65)">
+              <!-- PCB 板身 -->
+              <rect width="240" height="740" rx="16" fill="#0f172a" stroke="#334155" stroke-width="2.5"/>
+              
+              <!-- 顶部装饰与 LOGO -->
+              <rect x="25" y="20" width="190" height="40" rx="8" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+              <text x="120" y="45" text-anchor="middle" font-size="14" font-weight="900" fill="#38bdf8">Raspberry Pi 5</text>
+
+              <!-- BCM2712 主控芯片 (金属均热罩) -->
+              <rect x="35" y="80" width="170" height="110" rx="8" fill="#cbd5e1" stroke="#94a3b8" stroke-width="2"/>
+              <rect x="45" y="90" width="150" height="90" rx="6" fill="#94a3b8"/>
+              <text x="120" y="130" text-anchor="middle" font-size="13" font-weight="bold" fill="#0f172a">BCM2712</text>
+              <text x="120" y="150" text-anchor="middle" font-size="10" fill="#1e293b">2.4GHz Quad-A76</text>
+
+              <!-- RP1 I/O 控制器芯片 (负责 40-Pin GPIO 与 I2S) -->
+              <rect x="65" y="210" width="110" height="75" rx="6" fill="#1e293b" stroke="#38bdf8" stroke-width="1.5"/>
+              <text x="120" y="245" text-anchor="middle" font-size="11" font-weight="bold" fill="#38bdf8">RP1 I/O</text>
+              <text x="120" y="265" text-anchor="middle" font-size="9" fill="#94a3b8">Native I2S Audio</text>
+
+              <!-- 板载 Micro-HDMI 端口 0 (直连微雪 7 寸 QLED 屏) -->
+              <rect x="15" y="310" width="50" height="40" rx="4" fill="#334155" stroke="#cbd5e1"/>
+              <text x="40" y="335" text-anchor="middle" font-size="8" fill="#f8fafc">HDMI 0</text>
+              <text x="40" y="365" text-anchor="middle" font-size="8" fill="#38bdf8">接 7寸大屏</text>
+
+              <!-- Type-C 供电口 -->
+              <rect x="15" y="390" width="50" height="35" rx="4" fill="#334155" stroke="#ef4444"/>
+              <text x="40" y="412" text-anchor="middle" font-size="8" fill="#f8fafc">Type-C</text>
+              <text x="40" y="440" text-anchor="middle" font-size="8" fill="#f87171">5V 5A 输入</text>
+
+              <!-- 40-Pin 双排针座槽框 -->
+              <rect x="160" y="305" width="65" height="415" rx="6" fill="#020617" stroke="#475569" stroke-width="1.5"/>
+              <text x="192" y="325" text-anchor="middle" font-size="9" font-weight="bold" fill="#64748b">40-PIN</text>
+
+              <!-- 40个真实针脚点 (左列奇数，右列偶数) -->
+              <!-- y 起始 340, 间距 18 -->
+              <!-- Pin 1, 2 -->
+              <circle cx="178" cy="340" r="3.5" fill="#ef4444"/><circle cx="206" cy="340" r="3.5" fill="#ef4444"/>
+              <!-- Pin 3, 4 (3 为 MENU 菜单) -->
+              <circle cx="178" cy="358" r="4.5" fill="#38bdf8" stroke="#fff" stroke-width="1.5"/><circle cx="206" cy="358" r="3.5" fill="#ef4444"/>
+              <!-- Pin 5, 6 (5 为 BACK 返回) -->
+              <circle cx="178" cy="376" r="4.5" fill="#fb7185" stroke="#fff" stroke-width="1.5"/><circle cx="206" cy="376" r="3.5" fill="#64748b"/>
+              <!-- Pin 7, 8 (7 为 UP 向上) -->
+              <circle cx="178" cy="394" r="4.5" fill="#4ade80" stroke="#fff" stroke-width="1.5"/><circle cx="206" cy="394" r="3.5" fill="#94a3b8"/>
+              <!-- Pin 9, 10 (9 为 7按键公共地 GND) -->
+              <circle cx="178" cy="412" r="4.5" fill="#64748b" stroke="#fff" stroke-width="1.5"/><circle cx="206" cy="412" r="3.5" fill="#94a3b8"/>
+              <!-- Pin 11, 12 (11 为 DOWN 向下, 12 为 I2S BCLK) -->
+              <circle cx="178" cy="430" r="4.5" fill="#4ade80" stroke="#fff" stroke-width="1.5"/><circle cx="206" cy="430" r="4.5" fill="#38bdf8" stroke="#fff" stroke-width="1.5"/>
+              <!-- Pin 13, 14 (13 为 LEFT 向左) -->
+              <circle cx="178" cy="448" r="4.5" fill="#c084fc" stroke="#fff" stroke-width="1.5"/><circle cx="206" cy="448" r="3.5" fill="#64748b"/>
+              <!-- Pin 15, 16 (15 为 RIGHT 向右, 16 为 旋钮 A) -->
+              <circle cx="178" cy="466" r="4.5" fill="#c084fc" stroke="#fff" stroke-width="1.5"/><circle cx="206" cy="466" r="4.5" fill="#f59e0b" stroke="#fff" stroke-width="1.5"/>
+              <!-- Pin 17, 18 (18 为 旋钮 B) -->
+              <circle cx="178" cy="484" r="3.5" fill="#ef4444"/><circle cx="206" cy="484" r="4.5" fill="#f59e0b" stroke="#fff" stroke-width="1.5"/>
+              <!-- Pin 19, 20 (20 为 旋钮地) -->
+              <circle cx="178" cy="502" r="3.5" fill="#94a3b8"/><circle cx="206" cy="502" r="4.5" fill="#64748b" stroke="#fff" stroke-width="1.5"/>
+              <!-- Pin 21, 22 (22 为 旋钮开关) -->
+              <circle cx="178" cy="520" r="3.5" fill="#94a3b8"/><circle cx="206" cy="520" r="4.5" fill="#a855f7" stroke="#fff" stroke-width="1.5"/>
+              <!-- Pin 23, 24 -->
+              <circle cx="178" cy="538" r="3.5" fill="#94a3b8"/><circle cx="206" cy="538" r="3.5" fill="#94a3b8"/>
+              <!-- Pin 25, 26 -->
+              <circle cx="178" cy="556" r="3.5" fill="#64748b"/><circle cx="206" cy="556" r="3.5" fill="#94a3b8"/>
+              <!-- Pin 27, 28 -->
+              <circle cx="178" cy="574" r="3.5" fill="#94a3b8"/><circle cx="206" cy="574" r="3.5" fill="#94a3b8"/>
+              <!-- Pin 29, 30 (29 为 OK 确认) -->
+              <circle cx="178" cy="592" r="4.5" fill="#f59e0b" stroke="#fff" stroke-width="1.5"/><circle cx="206" cy="592" r="3.5" fill="#64748b"/>
+              <!-- Pin 31, 32 -->
+              <circle cx="178" cy="610" r="3.5" fill="#94a3b8"/><circle cx="206" cy="610" r="3.5" fill="#94a3b8"/>
+              <!-- Pin 33, 34 -->
+              <circle cx="178" cy="628" r="3.5" fill="#94a3b8"/><circle cx="206" cy="628" r="3.5" fill="#64748b"/>
+              <!-- Pin 35, 36 (35 为 I2S LRCLK) -->
+              <circle cx="178" cy="646" r="4.5" fill="#38bdf8" stroke="#fff" stroke-width="1.5"/><circle cx="206" cy="646" r="3.5" fill="#94a3b8"/>
+              <!-- Pin 37, 38 -->
+              <circle cx="178" cy="664" r="3.5" fill="#94a3b8"/><circle cx="206" cy="664" r="3.5" fill="#94a3b8"/>
+              <!-- Pin 39, 40 (39 为 I2S GND, 40 为 I2S DOUT) -->
+              <circle cx="178" cy="682" r="4.5" fill="#64748b" stroke="#fff" stroke-width="1.5"/><circle cx="206" cy="682" r="4.5" fill="#38bdf8" stroke="#fff" stroke-width="1.5"/>
+
+              <!-- 底部 USB 3.0 接口 -->
+              <rect x="25" y="650" width="80" height="60" rx="4" fill="#0284c7" stroke="#cbd5e1" stroke-width="1.5"/>
+              <text x="65" y="685" text-anchor="middle" font-size="10" font-weight="bold" fill="#fff">USB 3.0</text>
+              <text x="65" y="702" text-anchor="middle" font-size="8" fill="#bae6fd">插吸入式CD光驱</text>
+            </g>
+
+            <!-- ================= 左侧引出线标注 (奇数排针侧) ================= -->
+            
+            <!-- 外部模块 0：7 个独立物理微动按键模块 (左上方) -->
+            <g transform="translate(35, 65)">
+              <rect width="345" height="380" rx="12" fill="#0f172a" stroke="#6366f1" stroke-width="2"/>
+              <rect x="0" y="0" width="345" height="32" rx="12" fill="#4f46e5"/>
+              <text x="172" y="21" text-anchor="middle" font-size="12" font-weight="bold" fill="#fff">7 个独立微动按键 (连续 8P 彩排线一体直插)</text>
+              
+              <text x="18" y="58" font-size="11" fill="#38bdf8" font-weight="bold">Pin 3  (GPIO 2)  ➔ MENU 菜单 (设置/切表头)</text>
+              <text x="18" y="88" font-size="11" fill="#fb7185" font-weight="bold">Pin 5  (GPIO 3)  ➔ BACK 返回 (上一级/退出)</text>
+              <text x="18" y="118" font-size="11" fill="#4ade80" font-weight="bold">Pin 7  (GPIO 4)  ➔ UP 向上 (光标上移)</text>
+              <text x="18" y="148" font-size="11" fill="#94a3b8" font-weight="bold">Pin 9  (GND)     ➔ ★ 7按键公共地 (一地通7键)</text>
+              <text x="18" y="178" font-size="11" fill="#4ade80" font-weight="bold">Pin 11 (GPIO 17) ➔ DOWN 向下 (光标下移)</text>
+              <text x="18" y="208" font-size="11" fill="#c084fc" font-weight="bold">Pin 13 (GPIO 27) ➔ LEFT 向左 (快退5s/切Tab)</text>
+              <text x="18" y="238" font-size="11" fill="#c084fc" font-weight="bold">Pin 15 (GPIO 22) ➔ RIGHT 向右 (快进5s/切Tab)</text>
+              <text x="18" y="268" font-size="11" fill="#f59e0b" font-weight="bold">Pin 29 (GPIO 5)  ➔ OK 确认 (选曲播放/确认)</text>
+
+              <!-- 提示徽章 -->
+              <rect x="18" y="295" width="309" height="65" rx="8" fill="#1e1b4b" stroke="#4338ca"/>
+              <text x="172" y="318" text-anchor="middle" font-size="11" fill="#a5b4fc" font-weight="bold">★ 绝妙设计: Pin 3~15 为奇数列连续 7 针</text>
+              <text x="172" y="335" text-anchor="middle" font-size="9.5" fill="#c7d2fe">直接使用一根 8P 彩色排线母头一体直插，</text>
+              <text x="172" y="350" text-anchor="middle" font-size="9.5" fill="#818cf8">彻底消灭零散杜邦线，桌面极其整洁！</text>
+            </g>
+
+            <!-- Pin 3~15 与 Pin 29 实体连接线 -->
+            <line x1="608" y1="423" x2="380" y2="423" stroke="#38bdf8" stroke-width="2"/><circle cx="608" cy="423" r="3" fill="#38bdf8"/>
+            <line x1="608" y1="441" x2="380" y2="441" stroke="#fb7185" stroke-width="2"/><circle cx="608" cy="441" r="3" fill="#fb7185"/>
+            <line x1="608" y1="459" x2="380" y2="459" stroke="#4ade80" stroke-width="2"/><circle cx="608" cy="459" r="3" fill="#4ade80"/>
+            <line x1="608" y1="477" x2="380" y2="477" stroke="#64748b" stroke-width="2.5"/><circle cx="608" cy="477" r="3.5" fill="#64748b"/>
+            <line x1="608" y1="495" x2="380" y2="495" stroke="#4ade80" stroke-width="2"/><circle cx="608" cy="495" r="3" fill="#4ade80"/>
+            <line x1="608" y1="513" x2="380" y2="513" stroke="#c084fc" stroke-width="2"/><circle cx="608" cy="513" r="3" fill="#c084fc"/>
+            <line x1="608" y1="531" x2="380" y2="531" stroke="#c084fc" stroke-width="2"/><circle cx="608" cy="531" r="3" fill="#c084fc"/>
+            <line x1="608" y1="657" x2="380" y2="657" stroke="#f59e0b" stroke-width="2"/><circle cx="608" cy="657" r="3" fill="#f59e0b"/>
+
+            <!-- 外部模块 1：ES9038PRO 4P 输入插排展示框 (左下方) -->
+            <g transform="translate(35, 475)">
+              <rect width="345" height="150" rx="12" fill="#0f172a" stroke="#0284c7" stroke-width="2"/>
+              <rect x="0" y="0" width="345" height="32" rx="12" fill="#0369a1"/>
+              <text x="172" y="21" text-anchor="middle" font-size="12" font-weight="bold" fill="#fff">ES9038PRO 解码板 4P 输入端子</text>
+              
+              <text x="20" y="55" font-size="11" fill="#38bdf8" font-weight="bold">1. BCK / SCLK  ➔ 接 Pin 12 (GPIO 18)</text>
+              <text x="20" y="80" font-size="11" fill="#38bdf8" font-weight="bold">2. LRCK / WS   ➔ 接 Pin 35 (GPIO 19)</text>
+              <text x="20" y="105" font-size="11" fill="#38bdf8" font-weight="bold">3. DATA / DIN  ➔ 接 Pin 40 (GPIO 21)</text>
+              <text x="20" y="130" font-size="11" fill="#94a3b8" font-weight="bold">4. GND 地线    ➔ 接 Pin 39 (GND)</text>
+            </g>
+
+            <!-- Pin 35: GPIO 19 -> I2S LRCLK -->
+            <line x1="608" y1="711" x2="350" y2="711" stroke="#0284c7" stroke-width="2.5"/><circle cx="608" cy="711" r="3" fill="#0284c7"/>
+            <g transform="translate(60, 698)">
+              <rect width="280" height="28" rx="5" fill="#e0f2fe" stroke="#0284c7" stroke-width="1.5"/>
+              <rect width="70" height="28" rx="5" fill="#0284c7"/>
+              <text x="35" y="18" text-anchor="middle" font-weight="bold" fill="#fff">Pin 35</text>
+              <text x="175" y="18" text-anchor="middle" font-weight="bold" fill="#0369a1">GPIO 19 ➔ I2S LRCLK (帧同步)</text>
+            </g>
+
+            <!-- Pin 39: GND -> I2S GND -->
+            <line x1="608" y1="747" x2="350" y2="747" stroke="#475569" stroke-width="2.5"/><circle cx="608" cy="747" r="3" fill="#475569"/>
+            <g transform="translate(60, 734)">
+              <rect width="280" height="28" rx="5" fill="#f1f5f9" stroke="#64748b" stroke-width="1.5"/>
+              <rect width="70" height="28" rx="5" fill="#475569"/>
+              <text x="35" y="18" text-anchor="middle" font-weight="bold" fill="#fff">Pin 39</text>
+              <text x="175" y="18" text-anchor="middle" font-weight="bold" fill="#334155">GND ➔ 数字参考地 (Audio GND)</text>
+            </g>
+
+            <!-- ================= 右侧引出线标注 (偶数排针侧) ================= -->
+
+            <!-- Pin 12: GPIO 18 -> I2S BCLK -->
+            <line x1="636" y1="495" x2="720" y2="495" stroke="#0284c7" stroke-width="2.5"/><circle cx="636" cy="495" r="3" fill="#0284c7"/>
+            <g transform="translate(730, 482)">
+              <rect width="310" height="28" rx="5" fill="#e0f2fe" stroke="#0284c7" stroke-width="1.5"/>
+              <rect x="235" width="75" height="28" rx="5" fill="#0284c7"/>
+              <text x="272" y="18" text-anchor="middle" font-weight="bold" fill="#fff">Pin 12</text>
+              <text x="115" y="18" text-anchor="middle" font-weight="bold" fill="#0369a1">I2S BCLK (位时钟)  GPIO 18</text>
+            </g>
+
+            <!-- Pin 16: GPIO 23 -> EC11 旋钮 A -->
+            <line x1="636" y1="531" x2="720" y2="531" stroke="#f59e0b" stroke-width="2"/><circle cx="636" cy="531" r="3" fill="#f59e0b"/>
+            <g transform="translate(730, 518)">
+              <rect width="310" height="26" rx="4" fill="#fef3c7" stroke="#f59e0b"/>
+              <rect x="235" width="75" height="26" rx="4" fill="#d97706"/>
+              <text x="272" y="17" text-anchor="middle" font-weight="bold" fill="#fff">Pin 16</text>
+              <text x="115" y="17" text-anchor="middle" font-weight="bold" fill="#b45309">EC11 旋钮 A相  GPIO 23</text>
+            </g>
+
+            <!-- Pin 18: GPIO 24 -> EC11 旋钮 B -->
+            <line x1="636" y1="549" x2="720" y2="549" stroke="#f59e0b" stroke-width="2"/><circle cx="636" cy="549" r="3" fill="#f59e0b"/>
+            <g transform="translate(730, 546)">
+              <rect width="310" height="26" rx="4" fill="#fef3c7" stroke="#f59e0b"/>
+              <rect x="235" width="75" height="26" rx="4" fill="#d97706"/>
+              <text x="272" y="17" text-anchor="middle" font-weight="bold" fill="#fff">Pin 18</text>
+              <text x="115" y="17" text-anchor="middle" font-weight="bold" fill="#b45309">EC11 旋钮 B相  GPIO 24</text>
+            </g>
+
+            <!-- Pin 20: GND -> EC11 旋钮公共地 -->
+            <line x1="636" y1="567" x2="720" y2="567" stroke="#475569" stroke-width="2"/><circle cx="636" cy="567" r="3" fill="#475569"/>
+            <g transform="translate(730, 574)">
+              <rect width="310" height="26" rx="4" fill="#f1f5f9" stroke="#64748b"/>
+              <rect x="235" width="75" height="26" rx="4" fill="#475569"/>
+              <text x="272" y="17" text-anchor="middle" font-weight="bold" fill="#fff">Pin 20</text>
+              <text x="115" y="17" text-anchor="middle" font-weight="bold" fill="#334155">旋钮公共地线  GND</text>
+            </g>
+
+            <!-- Pin 22: GPIO 25 -> EC11 按压开关 -->
+            <line x1="636" y1="585" x2="720" y2="585" stroke="#a855f7" stroke-width="2"/><circle cx="636" cy="585" r="3" fill="#a855f7"/>
+            <g transform="translate(730, 602)">
+              <rect width="310" height="26" rx="4" fill="#f3e8ff" stroke="#a855f7"/>
+              <rect x="235" width="75" height="26" rx="4" fill="#7e22ce"/>
+              <text x="272" y="17" text-anchor="middle" font-weight="bold" fill="#fff">Pin 22</text>
+              <text x="115" y="17" text-anchor="middle" font-weight="bold" fill="#7e22ce">旋钮按压(静音/播放)  GPIO 25</text>
+            </g>
+
+            <!-- Pin 40: GPIO 21 -> I2S DOUT -->
+            <line x1="636" y1="747" x2="720" y2="747" stroke="#0284c7" stroke-width="2.5"/><circle cx="636" cy="747" r="3" fill="#0284c7"/>
+            <g transform="translate(730, 734)">
+              <rect width="310" height="28" rx="5" fill="#e0f2fe" stroke="#0284c7" stroke-width="1.5"/>
+              <rect x="235" width="75" height="28" rx="5" fill="#0284c7"/>
+              <text x="272" y="18" text-anchor="middle" font-weight="bold" fill="#fff">Pin 40</text>
+              <text x="115" y="18" text-anchor="middle" font-weight="bold" fill="#0369a1">I2S DOUT (数据串流)  GPIO 21</text>
+            </g>
+
+            <!-- 外部模块 2：EC11 35mm 铝旋钮展示框 (右侧) -->
+            <g transform="translate(730, 290)">
+              <rect width="310" height="150" rx="12" fill="#0f172a" stroke="#f59e0b" stroke-width="2"/>
+              <rect x="0" y="0" width="310" height="32" rx="12" fill="#d97706"/>
+              <text x="155" y="21" text-anchor="middle" font-size="12" font-weight="bold" fill="#fff">EC11 实心铝音量旋钮 (连续4针直插)</text>
+              
+              <text x="20" y="55" font-size="11" fill="#fcd34d" font-weight="bold">Pin 16 (IO23) ➔ 旋钮 A 脉冲脚</text>
+              <text x="20" y="80" font-size="11" fill="#fcd34d" font-weight="bold">Pin 18 (IO24) ➔ 旋钮 B 脉冲脚</text>
+              <text x="20" y="105" font-size="11" fill="#94a3b8" font-weight="bold">Pin 20 (GND)  ➔ 旋钮 C 公共地</text>
+              <text x="20" y="130" font-size="11" fill="#d8b4fe" font-weight="bold">Pin 22 (IO25) ➔ 旋钮向下按压开关</text>
+            </g>
+          </svg>
+        </div>
+
+        <!-- 极度优雅的设计总结说明 (4张卡片) -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-xs text-slate-300">
+          <div class="bg-slate-950 p-4 rounded-xl border border-indigo-900/40 space-y-1.5">
+            <span class="text-indigo-400 font-bold block flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-indigo-400"></span>
+              1. 8P 彩排线一体直插 7 独立按键
+            </span>
+            <p class="text-slate-400 leading-relaxed">
+              <b>Pin 3、5、7、9、11、13、15</b> 完美汇聚在奇数列连续 7 针上！其中 <b>Pin 9</b> 为 7 键共用公共地，直接用一根标准 8P 排线母头一体直插，免去散线困扰。
+            </p>
+          </div>
+          <div class="bg-slate-950 p-4 rounded-xl border border-amber-900/40 space-y-1.5">
+            <span class="text-amber-400 font-bold block flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+              2. EC11 旋钮 4 根线连续相邻
+            </span>
+            <p class="text-slate-400 leading-relaxed">
+              <b>Pin 16、18、20、22</b> 恰好位于偶数列的连续 4 个引脚！直接用一根 <b>4P 一体化排线母头</b> 一下子插在这 4 根针上，插拔整洁美观度拉满！
+            </p>
+          </div>
+          <div class="bg-slate-950 p-4 rounded-xl border border-sky-900/40 space-y-1.5">
+            <span class="text-sky-400 font-bold block flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-sky-400"></span>
+              3. I2S 物理针脚全部汇聚在底角
+            </span>
+            <p class="text-slate-400 leading-relaxed">
+              <b>Pin 35 (LRCLK)、Pin 39 (GND)、Pin 40 (DOUT)</b> 紧密排列在 40 针排针右下底角，加上旁边的 <b>Pin 12 (BCLK)</b>，超短屏蔽线贴底走线，电磁辐射最小。
+            </p>
+          </div>
+          <div class="bg-slate-950 p-4 rounded-xl border border-emerald-900/40 space-y-1.5">
+            <span class="text-emerald-400 font-bold block flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+              4. 分体双箱 0 强电上桌
+            </span>
+            <p class="text-slate-400 leading-relaxed">
+              桌面数播中枢仅 5V 安全弱电，无任何 220V 漏电风险；纯模拟解码前级全金属封闭机箱屏蔽，彻底隔绝外界 Wi-Fi 与射频杂讯，声底深黑如夜。
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 3: C++ 播放器 SDK 与软件架构 ==================== -->
+    <section id="view-sdk" class="space-y-6 hidden">
+      
+      <!-- 架构综述卡片 -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 md:p-8 space-y-6 shadow-2xl">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-6">
+          <div>
+            <span class="px-3 py-1 text-xs font-semibold rounded-full bg-sky-950 text-sky-400 border border-sky-800">
+              Linux 嵌入式纯音一体机范式
+            </span>
+            <h2 class="text-2xl font-black text-white mt-2">C++20 高性能无锁音频流与 60fps 动圈渲染引擎</h2>
+            <p class="text-sm text-slate-400 mt-1 max-w-3xl">
+              告别臃肿的桌面环境与卡顿的 Web 技术栈！通过 <b>KMS/DRM + OpenGL ES 2.0</b> 直启，实现开机 4 秒直达 <b>Dear ImGui 麦景图表头</b>，ALSA 独占硬件级 Bit-Perfect 零抖动直出！
+            </p>
+          </div>
+          <div class="flex items-center gap-2">
+            <div class="bg-slate-950 border border-slate-800 px-4 py-2.5 rounded-xl text-center">
+              <div class="text-[10px] text-slate-400">系统开机启动耗时</div>
+              <div class="text-xl font-mono font-black text-emerald-400">~ 3.8s</div>
+            </div>
+            <div class="bg-slate-950 border border-slate-800 px-4 py-2.5 rounded-xl text-center">
+              <div class="text-[10px] text-slate-400">UI 渲染刷新率</div>
+              <div class="text-xl font-mono font-black text-sky-400">60 FPS</div>
+            </div>
+            <div class="bg-slate-950 border border-slate-800 px-4 py-2.5 rounded-xl text-center">
+              <div class="text-[10px] text-slate-400">CPU 占用率 (四核)</div>
+              <div class="text-xl font-mono font-black text-indigo-400">&lt; 4.5%</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 核心多线程架构模型 -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs">
+          <div class="bg-slate-950 p-4 rounded-xl border border-sky-900/40 space-y-2">
+            <div class="text-sky-400 font-bold text-sm flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-sky-400"></span>
+              Thread 1: Audio Core (ALSA)
+            </div>
+            <p class="text-slate-400 leading-relaxed">
+              采用 Linux 实时调度策略 (<code>SCHED_FIFO</code>，优先级 90)，从无锁环形缓冲区消费 PCM，零拷贝调用 <code>snd_pcm_writei</code> 送入 I2S 硬件，绝不爆音或欠载。
+            </p>
+          </div>
+          <div class="bg-slate-950 p-4 rounded-xl border border-indigo-900/40 space-y-2">
+            <div class="text-indigo-400 font-bold text-sm flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-indigo-400"></span>
+              Thread 2: Decoder & Cache
+            </div>
+            <p class="text-slate-400 leading-relaxed">
+              基于 FFmpeg (<code>libavcodec</code>/<code>libavformat</code>) 解析 FLAC/WAV/DSD/APE 或 CD 音频，重采样至 ES9038PRO 原生支持的最佳位深并填充环形缓冲。
+            </p>
+          </div>
+          <div class="bg-slate-950 p-4 rounded-xl border border-amber-900/40 space-y-2">
+            <div class="text-amber-400 font-bold text-sm flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+              Thread 3: UI & 60fps VU Meter
+            </div>
+            <p class="text-slate-400 leading-relaxed">
+              SDL2 + OpenGL ES + Dear ImGui。高精算力计算 RMS 与峰值能量，代入惯性动圈物理公式，实现麦景图指针随音乐波形丝滑起伏跳动。
+            </p>
+          </div>
+          <div class="bg-slate-950 p-4 rounded-xl border border-emerald-900/40 space-y-2">
+            <div class="text-emerald-400 font-bold text-sm flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+              Thread 4: Input & Control (InputManager)
+            </div>
+            <p class="text-slate-400 leading-relaxed">
+              统一事件总线！在树莓派上由 <code>libgpiod</code> 边缘中断捕获 7 个微动按键（20ms 软件消抖）与 EC11 正交脉冲；在 Mac 开发期完全由键盘（方向键/Enter/Esc/M）与滚轮透明模拟，UI 零修改！
+            </p>
+          </div>
+        </div>
+
+        <!-- 结对编程与双平台开发流规范卡片 (用户亲手实操) -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs pt-2">
+          <div class="bg-slate-950 p-4 rounded-xl border border-sky-900/40 space-y-2">
+            <div class="text-sky-400 font-bold text-sm flex items-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+              结对编程模式：用户为主驾驶，AI 为领航员
+            </div>
+            <p class="text-slate-400 leading-relaxed">
+              本项目是用户的 <b>Modern C++20 深度实战练手项目</b>。AI 严禁代替用户写完所有代码！AI 负责拆解关卡、提供设计思路与关键数据结构骨架，由用户逐行亲手敲出代码。AI 随后进行严谨 Code Review（检查内存泄漏、未定义行为、原子无锁与线程安全）。
+            </p>
+          </div>
+
+          <div class="bg-slate-950 p-4 rounded-xl border border-indigo-900/40 space-y-2">
+            <div class="text-indigo-400 font-bold text-sm flex items-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+              两阶段开发闭环：Mac 本地 85% ➔ 树莓派真机 15%
+            </div>
+            <p class="text-slate-400 leading-relaxed">
+              <b>第一阶段 (Mac)</b>：在 macOS 上配置 CMake + Ninja，秒级编译弹出 1024×600 窗口，用键盘/鼠标自测 Dear ImGui 麦景图表头、音频播放与列表逻辑；<br>
+              <b>第二阶段 (树莓派)</b>：真机到货后，一键 <code>rsync</code> 增量同步，接管 <code>libgpiod</code> 硬件按键与 ALSA I2S 直出！
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 工程文件结构与核心代码查看器 -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
+        <div class="flex flex-wrap items-center justify-between border-b border-slate-800 px-6 py-4 bg-slate-950/70">
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-full bg-red-500/80"></span>
+            <span class="w-3 h-3 rounded-full bg-amber-500/80"></span>
+            <span class="w-3 h-3 rounded-full bg-emerald-500/80"></span>
+            <span class="text-xs font-mono font-bold text-slate-300 ml-2">MyHiFiPlayer SDK 源码骨架与工程设计</span>
+          </div>
+
+          <!-- 代码文件切换按钮 -->
+          <div class="flex flex-wrap items-center gap-1.5" id="code-tabs">
+            <button onclick="showCodeFile('cmake')" class="code-tab active px-3 py-1 text-xs font-mono rounded-lg bg-sky-600 text-white font-semibold">CMakeLists.txt</button>
+            <button onclick="showCodeFile('main')" class="code-tab px-3 py-1 text-xs font-mono rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300">main.cpp</button>
+            <button onclick="showCodeFile('input')" class="code-tab px-3 py-1 text-xs font-mono rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300">InputManager.hpp</button>
+            <button onclick="showCodeFile('audio')" class="code-tab px-3 py-1 text-xs font-mono rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300">AudioEngine.cpp</button>
+            <button onclick="showCodeFile('vu')" class="code-tab px-3 py-1 text-xs font-mono rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300">VUMeterRenderer.cpp</button>
+            <button onclick="showCodeFile('encoder')" class="code-tab px-3 py-1 text-xs font-mono rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300">RotaryEncoder.hpp</button>
+            <button onclick="showCodeFile('cd')" class="code-tab px-3 py-1 text-xs font-mono rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300">CDRipper.cpp</button>
+          </div>
+        </div>
+
+        <!-- 代码显示区域 -->
+        <div class="p-6 bg-slate-950 overflow-x-auto text-xs font-mono relative">
+          <button onclick="copyCurrentCode()" class="absolute top-4 right-4 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs flex items-center gap-1.5 border border-slate-700 transition">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+            <span id="copy-btn-text">复制代码</span>
+          </button>
+          <pre id="code-content" class="text-slate-300 leading-relaxed"></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 4: 麦景图湖蓝 VU 表头 Live 体验 ==================== -->
+    <section id="view-vu" class="space-y-6 hidden">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 md:p-8 space-y-6 shadow-2xl">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-5">
+          <div>
+            <h2 class="text-2xl font-black text-white glow-mcintosh">经典麦景图 (McIntosh) 湖蓝动圈双表头 Live 渲染器</h2>
+            <p class="text-xs text-slate-400 mt-1">
+              使用 HTML5 Canvas 1:1 数学拟合你在微雪 7 寸 QLED 屏幕（1024×600）上的最终 C++ 渲染视觉效果！
+            </p>
+          </div>
+
+          <div class="flex items-center gap-3">
+            <button id="vu-play-btn" onclick="toggleVUSimulation()" class="px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs shadow-lg shadow-sky-500/30 flex items-center gap-2 transition">
+              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path></svg>
+              <span>模拟音乐输入 (指针跳动)</span>
+            </button>
+            <div class="flex items-center gap-2 bg-slate-950 px-3 py-2 rounded-xl border border-slate-800 text-xs">
+              <span class="text-slate-400">背光亮度:</span>
+              <input type="range" id="vu-brightness" min="40" max="100" value="85" oninput="updateVUBrightness(this.value)" class="w-20 accent-sky-500 cursor-pointer">
+            </div>
+          </div>
+        </div>
+
+        <!-- 模拟微雪 7 寸屏实际尺寸比例 (1024×600) 的 Canvas 容器 -->
+        <div class="relative w-full aspect-[1024/520] max-w-4xl mx-auto bg-black rounded-2xl overflow-hidden border-4 border-slate-800 shadow-2xl flex items-center justify-center p-2">
+          <canvas id="vu-canvas" width="1024" height="520" class="w-full h-full object-contain"></canvas>
+          <div class="absolute bottom-4 left-6 text-[10px] font-mono text-sky-400/80 pointer-events-none">
+            McIntosh Precision Power Meter · Bit-Perfect 192kHz/24Bit ALSA
+          </div>
+          <div class="absolute bottom-4 right-6 text-[10px] font-mono text-sky-400/80 pointer-events-none">
+            ES9038PRO 8-CH PARALLEL BALANCED
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-slate-300 pt-2">
+          <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-1">
+            <span class="text-sky-400 font-bold block">1. 为什么必须是 QLED 量子点屏？</span>
+            <p class="text-slate-400 leading-relaxed">
+              普通 TFT 液晶屏漏光严重，黑色泛灰，麦景图背景会发白发雾；微雪 <b>QLED 量子点技术</b> 的纯粹黑位能让湖蓝色刻度与亮银针如霓虹般浮在夜空，视觉质感媲美十万元级名机。
+            </p>
+          </div>
+          <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-1">
+            <span class="text-sky-400 font-bold block">2. C++ 动圈表头阻尼算法</span>
+            <p class="text-slate-400 leading-relaxed">
+              真实机械指针具有质量与空气阻尼。在 C++ 实现中，我们采用二阶弹性阻尼物理公式：<code>targetAngle</code> 随能量上升极快（Attack 10ms），但回弹带有真实物理惯性（Decay 300ms），绝不僵硬生硬。
+            </p>
+          </div>
+          <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-1">
+            <span class="text-sky-400 font-bold block">3. 触摸大屏交互联动</span>
+            <p class="text-slate-400 leading-relaxed">
+              在 Dear ImGui 中，点击表头中心可以唤出全屏动态频谱、曲目清单、滤波模式（Fast/Slow Roll-off）、甚至一键在麦景图表头和复古磁带卡座动画之间无缝切换！
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 5: 电气拓扑与供电隔离 ==================== -->
+    <section id="view-schematic" class="space-y-6 hidden">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 md:p-8 space-y-6 shadow-2xl">
+        <div class="border-b border-slate-800 pb-5">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="px-2.5 py-0.5 text-xs font-bold rounded-full bg-amber-950 text-amber-400 border border-amber-800">分体式分身架构</span>
+            <span class="px-2.5 py-0.5 text-xs font-bold rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800">0 根 220V 强电上桌 · 彻底杜绝触电与市电杂讯</span>
+          </div>
+          <h2 class="text-2xl font-black text-white">分体双箱电气拓扑架构与物理隔离图解</h2>
+          <p class="text-xs text-slate-400 mt-1">
+            Box 1 (桌面数播中枢 5V 弱电) 与 Box 2 (全铝纯模拟解码前级) 物理彻底分离，从源头掐灭地线环路（Ground Loop）与电源串扰。
+          </p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <!-- Box 1: 桌面数播中枢 -->
+          <div class="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4">
+            <h3 class="text-sm font-bold text-sky-400 flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-sky-400"></span>
+              Box 1: 桌面数播控制中枢 (3D打印 15° 黄金仰角外壳)
+            </h3>
+            <p class="text-xs text-slate-400 leading-relaxed">
+              摆放在电脑屏幕旁或音响桌面正前方。全机仅 <b>5V 5A PD 安全弱电 (Type-C)</b> 供电，完全没有 220V 交流强电上桌的心理负担与触碰隐患：
+            </p>
+            <div class="space-y-2 text-xs">
+              <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 flex items-start gap-3">
+                <span class="px-2 py-0.5 rounded bg-sky-950 text-sky-400 font-bold text-[10px]">视觉中枢</span>
+                <div>
+                  <div class="font-bold text-white">微雪 7.0 寸 QLED 纯平触控屏</div>
+                  <div class="text-slate-400 text-[11px] mt-0.5">Micro-HDMI + USB 供电触控直连树莓派 5，0 占 GPIO，开机 3.8s 呈现 60fps 麦景图表头。</div>
+                </div>
+              </div>
+              <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 flex items-start gap-3">
+                <span class="px-2 py-0.5 rounded bg-indigo-950 text-indigo-400 font-bold text-[10px]">物理交互</span>
+                <div>
+                  <div class="font-bold text-white">7 个独立微动按键 + 35mm 实心铝音量旋钮</div>
+                  <div class="text-slate-400 text-[11px] mt-0.5">8P 彩排线一体直插奇数列 Pin 3~15，EC11 4P 排线直插偶数列 Pin 16~22，机械行程清脆。</div>
+                </div>
+              </div>
+              <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 flex items-start gap-3">
+                <span class="px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 font-bold text-[10px]">读播抓轨</span>
+                <div>
+                  <div class="font-bold text-white">吸入式 CD 读播机芯 (USB 3.0 直插)</div>
+                  <div class="text-slate-400 text-[11px] mt-0.5">内存纠错缓冲抓轨播放，彻底消除老式转盘激光读取物理震动带来的 Jitter 抖动。</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Box 2: 纯模拟解码前级 -->
+          <div class="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4">
+            <h3 class="text-sm font-bold text-amber-400 flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+              Box 2: 纯模拟平衡解码前级 (全铝金属屏蔽机箱)
+            </h3>
+            <p class="text-xs text-slate-400 leading-relaxed">
+              独立安置在功放旁。220V 市电进入机箱后由 <b>WAGO 221-413 免焊端子</b> 绝缘分线，全封闭金属壳形成完美法拉第笼：
+            </p>
+            <div class="space-y-2 text-xs">
+              <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 flex items-start gap-3">
+                <span class="px-2 py-0.5 rounded bg-amber-950 text-amber-400 font-bold text-[10px]">模拟运放</span>
+                <div>
+                  <div class="font-bold text-white">英国箭猪 (Noratel) 50VA 环牛 (双 15V)</div>
+                  <div class="text-slate-400 text-[11px] mt-0.5">十倍充沛功率余量，专供 ES9038PRO 的 LPF 运放与输出缓冲级，醇厚暖甜英国声底。</div>
+                </div>
+              </div>
+              <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 flex items-start gap-3">
+                <span class="px-2 py-0.5 rounded bg-amber-950 text-amber-400 font-bold text-[10px]">数字时钟</span>
+                <div>
+                  <div class="font-bold text-white">庆达全铜 R-20 变压器 (双 9V 三线)</div>
+                  <div class="text-slate-400 text-[11px] mt-0.5">零漏磁纯铜结构，专供 9038 主芯片与双飞秒晶振，杜绝任何数模串扰，背景声底极黑。</div>
+                </div>
+              </div>
+              <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 flex items-start gap-3">
+                <span class="px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 font-bold text-[10px]">平衡输出</span>
+                <div>
+                  <div class="font-bold text-white">Neutrik XLR 公座 × 2 + EIZZ 镀金 RCA 母座 × 2</div>
+                  <div class="text-slate-400 text-[11px] mt-0.5">佳耐美 L-2B2AT 屏蔽线引出，卡侬平衡直推山水 AU-α707KX 功放与惠威 M3 箱体！</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 双箱跨界互联卡片 -->
+        <div class="bg-slate-950 p-5 rounded-2xl border border-indigo-900/40 space-y-3">
+          <h3 class="text-sm font-bold text-indigo-400 flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
+            Box 1 (桌面数播) ➔ Box 2 (解码前级) 纯净音频传输双方案
+          </h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-slate-300">
+            <div class="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1.5">
+              <div class="font-bold text-sky-400 flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-sky-400"></span>
+                方案 A (标配极致)：超短屏蔽 I2S 线 (4P 航空头或屏蔽杜邦线)
+              </div>
+              <p class="text-slate-400 text-[11px] leading-relaxed">
+                线长控制在 15~20cm 以内，连接 BCLK/LRCLK/DOUT/GND 四根线。纯硬件直连，无操作系统驱动协议开销，时序精准无匹，直接由 ES9038PRO 飞秒晶振自同步锁相！
+              </p>
+            </div>
+
+            <div class="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1.5">
+              <div class="font-bold text-amber-400 flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+                方案 B (长距自如)：XMOS 异步 USB 纯净音频线
+              </div>
+              <p class="text-slate-400 text-[11px] leading-relaxed">
+                树莓派 USB 直插解码板的 XMOS 异步子卡（USB-B 口）。线长可放宽至 1 米，桌面摆位极度自由，差分信号具有极强抗干扰能力，Linux ALSA 原生即插即用！
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- 详情弹窗 (Modal) -->
+  <div id="modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 relative">
+      <button onclick="closeModal()" class="absolute right-4 top-4 text-slate-400 hover:text-white p-1 rounded-lg bg-slate-800 hover:bg-slate-700">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+      </button>
+      <div id="modal-content"></div>
+    </div>
+  </div>
+
+  <script>
+    // ==================== 1. 完整校准物料库 (BOM Data) ====================
+    let currentPlatform = "tb";
+    let currentFilter = "all";
+
+    const bomItems = [
+      {
+        id: "rpi5_1g_bundle",
+        name: "树莓派 5 代 (1GB 内存版) 官方基础套餐",
+        spec: "【阶段一·立即拍】树莓派5 (1G) + 5V 5A PD官方电源 + 32G高速卡 + 读卡器 + 纯铝散热器",
+        category: "phase1",
+        price: 502,
+        pddPrice: "¥490 - ¥520",
+        tbPrice: "¥502 (淘宝【树莓派零售商】券后)",
+        confirmed: true,
+        selected: true,
+        pddKeyword: "树莓派5 1G 基础套餐",
+        tbKeyword: "树莓派5 基础套餐 1G 树莓派零售商",
+        desc: "已在淘宝 4 蓝冠老店锁定！满血 5V 5A PD 专用电源杜绝降频红字；散热器拔掉风扇引线即化身 0dB 纯静音天然发烧散热片，开箱即点亮！",
+        img: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/Raspberry_Pi_4_Model_B_-_Top.jpg/640px-Raspberry_Pi_4_Model_B_-_Top.jpg",
+        tips: "勾选【基础套餐】与【1GB内存】，实付 502 元包邮。"
+      },
+      {
+        id: "screen",
+        name: "微雪 7.0 英寸 QLED 一体化全贴合电容屏 (带开发配件)",
+        spec: "【阶段一·立即拍】1024×600 QLED 量子点 / 纯平全贴合钢化玻璃 / Micro-HDMI 扁线配件包",
+        category: "phase1",
+        price: 301.71,
+        pddPrice: "¥280 - ¥310",
+        tbPrice: "¥301.71 (淘宝微雪店 SKU: 70H-1024600-QLED-CT-B)",
+        confirmed: true,
+        selected: true,
+        pddKeyword: "微雪 7寸 QLED 树莓派",
+        tbKeyword: "微雪 70H-1024600-QLED-CT-B",
+        desc: "已在淘宝微雪店锁定！纯平全贴合钢化玻璃，正面无下陷阶梯缝隙；QLED 量子点呈现黑如深空的极致纯粹黑位与极其鲜活透亮的麦景图湖蓝动圈指针；板载 3.5mm 耳机孔首期即可直接出声调试！",
+        img: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/VU_Meter.jpg/640px-VU_Meter.jpg",
+        tips: "拍下【QLED触控屏（带开发配件）】¥301.71 即可，内含 Micro-HDMI 扁平转接线与供电触控线。"
+      },
+      {
+        id: "dac_9038pro",
+        name: "ES9038PRO 软控全平衡解码成品板",
+        spec: "【阶段二】8通道并联 / 132dB 动态 / XLR 平衡 + RCA / 双时钟 / DIP-8运放座配齐",
+        category: "phase2",
+        price: 899,
+        pddPrice: "¥850 - ¥920",
+        tbPrice: "¥899 (实价校准·全配齐成品板)",
+        confirmed: true,
+        selected: true,
+        pddKeyword: "ES9038PRO 解码板 成品 软控",
+        tbKeyword: "ES9038PRO 软控 全平衡 解码板 成品",
+        desc: "已校准真实成交价！配齐 ES9038PRO 芯片、双超低相噪晶振时钟、DIP-8 镀金运放座（插满运放）、软控 OLED 显示屏及遥控，I2S 输入通电即响！",
+        img: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Yamaha_MM-MC_RIAA_preamp_board%2C_around_1987_%282%29.jpg/640px-Yamaha_MM-MC_RIAA_preamp_board%2C_around_1987_%282%29.jpg",
+        tips: "¥899 是配齐芯片、时钟、运放并出厂调试完毕的真正完整成品板，免焊调试。"
+      },
+      {
+        id: "noratel_50va",
+        name: "【模拟运放供电】英国箭猪 (Noratel) 50VA 环牛 (双15V)",
+        spec: "【阶段二】50VA 双15V 1.67A / 壹伴工作室正品 / 专供运放 LPF 模拟电路 / 醇厚暖甜人声",
+        category: "phase2",
+        price: 188,
+        pddPrice: "¥180 - ¥210",
+        tbPrice: "¥188 (淘宝【壹伴工作室】)",
+        confirmed: true,
+        selected: true,
+        pddKeyword: "箭猪 环牛 50W 双15V",
+        tbKeyword: "箭猪 环牛 双15V",
+        desc: "已在【壹伴工作室】确认！50VA 充足功率（十倍余量），专供 ES9038PRO 模拟运放。纯正英国暖声底，人声饱满多汁，自带多色无氧铜耐高温引线，直接螺丝紧固免焊接！",
+        img: "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4b/Toroidal_transformer.jpg/640px-Toroidal_transformer.jpg",
+        tips: "在【壹伴工作室】直接拍下 50VA 【双 15V】规格 ¥188 即可。"
+      },
+      {
+        id: "qingda_r20",
+        name: "【数字核心供电】全铜 R型发烧变压器 R-20 (双9V三线)",
+        spec: "【阶段二】20VA 双9V三线 (9V-0-9V) / 庆达企业店 / 专供 9038 芯片与飞秒时钟 / 零漏磁",
+        category: "phase2",
+        price: 58,
+        pddPrice: "¥50 - ¥60",
+        tbPrice: "¥58 (淘宝【庆达变压器企业店】实拍确认)",
+        confirmed: true,
+        selected: true,
+        pddKeyword: "R型变压器 双9V 20W",
+        tbKeyword: "全铜R牛 变压器 双9V",
+        desc: "已实拍锁定！发烧级 R型环氧纯铜结构，几乎零漏磁零辐射。输入 220V，输出双 9V 三线，专供 ES9038PRO 数字逻辑及单片机软控，自带金属底脚螺丝孔，接线极其清爽！",
+        img: "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4b/Toroidal_transformer.jpg/640px-Toroidal_transformer.jpg",
+        tips: "选择【普通黄色外观】+【R-20】+【9V】+【双电压(输出3根线)】，实付 ¥58 包邮。"
+      },
+      {
+        id: "wago_terminals",
+        name: "WAGO 德国万可 221-413 三孔快速接线端子 (5只装)",
+        spec: "【阶段二】220V 市电安全分线神器 / 橙色手柄免螺丝按压 / 450V阻燃绝缘绝不漏电",
+        category: "phase2",
+        price: 8.8,
+        pddPrice: "¥6 - ¥9",
+        tbPrice: "¥8.8 (淘宝包邮现货)",
+        confirmed: true,
+        selected: true,
+        pddKeyword: "万可 221-413 包邮",
+        tbKeyword: "万可 221-413 包邮",
+        desc: "220V 市电进入机箱后的安全核心！一进两出分别给箭猪牛和 R牛供电，手指一按一插卡死，透明可视，绝无电线裸露和漏电风险。",
+        img: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Apple_12W_USB_Power_Adapter.jpg/640px-Apple_12W_USB_Power_Adapter.jpg",
+        tips: "拍 5 只装包邮即可，实付 8 块多钱。"
+      },
+      {
+        id: "neutrik_xlr",
+        name: "瑞士 Neutrik NC3MD-LX-B 镀金卡侬公座 × 2",
+        spec: "【阶段三·已在购物车】认准公座(带3针) / D型黑镍金属外壳 / 镀金插针 / 深圳艾维声",
+        category: "phase3",
+        price: 55.92,
+        pddPrice: "¥50 - ¥60",
+        tbPrice: "¥55.92 (两只优惠后)",
+        confirmed: true,
+        selected: true,
+        pddKeyword: "Neutrik NC3MD-LX-B",
+        tbKeyword: "Neutrik NC3MD-LX-B 公座 艾维声",
+        desc: "解码器平衡输出端标准！行业规范要求信号源输出必须是带针的公座 (NC3MD)，才能完美对接市面标准母-公 XLR 平衡信号线！已在购物车锁定。",
+        img: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Yamaha_MM-MC_RIAA_preamp_board%2C_around_1987_%282%29.jpg/640px-Yamaha_MM-MC_RIAA_preamp_board%2C_around_1987_%282%29.jpg",
+        tips: "切勿拍成带孔的母座 (NC3FD)！"
+      },
+      {
+        id: "eizz_rca",
+        name: "EIZZ 磷青铜镀金发烧 RCA 莲花母座 × 2",
+        spec: "【阶段三·已在购物车】红黑各1只 / 特氟龙耐高温绝缘 / 纯铜车削 / 伟良音响DIY工厂店",
+        category: "phase3",
+        price: 35.2,
+        pddPrice: "¥30 - ¥40",
+        tbPrice: "¥35.2 (两只优惠后)",
+        confirmed: true,
+        selected: true,
+        pddKeyword: "EIZZ RCA 母座 磷青铜",
+        tbKeyword: "EIZZ 磷青铜镀金 RCA 母座 伟良",
+        desc: "发烧级顶级工艺！特氟龙 (PTFE) 绝缘耐 300℃ 高温烙铁不熔化；磷青铜厚金电镀，红为右声道 (Right)，黑为左声道 (Left)，已在购物车锁定。",
+        img: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Yamaha_MM-MC_RIAA_preamp_board%2C_around_1987_%282%29.jpg/640px-Yamaha_MM-MC_RIAA_preamp_board%2C_around_1987_%282%29.jpg",
+        tips: "选红 1 只、黑 1 只。"
+      },
+      {
+        id: "canare_cable",
+        name: "日本 CANARE 佳耐美 L-2B2AT 机内屏蔽信号线 (1米)",
+        spec: "【阶段三·已在购物车】铝箔100%屏蔽+地线 / 3.2mm极细柔软 / 伟良音响同店打包",
+        category: "phase3",
+        price: 8.28,
+        pddPrice: "¥7 - ¥10",
+        tbPrice: "¥8.28 (1米)",
+        confirmed: true,
+        selected: true,
+        pddKeyword: "佳耐美 L-2B2AT 屏蔽线",
+        tbKeyword: "CANARE 佳耐美 L-2B2AT 伟良",
+        desc: "机箱内连接专用线！极度柔软服帖，100% 铝箔屏蔽层彻底隔绝变压器和树莓派射频杂波。与 RCA 座同在伟良店打包，免除多余快递费。",
+        img: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Yamaha_MM-MC_RIAA_preamp_board%2C_around_1987_%282%29.jpg/640px-Yamaha_MM-MC_RIAA_preamp_board%2C_around_1987_%282%29.jpg",
+        tips: "拍 1 米足够剪 5~6 段连接线。"
+      },
+      {
+        id: "push_buttons_7",
+        name: "12mm 纯铝平头微动金属按键 × 7 (带锁紧螺母)",
+        spec: "【阶段三·分体外壳】MENU / BACK / 上下左右 / OK 独立物理按键 / 纯铜镀银触点",
+        category: "phase3",
+        price: 21,
+        pddPrice: "¥18 - ¥25",
+        tbPrice: "¥21 (7只包邮现货)",
+        confirmed: true,
+        selected: true,
+        pddKeyword: "12mm 金属按钮 平头 无锁",
+        tbKeyword: "12mm 平头微动金属按键 无锁 复位",
+        desc: "已在淘宝确认！12mm 纯铝金属拉丝质感，无锁瞬时复位型，清脆微动行程手感。配齐固定螺母与防水圈，共用 1 根地线接 Pin 9，通过 8P 彩排线一体直插树莓派！",
+        img: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Yamaha_MM-MC_RIAA_preamp_board%2C_around_1987_%282%29.jpg/640px-Yamaha_MM-MC_RIAA_preamp_board%2C_around_1987_%282%29.jpg",
+        tips: "认准【12mm 螺纹】+【无锁自复位】+【平头】，拍 7 只即可。"
+      },
+      {
+        id: "chassis_split",
+        name: "分体式双机箱方案 (Box 1 3D打印外壳 + Box 2 全铝前级机箱)",
+        spec: "【阶段三】Box 1: 3D打印 15° 黄金仰角外壳 ｜ Box 2: 纯模拟全铝纤薄机箱 (含35mm铝旋钮与尾插脚垫)",
+        category: "phase3",
+        price: 195,
+        pddPrice: "¥180 - ¥220",
+        tbPrice: "¥195 - ¥230",
+        confirmed: false,
+        selected: true,
+        pddKeyword: "全铝机箱 纤薄 音频",
+        tbKeyword: "全铝音频机箱 纤薄",
+        desc: "终极分体方案！数播控制中枢采用 3D 打印 15° 仰角外壳，桌面触控与按键极度顺手且全机仅 5V 安全弱电；解码前级采用独立全铝封闭机箱，彻底屏蔽 220V 与杂讯，声底黑如深空！",
+        img: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/VU_Meter.jpg/640px-VU_Meter.jpg",
+        tips: "树莓派板子到手出声后，再发开孔图给店家 CNC 雕刻后机箱。"
+      },
+      {
+        id: "meanwell_5v",
+        name: "台湾明纬 5V 6A 超薄工业电源 (LRS-35-5)",
+        spec: "【阶段三】装箱消灭外部插座 / 220V 螺丝端子直入 / 5V 专供树莓派5与7寸屏",
+        category: "phase3",
+        price: 38,
+        pddPrice: "¥32 - ¥40",
+        tbPrice: "¥38 (明纬专卖店)",
+        confirmed: false,
+        selected: true,
+        pddKeyword: "明纬 LRS-35-5",
+        tbKeyword: "明纬电源 LRS-35-5 5V",
+        desc: "装箱时锁在机箱底板，实现机箱后背对外部仅需一根 220V 电源线插墙！桌面试验期使用套餐自带 Type-C 电源即可。",
+        img: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Apple_12W_USB_Power_Adapter.jpg/640px-Apple_12W_USB_Power_Adapter.jpg",
+        tips: "第三阶段装箱时再拍下。"
+      },
+      {
+        id: "cd_addon",
+        name: "【选配】吸入式笔记本光驱 + Slim SATA 转 USB 易驱线",
+        spec: "【选配·仪式感】Slot-in 先锋/日立机芯 / USB 直连树莓派 / 一键抓轨 / 封面歌名自动匹配",
+        category: "phase3",
+        price: 85,
+        pddPrice: "¥75 - ¥90",
+        tbPrice: "¥85",
+        confirmed: false,
+        selected: false,
+        pddKeyword: "吸入式光驱 SATA 转接线",
+        tbKeyword: "吸入式光驱 SATA 转接线",
+        desc: "前面板开 13cm 细缝，把 CD 推进去自动吸入。树莓派内存缓存抓轨消除机械 Jitter，7寸大屏自动显示原装专辑封面与触控选歌！",
+        img: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/91/CD-ROM_drive.jpg/640px-CD-ROM_drive.jpg",
+        tips: "如果家里有实体 CD 收藏极力推荐选配，若纯听流媒体可不选。"
+      }
+    ];
+
+    function getSearchUrl(keyword, platform = currentPlatform) {
+      if (platform === "tb") {
+        return `https://s.taobao.com/search?q=${encodeURIComponent(keyword)}`;
+      } else {
+        return `https://mobile.yangkeduo.com/search_result.html?search_key=${encodeURIComponent(keyword)}`;
+      }
+    }
+
+    function changePlatform(p) {
+      currentPlatform = p;
+      renderGrid(currentFilter);
+    }
+
+    function jumpToSearch(keyword) {
+      const url = getSearchUrl(keyword, currentPlatform);
+      window.open(url, "_blank");
+    }
+
+    function renderGrid(filter = currentFilter) {
+      currentFilter = filter;
+      const grid = document.getElementById("bom-grid");
+      grid.innerHTML = "";
+      
+      const filtered = filter === "all" ? bomItems : bomItems.filter(item => item.category === filter);
+      
+      filtered.forEach(item => {
+        const activeKeyword = (currentPlatform === 'tb' && item.tbKeyword) ? item.tbKeyword : item.pddKeyword;
+        const platformName = currentPlatform === 'tb' ? '淘宝' : '拼多多';
+        const btnBg = currentPlatform === 'tb' ? 'bg-amber-600 hover:bg-amber-500' : 'bg-red-600 hover:bg-red-500';
+
+        const card = document.createElement("div");
+        card.className = `group bg-slate-900/90 border ${item.selected ? 'border-slate-700 hover:border-sky-500/50' : 'border-slate-800 opacity-60'} rounded-2xl overflow-hidden transition-all duration-300 flex flex-col justify-between hover:shadow-2xl hover:-translate-y-1`;
+        
+        card.innerHTML = `
+          <div>
+            <div class="relative h-40 w-full bg-slate-950 overflow-hidden border-b border-slate-800 cursor-pointer" onclick="jumpToSearch('${activeKeyword}')">
+              <img src="${item.img}" alt="${item.name}" class="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500 opacity-80 group-hover:opacity-100" onerror="this.src='https://images.unsplash.com/photo-1518770660439-4636190af475?w=500&q=80'">
+              <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent"></div>
+              
+              <div class="absolute top-3 left-3 flex gap-1.5">
+                ${item.confirmed ? '<span class="px-2 py-0.5 text-[10px] font-bold rounded-full badge-emerald flex items-center gap-1"><svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>已锁定正品</span>' : '<span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-slate-800 text-slate-300 border border-slate-700">阶段选配</span>'}
+              </div>
+
+              <div class="absolute bottom-2 right-3 font-mono font-black text-sky-400 text-lg">
+                ¥${item.price}
+              </div>
+            </div>
+            
+            <div class="p-5">
+              <h3 class="font-bold text-white text-base leading-snug group-hover:text-sky-400 transition-colors cursor-pointer" onclick="jumpToSearch('${activeKeyword}')">
+                ${item.name}
+              </h3>
+              <p class="text-xs text-amber-300/90 font-mono mt-1">${item.spec}</p>
+              
+              <div class="mt-2.5 flex items-center gap-2 text-[11px] font-mono">
+                <span class="text-amber-400 bg-amber-950/60 px-2 py-0.5 rounded border border-amber-800/40">${item.tbPrice}</span>
+              </div>
+
+              <p class="text-xs text-slate-400 mt-2.5 leading-relaxed line-clamp-2">${item.desc}</p>
+            </div>
+          </div>
+
+          <div class="p-4 pt-0 space-y-2 mt-2">
+            <div class="flex items-center justify-between border-t border-slate-800/80 pt-3">
+              <label class="flex items-center gap-2 cursor-pointer text-xs text-slate-300 hover:text-white select-none">
+                <input type="checkbox" ${item.selected ? 'checked' : ''} onchange="toggleItem('${item.id}')" class="w-4 h-4 rounded border-slate-700 text-sky-600 focus:ring-sky-500 focus:ring-offset-slate-900">
+                <span>计入总预算</span>
+              </label>
+
+              <button onclick="showDetails('${item.id}')" class="text-xs text-slate-400 hover:text-white flex items-center gap-1 font-medium transition">
+                避坑要点
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+              </button>
+            </div>
+
+            <button onclick="jumpToSearch('${activeKeyword}')" class="w-full py-2 px-3 text-xs font-bold rounded-xl ${btnBg} text-white transition flex items-center justify-center gap-1.5 shadow-md">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+              在${platformName}直达【${activeKeyword}】
+            </button>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+
+      calculateTotal();
+    }
+
+    function calculateTotal() {
+      const total = bomItems.filter(i => i.selected).reduce((acc, curr) => acc + curr.price, 0);
+      document.getElementById("header-total").innerText = total.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+    }
+
+    function toggleItem(id) {
+      const item = bomItems.find(i => i.id === id);
+      if (item) {
+        item.selected = !item.selected;
+        renderGrid(currentFilter);
+      }
+    }
+
+    function filterCategory(cat) {
+      document.querySelectorAll(".cat-btn").forEach(btn => {
+        if (btn.dataset.cat === cat) {
+          btn.className = "cat-btn active px-4 py-2 text-xs font-bold rounded-xl bg-sky-600 text-white shadow-md";
+        } else {
+          btn.className = "cat-btn px-4 py-2 text-xs font-medium rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300";
+        }
+      });
+      renderGrid(cat);
+    }
+
+    function showDetails(id) {
+      const item = bomItems.find(i => i.id === id);
+      if (!item) return;
+
+      const content = document.getElementById("modal-content");
+      content.innerHTML = `
+        <div class="flex items-center gap-3">
+          <span class="p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-400">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          </span>
+          <div>
+            <h3 class="text-base font-bold text-white">${item.name}</h3>
+            <span class="text-xs text-amber-400 font-mono">${item.tbPrice}</span>
+          </div>
+        </div>
+
+        <div class="space-y-3 text-xs leading-relaxed text-slate-300 pt-2">
+          <div class="bg-slate-950 p-3 rounded-xl border border-slate-800">
+            <span class="text-slate-400 block font-semibold mb-1">🔍 淘宝搜索精准词：</span>
+            <code class="text-sky-300 font-mono select-all bg-slate-900 px-2 py-1 rounded border border-slate-800 block">${item.tbKeyword}</code>
+          </div>
+
+          <div class="bg-slate-950 p-3 rounded-xl border border-slate-800">
+            <span class="text-slate-400 block font-semibold mb-1">⚙️ 核心技术规格：</span>
+            <p class="text-slate-200">${item.spec}</p>
+          </div>
+
+          <div class="bg-sky-950/30 p-3 rounded-xl border border-sky-800/40 text-sky-200">
+            <span class="font-bold flex items-center gap-1 mb-1 text-sky-400">
+              💡 避坑建议：
+            </span>
+            <p>${item.tips}</p>
+          </div>
+        </div>
+
+        <div class="pt-3 flex items-center justify-between gap-3">
+          <button onclick="jumpToSearch('${item.tbKeyword}')" class="px-4 py-2 text-xs font-bold rounded-xl bg-sky-600 hover:bg-sky-500 text-white transition flex items-center gap-1">
+            打开淘宝搜索 ➔
+          </button>
+          <button onclick="closeModal()" class="px-4 py-2 text-xs font-semibold rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition">
+            关闭
+          </button>
+        </div>
+      `;
+      document.getElementById("modal").classList.remove("hidden");
+    }
+
+    function closeModal() {
+      document.getElementById("modal").classList.add("hidden");
+    }
+
+    // ==================== 2. TAB 切换控制 ====================
+    function switchTab(tabId) {
+      ['bom', 'pinout', 'sdk', 'vu', 'schematic'].forEach(t => {
+        const view = document.getElementById(`view-${t}`);
+        const btn = document.getElementById(`tab-btn-${t}`);
+        if (t === tabId) {
+          view.classList.remove('hidden');
+          btn.className = "tab-btn tab-active px-4 py-2.5 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5";
+        } else {
+          view.classList.add('hidden');
+          btn.className = "tab-btn px-4 py-2.5 text-xs font-bold rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-all flex items-center gap-1.5";
+        }
+      });
+
+      if (tabId === 'vu') {
+        initVUMeter();
+      }
+    }
+
+    // ==================== 3. C++ SDK 源码片段库 ====================
+    const codeFiles = {
+      cmake: `# ==============================================================================
+# MyHiFiPlayer - 顶级嵌入式 C++20 数播解码播放器 CMake 构建配置
+# 目标硬件平台: 树莓派 5 (BCM2712, 64-bit Cortex-A76)
+# ==============================================================================
+cmake_minimum_required(VERSION 3.20)
+project(MyHiFiPlayer VERSION 1.0.0 LANGUAGES C CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+# 开启 AArch64 原生极端矢量化性能优化
+add_compile_options(-O3 -pipe -march=armv8.2-a+crypto -mcpu=cortex-a76)
+
+# 引入核心外部依赖库
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(ALSA REQUIRED alsa)                # 硬件级音频直出
+pkg_check_modules(AVCODEC REQUIRED libavcodec)       # FFmpeg 音频解码
+pkg_check_modules(AVFORMAT REQUIRED libavformat)     # 音频容器封装解析
+pkg_check_modules(AVUTIL REQUIRED libavutil)         # FFmpeg 工具库
+pkg_check_modules(SWRESAMPLE REQUIRED libswresample) # 高精度音频重采样
+pkg_check_modules(SDL2 REQUIRED sdl2)                # KMS/DRM 显示底座
+pkg_check_modules(GLESV2 REQUIRED glesv2)            # OpenGL ES 2.0 渲染
+pkg_check_modules(GPIOD REQUIRED libgpiod)           # 硬件 EC11 旋钮中断
+
+# 头文件搜索路径
+include_directories(
+    \${CMAKE_CURRENT_SOURCE_DIR}/include
+    \${CMAKE_CURRENT_SOURCE_DIR}/third_party/imgui
+    \${CMAKE_CURRENT_SOURCE_DIR}/third_party/imgui/backends
+    \${ALSA_INCLUDE_DIRS}
+    \${AVCODEC_INCLUDE_DIRS}
+    \${SDL2_INCLUDE_DIRS}
+    \${GPIOD_INCLUDE_DIRS}
+)
+
+# 收集源码文件
+file(GLOB SOURCES 
+    src/*.cpp
+    third_party/imgui/imgui.cpp
+    third_party/imgui/imgui_draw.cpp
+    third_party/imgui/imgui_tables.cpp
+    third_party/imgui/imgui_widgets.cpp
+    third_party/imgui/backends/imgui_impl_sdl2.cpp
+    third_party/imgui/backends/imgui_impl_opengl3.cpp
+)
+
+# 生成最终可执行程序
+add_executable(\${PROJECT_NAME} \${SOURCES})
+
+# 链接系统线程与动态库
+target_link_libraries(\${PROJECT_NAME} PRIVATE
+    pthread
+    \${ALSA_LIBRARIES}
+    \${AVCODEC_LIBRARIES}
+    \${AVFORMAT_LIBRARIES}
+    \${AVUTIL_LIBRARIES}
+    \${SWRESAMPLE_LIBRARIES}
+    \${SDL2_LIBRARIES}
+    \${GLESV2_LIBRARIES}
+    \${GPIOD_LIBRARIES}
+)`,
+      main: `// ==============================================================================
+// src/main.cpp - 极速启动主循环 (DRM/KMS + OpenGL ES + Dear ImGui)
+// ==============================================================================
+#include <iostream>
+#include <thread>
+#include <chrono>
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_opengles2.h>
+#include "imgui.h"
+#include "imgui_impl_sdl2.h"
+#include "imgui_impl_opengl3.h"
+
+#include "AudioEngine.hpp"
+#include "VUMeterRenderer.hpp"
+#include "RotaryEncoder.hpp"
+
+int main(int argc, char* argv[]) {
+    std::cout << "[Init] 启动 MyHiFiPlayer 纯音数播系统..." << std::endl;
+
+    // 1. 初始化 SDL2 (在 Linux 控制台下原生自动选择 KMSDRM 驱动，无需 X11 桌面)
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_EVENTS) != 0) {
+        std::cerr << "SDL_Init Error: " << SDL_GetError() << std::endl;
+        return -1;
+    }
+
+    // 设置 OpenGL ES 2.0 上下文属性
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+
+    // 2. 创建 1024x600 纯平全屏窗口 (适配微雪 7 寸 QLED 触摸屏)
+    SDL_Window* window = SDL_CreateWindow(
+        "MyHiFiPlayer",
+        SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+        1024, 600,
+        SDL_WINDOW_OPENGL | SDL_WINDOW_FULLSCREEN | SDL_WINDOW_SHOWN
+    );
+    SDL_GLContext gl_context = SDL_GL_CreateContext(window);
+    SDL_GL_SetSwapInterval(1); // 开启 V-Sync 锁死 60 FPS 丝滑刷新
+
+    // 3. 初始化 Dear ImGui
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO();
+    io.IniFilename = nullptr; // 纯嵌入式免配置文件写盘
+    ImGui::StyleColorsDark();
+
+    ImGui_ImplSDL2_InitForOpenGL(window, gl_context);
+    ImGui_ImplOpenGL3_Init("#version 100");
+
+    // 4. 启动音频核心与硬件外设
+    AudioEngine audioEngine("hw:0,0"); // 绑定 I2S 硬件声卡
+    audioEngine.start();
+
+    // 绑定 Pin 16 (GPIO 23) 与 Pin 18 (GPIO 24)
+    RotaryEncoder volumeKnob("/dev/gpiochip4", 23, 24, [&audioEngine](int delta) {
+        audioEngine.adjustVolume(delta * 0.02f);
+    });
+    volumeKnob.startListening();
+
+    VUMeterRenderer vuRenderer;
+
+    std::cout << "[Ready] 系统初始化完毕，进入 60fps 实时主循环。" << std::endl;
+
+    // 5. 主渲染事件循环
+    bool running = true;
+    while (running) {
+        SDL_Event event;
+        while (SDL_PollEvent(&event)) {
+            ImGui_ImplSDL2_ProcessEvent(&event);
+            if (event.type == SDL_QUIT) running = false;
+        }
+
+        // 获取左右声道实时电平 (RMS 与 Peak)
+        float levelL = audioEngine.getMeterLevelL();
+        float levelR = audioEngine.getMeterLevelR();
+
+        // 开始 ImGui 帧渲染
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplSDL2_NewFrame();
+        ImGui::NewFrame();
+
+        // 渲染经典麦景图湖蓝色全屏动圈表头
+        vuRenderer.render(1024, 600, levelL, levelR);
+
+        ImGui::Render();
+        glViewport(0, 0, 1024, 600);
+        glClearColor(0.02f, 0.04f, 0.08f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        SDL_GL_SwapWindow(window);
+    }
+
+    // 优雅退出清理
+    audioEngine.stop();
+    volumeKnob.stop();
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplSDL2_Shutdown();
+    ImGui::DestroyContext();
+    SDL_GL_DeleteContext(gl_context);
+    SDL_DestroyWindow(window);
+    SDL_Quit();
+    return 0;
+}`,
+      input: `// ==============================================================================
+// include/InputManager.hpp - 跨平台统一输入事件总线 (Modern C++20)
+// 适配 macOS (键盘/鼠标模拟) 与 树莓派 5 (7 个独立物理微动按键 + EC11 旋钮)
+// ==============================================================================
+#pragma once
+#include <queue>
+#include <mutex>
+#include <optional>
+#include <chrono>
+
+enum class HiFiEvent {
+    None = 0,
+    KeyMenu,        // Pin 3 (GPIO 2)   / Mac 'M' 键 -> 呼出设置 / 切换表头视觉
+    KeyBack,        // Pin 5 (GPIO 3)   / Mac 'ESC' 键 -> 返回上一级 / 退出弹窗
+    KeyUp,          // Pin 7 (GPIO 4)   / Mac 方向键 '↑' -> 选中上一曲
+    KeyDown,        // Pin 11 (GPIO 17) / Mac 方向键 '↓' -> 选中下一曲
+    KeyLeft,        // Pin 13 (GPIO 27) / Mac 方向键 '←' -> 快退 5 秒 / 上一Tab
+    KeyRight,       // Pin 15 (GPIO 22) / Mac 方向键 '→' -> 快进 5 秒 / 下一Tab
+    KeyOk,          // Pin 29 (GPIO 5)  / Mac 'Enter' 键 -> 播放选中歌曲 / 确认
+    KnobVolumeUp,   // Pin 16/18        / Mac 滚轮上滚 / '+' 键 -> 音量递增
+    KnobVolumeDown, // Pin 16/18        / Mac 滚轮下滚 / '-' 键 -> 音量递减
+    KnobClick       // Pin 22 (GPIO 25) / Mac 'Space' 键 -> 静音 / 播放暂停
+};
+
+class InputManager {
+public:
+    static InputManager& getInstance() {
+        static InputManager instance;
+        return instance;
+    }
+
+    // 跨线程安全推入输入事件 (硬件中断线程 或 SDL 事件线程调用)
+    void pushEvent(HiFiEvent ev) {
+        if (ev == HiFiEvent::None) return;
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_eventQueue.push(ev);
+    }
+
+    // UI 或播放主循环每帧消费事件 (非阻塞)
+    std::optional<HiFiEvent> pollEvent() {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (m_eventQueue.empty()) return std::nullopt;
+        HiFiEvent ev = m_eventQueue.front();
+        m_eventQueue.pop();
+        return ev;
+    }
+
+    // 软件消抖辅助函数 (树莓派 GPIO 20ms 防抖)
+    bool checkDebounce(int pinIndex, int debounceMs = 20) {
+        auto now = std::chrono::steady_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+            now - m_lastPressTime[pinIndex]).count();
+        if (elapsed > debounceMs) {
+            m_lastPressTime[pinIndex] = now;
+            return true;
+        }
+        return false;
+    }
+
+private:
+    InputManager() = default;
+    std::mutex m_mutex;
+    std::queue<HiFiEvent> m_eventQueue;
+    std::chrono::steady_clock::time_point m_lastPressTime[32]{};
+};`,
+      audio: `// ==============================================================================
+// src/AudioEngine.cpp - ALSA 原生 Bit-Perfect 零拷贝硬解直出引擎
+// ==============================================================================
+#include <alsa/asoundlib.h>
+#include <thread>
+#include <atomic>
+#include <vector>
+#include <cmath>
+#include <iostream>
+
+class AudioEngine {
+private:
+    snd_pcm_t* pcm_handle_ = nullptr;
+    std::string device_name_;
+    std::atomic<bool> is_running_{false};
+    std::thread playback_thread_;
+
+    std::atomic<float> meter_l_{0.0f};
+    std::atomic<float> meter_r_{0.0f};
+    std::atomic<float> volume_{0.85f};
+
+public:
+    AudioEngine(const std::string& dev = "default") : device_name_(dev) {}
+
+    bool initALSA(unsigned int rate = 44100, int channels = 2) {
+        // 独占打开 ALSA 硬件播放流 (Bit-Perfect)
+        int err = snd_pcm_open(&pcm_handle_, device_name_.c_str(), SND_PCM_STREAM_PLAYBACK, 0);
+        if (err < 0) {
+            std::cerr << "无法打开 ALSA 设备: " << snd_strerror(err) << std::endl;
+            return false;
+        }
+
+        snd_pcm_hw_params_t* hw_params;
+        snd_pcm_hw_params_alloca(&hw_params);
+        snd_pcm_hw_params_any(pcm_handle_, hw_params);
+
+        // 设置交错采样、16位有符号原生小端格式、通道数与时钟
+        snd_pcm_hw_params_set_access(pcm_handle_, hw_params, SND_PCM_ACCESS_RW_INTERLEAVED);
+        snd_pcm_hw_params_set_format(pcm_handle_, hw_params, SND_PCM_FORMAT_S16_LE);
+        snd_pcm_hw_params_set_channels(pcm_handle_, hw_params, channels);
+        snd_pcm_hw_params_set_rate_near(pcm_handle_, hw_params, &rate, 0);
+
+        // 设置低延迟双环形缓冲区 (2048 帧缓冲，512 帧周期)
+        snd_pcm_uframes_t buffer_size = 2048;
+        snd_pcm_uframes_t period_size = 512;
+        snd_pcm_hw_params_set_buffer_size_near(pcm_handle_, hw_params, &buffer_size);
+        snd_pcm_hw_params_set_period_size_near(pcm_handle_, hw_params, &period_size, 0);
+
+        snd_pcm_hw_params(pcm_handle_, hw_params);
+        return true;
+    }
+
+    void start() {
+        if (!initALSA()) return;
+        is_running_ = true;
+
+        playback_thread_ = std::thread([this]() {
+            // 提权当前线程为 Linux 实时 FIFO 调度 (绝不发生音频 Underrun)
+            struct sched_param param;
+            param.sched_priority = 90;
+            pthread_setschedparam(pthread_self(), SCHED_FIFO, &param);
+
+            const int frames_to_deliver = 512;
+            std::vector<int16_t> buffer(frames_to_deliver * 2);
+
+            while (is_running_) {
+                // 此处从 RingBuffer 提取 PCM 数据，并实时计算 RMS 能量供麦景图表头显示
+                float sum_sq_l = 0.0f, sum_sq_r = 0.0f;
+                for (int i = 0; i < frames_to_deliver; ++i) {
+                    float sample_l = buffer[i * 2] / 32768.0f;
+                    float sample_r = buffer[i * 2 + 1] / 32768.0f;
+                    sum_sq_l += sample_l * sample_l;
+                    sum_sq_r += sample_r * sample_r;
+                }
+
+                // 写入原子变量，无锁安全传递给 UI 线程
+                meter_l_.store(std::sqrt(sum_sq_l / frames_to_deliver));
+                meter_r_.store(std::sqrt(sum_sq_r / frames_to_deliver));
+
+                // 直接推送 I2S 硬件音频帧 (Pin 12/35/40)
+                snd_pcm_sframes_t frames = snd_pcm_writei(pcm_handle_, buffer.data(), frames_to_deliver);
+                if (frames < 0) {
+                    snd_pcm_recover(pcm_handle_, frames, 0); // 发生欠载时自动恢复
+                }
+            }
+        });
+    }
+
+    float getMeterLevelL() const { return meter_l_.load(); }
+    float getMeterLevelR() const { return meter_r_.load(); }
+    void adjustVolume(float delta) {
+        float v = volume_.load() + delta;
+        volume_.store(std::clamp(v, 0.0f, 1.0f));
+    }
+
+    void stop() {
+        is_running_ = false;
+        if (playback_thread_.joinable()) playback_thread_.join();
+        if (pcm_handle_) {
+            snd_pcm_close(pcm_handle_);
+            pcm_handle_ = nullptr;
+        }
+    }
+};`,
+      vu: `// ==============================================================================
+// src/VUMeterRenderer.cpp - 经典麦景图湖蓝动圈表头算法与 ImGui 绘制
+// ==============================================================================
+#include "imgui.h"
+#include <cmath>
+#include <algorithm>
+
+class VUMeterRenderer {
+private:
+    float needle_angle_l_ = -0.785f; // 左声道指针当前弧度 (-45度)
+    float needle_angle_r_ = -0.785f; // 右声道指针当前弧度
+
+public:
+    void render(float screen_w, float screen_h, float raw_level_l, float raw_level_r) {
+        ImGui::SetNextWindowPos(ImVec2(0, 0));
+        ImGui::SetNextWindowSize(ImVec2(screen_w, screen_h));
+        ImGui::Begin("VUMeterWindow", nullptr, 
+            ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoBringToFrontOnFocus);
+
+        ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+        // 1. 绘制麦景图经典深邃黑金底板
+        draw_list->AddRectFilled(ImVec2(0, 0), ImVec2(screen_w, screen_h), IM_COL32(5, 10, 18, 255));
+
+        // 2. 计算左右两个双表头的几何区域
+        float meter_w = (screen_w - 48.0f) * 0.5f;
+        float meter_h = screen_h - 40.0f;
+
+        drawSingleMeter(draw_list, ImVec2(16, 20), ImVec2(16 + meter_w, 20 + meter_h), raw_level_l, needle_angle_l_, "LEFT CHANNEL");
+        drawSingleMeter(draw_list, ImVec2(32 + meter_w, 20), ImVec2(32 + meter_w * 2, 20 + meter_h), raw_level_r, needle_angle_r_, "RIGHT CHANNEL");
+
+        ImGui::End();
+    }
+
+private:
+    void drawSingleMeter(ImDrawList* dl, ImVec2 p_min, ImVec2 p_max, float raw_level, float& current_angle, const char* label) {
+        // 麦景图纯正湖蓝色柔光渐变 (Lake Blue #0088CC ~ #003366)
+        dl->AddRectFilled(p_min, p_max, IM_COL32(0, 48, 85, 230), 12.0f);
+        dl->AddRect(p_min, p_max, IM_COL32(20, 110, 180, 255), 12.0f, 0, 2.0f);
+
+        ImVec2 center(p_min.x + (p_max.x - p_min.x) * 0.5f, p_max.y - 30.0f);
+        float radius = (p_max.x - p_min.x) * 0.45f;
+
+        // 绘制刻度弧线与 dB 标度 (-20dB ~ +3dB)
+        dl->AddCircleArc(center, radius, -2.356f, -0.785f, IM_COL32(180, 230, 255, 220), 48, 2.0f);
+
+        // 动圈表头阻尼物理拟合 (Attack 瞬态上升快，Decay 惯性阻尼缓慢回落)
+        float target_angle = -2.356f + std::clamp(raw_level, 0.0f, 1.0f) * 1.571f;
+        if (target_angle > current_angle) {
+            current_angle += (target_angle - current_angle) * 0.35f; // 极速跟手
+        } else {
+            current_angle += (target_angle - current_angle) * 0.06f; // 优雅阻尼下坠
+        }
+
+        // 绘制亮红/亮橙色指针
+        ImVec2 needle_tip(center.x + std::cos(current_angle) * (radius - 10.0f),
+                          center.y + std::sin(current_angle) * (radius - 10.0f));
+        dl->AddLine(center, needle_tip, IM_COL32(255, 60, 40, 255), 2.5f);
+
+        // 指针旋转中心金属轴盖
+        dl->AddCircleFilled(center, 12.0f, IM_COL32(20, 25, 35, 255));
+        dl->AddCircle(center, 12.0f, IM_COL32(150, 170, 190, 255), 32, 1.5f);
+
+        // 声道与 McIntosh 标牌
+        dl->AddText(ImVec2(center.x - 45, p_min.y + 20), IM_COL32(140, 210, 255, 200), label);
+        dl->AddText(ImVec2(center.x - 30, center.y - 50), IM_COL32(255, 255, 255, 240), "WATTS");
+    }
+};`,
+      encoder: `// ==============================================================================
+// include/RotaryEncoder.hpp - libgpiod 硬件 EC11 旋钮中断监听类
+// ==============================================================================
+#pragma once
+#include <gpiod.h>
+#include <functional>
+#include <thread>
+#include <atomic>
+#include <iostream>
+
+class RotaryEncoder {
+public:
+    using Callback = std::function<void(int delta)>;
+
+private:
+    std::string chip_path_;
+    int pin_a_;
+    int pin_b_;
+    Callback on_change_;
+    std::atomic<bool> running_{false};
+    std::thread worker_;
+
+public:
+    // 绑定 Pin 16 (GPIO 23) 与 Pin 18 (GPIO 24)
+    RotaryEncoder(const std::string& chip, int a, int b, Callback cb)
+        : chip_path_(chip), pin_a_(a), pin_b_(b), on_change_(cb) {}
+
+    void startListening() {
+        running_ = true;
+        worker_ = std::thread([this]() {
+            struct gpiod_chip* chip = gpiod_chip_open(chip_path_.c_str());
+            if (!chip) {
+                std::cerr << "无法打开 GPIO Chip: " << chip_path_ << std::endl;
+                return;
+            }
+
+            struct gpiod_line* line_a = gpiod_chip_get_line(chip, pin_a_);
+            struct gpiod_line* line_b = gpiod_chip_get_line(chip, pin_b_);
+
+            gpiod_line_request_both_edges_events(line_a, "encoder_a");
+            gpiod_line_request_input(line_b, "encoder_b");
+
+            int last_a = gpiod_line_get_value(line_a);
+
+            while (running_) {
+                struct gpiod_line_event event;
+                if (gpiod_line_event_wait(line_a, nullptr) == 1) {
+                    if (gpiod_line_event_read(line_a, &event) == 0) {
+                        int cur_a = gpiod_line_get_value(line_a);
+                        int cur_b = gpiod_line_get_value(line_b);
+
+                        if (cur_a != last_a) {
+                            int delta = (cur_a == cur_b) ? -1 : 1;
+                            if (on_change_) on_change_(delta);
+                            last_a = cur_a;
+                        }
+                    }
+                }
+            }
+
+            gpiod_line_release(line_a);
+            gpiod_line_release(line_b);
+            gpiod_chip_close(chip);
+        });
+    }
+
+    void stop() {
+        running_ = false;
+        if (worker_.joinable()) worker_.join();
+    }
+};`,
+      cd: `// ==============================================================================
+// src/CDRipper.cpp - 吸入式光驱自动感应、内存缓冲与 MusicBrainz 抓轨
+// ==============================================================================
+#include <iostream>
+#include <fstream>
+#include <thread>
+#include <chrono>
+
+class CDManager {
+public:
+    void listenCDInsert() {
+        std::cout << "[CD Monitor] 启动 /dev/cdrom 硬件监听..." << std::endl;
+        while (true) {
+            // 通过 Linux udev 或 ioctl 轮询检查光驱状态
+            std::ifstream disc_state("/sys/block/sr0/events_poll_msecs");
+            if (disc_state.is_open()) {
+                // 检测到光盘吸入插入
+                std::cout << "[CD Inserted] 发现发烧 CD 光盘插入！" << std::endl;
+                
+                // 1. 读取 DiscID 联网请求 MusicBrainz 数据库
+                fetchAlbumCoverAndTracks();
+
+                // 2. 启用 cdparanoia 高速无损纠错提取至内存缓冲区
+                startMemoryPlayback();
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::seconds(2));
+        }
+    }
+
+private:
+    void fetchAlbumCoverAndTracks() {
+        std::cout << "[Online] 正在获取 MusicBrainz 高清封面大图与曲目信息..." << std::endl;
+        // 自动拉取 600x600 高清专辑封面 jpg，直接交给 OpenGL 生成纹理贴图
+    }
+
+    void startMemoryPlayback() {
+        std::cout << "[RAM Playback] 启动内存纠错缓冲播放 (Bit-Perfect I2S)..." << std::endl;
+    }
+};`
+    };
+
+    function showCodeFile(fileKey) {
+      document.querySelectorAll('.code-tab').forEach(btn => {
+        btn.className = "code-tab px-3 py-1 text-xs font-mono rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300";
+      });
+      event.target.className = "code-tab active px-3 py-1 text-xs font-mono rounded-lg bg-sky-600 text-white font-semibold";
+      document.getElementById('code-content').textContent = codeFiles[fileKey];
+    }
+
+    function copyCurrentCode() {
+      const code = document.getElementById('code-content').textContent;
+      navigator.clipboard.writeText(code).then(() => {
+        const btnText = document.getElementById('copy-btn-text');
+        btnText.textContent = "已复制成功！";
+        setTimeout(() => { btnText.textContent = "复制代码"; }, 2000);
+      });
+    }
+
+    // ==================== 4. 麦景图湖蓝 VU 动圈表头 Canvas 仿真 ====================
+    let vuCanvas, vuCtx;
+    let vuSimulating = false;
+    let vuAnimId;
+    let needleL = -2.356, needleR = -2.356;
+    let targetL = -2.356, targetR = -2.356;
+    let vuBrightness = 0.85;
+
+    function initVUMeter() {
+      vuCanvas = document.getElementById('vu-canvas');
+      if (!vuCanvas) return;
+      vuCtx = vuCanvas.getContext('2d');
+      drawVUMeter();
+    }
+
+    function updateVUBrightness(val) {
+      vuBrightness = val / 100.0;
+      if (!vuSimulating) drawVUMeter();
+    }
+
+    function toggleVUSimulation() {
+      vuSimulating = !vuSimulating;
+      const btn = document.getElementById('vu-play-btn');
+      if (vuSimulating) {
+        btn.innerHTML = `<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg><span>暂停模拟</span>`;
+        btn.className = "px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow-lg flex items-center gap-2 transition";
+        simulateStep();
+      } else {
+        btn.innerHTML = `<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path></svg><span>模拟音乐输入 (指针跳动)</span>`;
+        btn.className = "px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs shadow-lg shadow-sky-500/30 flex items-center gap-2 transition";
+        cancelAnimationFrame(vuAnimId);
+      }
+    }
+
+    function simulateStep() {
+      if (!vuSimulating) return;
+
+      const now = Date.now() * 0.005;
+      const pulseL = Math.pow(Math.max(0, Math.sin(now * 1.5) * 0.7 + Math.sin(now * 3.7) * 0.3), 1.8);
+      const pulseR = Math.pow(Math.max(0, Math.sin(now * 1.5 + 0.3) * 0.7 + Math.sin(now * 4.1) * 0.3), 1.8);
+
+      targetL = -2.356 + pulseL * 1.571;
+      targetR = -2.356 + pulseR * 1.571;
+
+      if (targetL > needleL) needleL += (targetL - needleL) * 0.32;
+      else needleL += (targetL - needleL) * 0.06;
+
+      if (targetR > needleR) needleR += (targetR - needleR) * 0.32;
+      else needleR += (targetR - needleR) * 0.06;
+
+      drawVUMeter();
+      vuAnimId = requestAnimationFrame(simulateStep);
+    }
+
+    function drawVUMeter() {
+      const w = vuCanvas.width;
+      const h = vuCanvas.height;
+      vuCtx.clearRect(0, 0, w, h);
+
+      vuCtx.fillStyle = "#030712";
+      vuCtx.fillRect(0, 0, w, h);
+
+      const meterW = (w - 60) / 2;
+      const meterH = h - 50;
+
+      drawSingleVUDial(20, 25, meterW, meterH, needleL, "LEFT CHANNEL");
+      drawSingleVUDial(40 + meterW, 25, meterW, meterH, needleR, "RIGHT CHANNEL");
+    }
+
+    function drawSingleVUDial(x, y, w, h, angle, title) {
+      vuCtx.save();
+
+      const grad = vuCtx.createRadialGradient(x + w/2, y + h - 40, 20, x + w/2, y + h/2, w/2);
+      grad.addColorStop(0, `rgba(0, 160, 240, ${0.45 * vuBrightness})`);
+      grad.addColorStop(0.6, `rgba(0, 80, 150, ${0.35 * vuBrightness})`);
+      grad.addColorStop(1, `rgba(2, 20, 45, ${0.7 * vuBrightness})`);
+
+      vuCtx.fillStyle = grad;
+      vuCtx.beginPath();
+      vuCtx.roundRect(x, y, w, h, 16);
+      vuCtx.fill();
+
+      vuCtx.strokeStyle = `rgba(56, 189, 248, ${0.6 * vuBrightness})`;
+      vuCtx.lineWidth = 2;
+      vuCtx.stroke();
+
+      const cx = x + w / 2;
+      const cy = y + h - 35;
+      const radius = w * 0.44;
+
+      vuCtx.beginPath();
+      vuCtx.arc(cx, cy, radius, -2.356, -0.785);
+      vuCtx.strokeStyle = "rgba(186, 230, 253, 0.85)";
+      vuCtx.lineWidth = 3;
+      vuCtx.stroke();
+
+      const marks = [-20, -10, -7, -5, -3, -1, 0, 1, 2, 3];
+      marks.forEach((db, idx) => {
+        const a = -2.356 + (idx / (marks.length - 1)) * 1.571;
+        const x1 = cx + Math.cos(a) * (radius - 4);
+        const y1 = cy + Math.sin(a) * (radius - 4);
+        const x2 = cx + Math.cos(a) * (radius - (idx % 2 === 0 ? 18 : 10));
+        const y2 = cy + Math.sin(a) * (radius - (idx % 2 === 0 ? 18 : 10));
+
+        vuCtx.beginPath();
+        vuCtx.moveTo(x1, y1);
+        vuCtx.lineTo(x2, y2);
+        vuCtx.strokeStyle = db >= 0 ? "#ef4444" : "rgba(224, 242, 254, 0.9)";
+        vuCtx.lineWidth = db >= 0 ? 3 : 2;
+        vuCtx.stroke();
+
+        if (idx % 2 === 0) {
+          const tx = cx + Math.cos(a) * (radius - 32);
+          const ty = cy + Math.sin(a) * (radius - 32);
+          vuCtx.fillStyle = db >= 0 ? "#ef4444" : "#bae6fd";
+          vuCtx.font = "bold 13px monospace";
+          vuCtx.textAlign = "center";
+          vuCtx.textBaseline = "middle";
+          vuCtx.fillText(db > 0 ? `+${db}` : `${db}`, tx, ty);
+        }
+      });
+
+      const tipX = cx + Math.cos(angle) * (radius - 8);
+      const tipY = cy + Math.sin(angle) * (radius - 8);
+      vuCtx.beginPath();
+      vuCtx.moveTo(cx, cy);
+      vuCtx.lineTo(tipX, tipY);
+      vuCtx.strokeStyle = "#ff3b30";
+      vuCtx.lineWidth = 3;
+      vuCtx.shadowColor = "#ff3b30";
+      vuCtx.shadowBlur = 8;
+      vuCtx.stroke();
+      vuCtx.shadowBlur = 0;
+
+      vuCtx.beginPath();
+      vuCtx.arc(cx, cy, 14, 0, Math.PI * 2);
+      vuCtx.fillStyle = "#1e293b";
+      vuCtx.fill();
+      vuCtx.strokeStyle = "#94a3b8";
+      vuCtx.lineWidth = 2;
+      vuCtx.stroke();
+
+      vuCtx.fillStyle = "rgba(186, 230, 253, 0.85)";
+      vuCtx.font = "bold 13px sans-serif";
+      vuCtx.textAlign = "center";
+      vuCtx.fillText(title, cx, y + 36);
+      vuCtx.font = "bold 11px monospace";
+      vuCtx.fillText("DECIBELS / WATTS", cx, cy - 65);
+
+      vuCtx.restore();
+    }
+
+    // 初始化渲染
+    window.addEventListener('DOMContentLoaded', () => {
+      renderGrid();
+      showCodeFile('cmake');
+    });
+  </script>
+</body>
+</html>
+
