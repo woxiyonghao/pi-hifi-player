@@ -1,0 +1,43 @@
+# ==============================================================================
+# MyHiFiPlayer - Git 忽略规则
+# ==============================================================================
+
+# 编译构建输出目录与临时构建缓存
+build/
+bin/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+compile_commands.json
+.ninja_*
+build.ninja
+
+# 编译中间目标与二进制文件
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.so.*
+*.dylib
+*.dll
+*.dSYM/
+
+# IDE 与编辑器配置
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
+
+# macOS 系统文件与缓存
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
