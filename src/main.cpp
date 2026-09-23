@@ -19,6 +19,7 @@
 #include "VUMeterRenderer.hpp"
 #include "SidebarView.hpp"
 #include "MusicModel.hpp"
+#include "Font.hpp"
 
 // C++20 [[maybe_unused]] 属性：明确告知编译器形参未直接使用，消除强警告
 int main([[maybe_unused]] int argc, [[maybe_unused]] char *argv[])
@@ -82,13 +83,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char *argv[])
     ImGuiIO &io = ImGui::GetIO();
     io.IniFilename = nullptr; // 纯音数播嵌入式设备，免写 imgui.ini 磁盘配置
     ImGui::StyleColorsDark();
-
-    // 加载 macOS 原生冬青黑体中文字库，避免中文显示为问号
-    const char *font_path = "/System/Library/Fonts/Hiragino Sans GB.ttc";
-    if (FILE *f = fopen(font_path, "r")){
-        fclose(f);
-        io.Fonts->AddFontFromFileTTF(font_path, 15.0f, nullptr, io.Fonts->GetGlyphRangesChineseFull());
-    }
+    // 统一初始化字阶系统 (Small 12px, Regular 15px, Medium 20px, Large 28px)
+    Fonts::initialize(io);
 
     // =========================================================================
     // 5. 绑定 SDL2 窗口系统与 OpenGL3 渲染后端
@@ -144,8 +140,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char *argv[])
 
         // [6.2] 模拟左右声道音频能量 (正弦节拍基底 + 随机瞬态爆发，后续接入真实 PCM 解码流)
         sim_time += 0.035f;
-        float level_l = std::abs(std::sin(sim_time * 1.5f)) * 0.75f + (rand() % 100 / 1000.0f);
-        float level_r = std::abs(std::sin(sim_time * 1.8f)) * 0.70f + (rand() % 100 / 1000.0f);
+        [[maybe_unused]]  float level_l = std::abs(std::sin(sim_time * 1.5f)) * 0.75f + (rand() % 100 / 1000.0f);
+        [[maybe_unused]]  float level_r = std::abs(std::sin(sim_time * 1.8f)) * 0.70f + (rand() % 100 / 1000.0f);
 
         // [6.3] 开启 ImGui 帧缓冲
         ImGui_ImplOpenGL3_NewFrame();

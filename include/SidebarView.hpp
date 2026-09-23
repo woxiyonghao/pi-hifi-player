@@ -1,36 +1,46 @@
 #pragma once
 
 #include "imgui.h"
-#include "MusicModel.hpp" // 引入模型类
+#include "MusicModel.hpp"
+#include "UIConfig.hpp"
 #include <vector>
 #include <functional>
 
-// 侧边栏核心分类与功能枚举
+// 侧边栏页面与功能枚举
 enum class SidebarTab {
-    // 顶部五大核心功能
     ScanMusic,      // 扫描音乐
-    Equalizer,      // Equalizer (10段图形 EQ)
-    DACSettings,    // DACSettings (硬件滤波与输出)
-    ThemeSettings,  // ThemeSettings (麦景图/金嗓子/自选色)
-    SystemSettings, // SystemSettings (屏幕亮度/按键/系统)
-
-    // 播放列表区
+    Equalizer,      // 10段图形 EQ
+    DACSettings,    // DAC 硬件滤波与输出
+    ThemeSettings,  // 主题风格与调色盘
+    SystemSettings, // 系统与硬件配置
     AllMusic,       // 所有音乐
     CustomPlaylist  // 自定义歌单
 };
 
+// 侧边栏矢量图标枚举 (纯代码绘制，支持动态变色)
+enum class NavIcon {
+    Search,         // 放大镜 (扫描音乐)
+    Equalizer,      // 调音滑块 (EQ)
+    DAC,            // 芯片底座 (DAC)
+    Theme,          // 调色板 (主题)
+    System,         // 齿轮滑块 (系统)
+    Music,          // 音符 (所有音乐)
+    Playlist,       // 列表横线 (播放列表)
+    Add             // 加号 (添加播放列表)
+};
+
 class SidebarView {
 public:
-    // 回调函数：用户点击“+ 添加播放列表”时触发，通知外部数据层新建歌单
     using CreatePlaylistCallback = std::function<void()>;
 
     SidebarView();
     ~SidebarView() = default;
 
-    // 纯视图渲染：接收外部的只读歌单模型引用 (解耦 View 与 Model)
-    void render(const std::vector<Playlist>& playlists, float width = 230.0f, float height = 600.0f);
+    // 顶层渲染入口 (默认使用 UIConfig 中的标准尺寸)
+    void render(const std::vector<Playlist>& playlists, 
+                float width = UIConfig::Layout::SidebarWidth, 
+                float height = UIConfig::Layout::ScreenHeight);
 
-    // 状态查询与设置
     SidebarTab getCurrentTab() const { return current_tab_; }
     void setCurrentTab(SidebarTab tab) { current_tab_ = tab; }
 
@@ -40,21 +50,42 @@ public:
         current_tab_ = SidebarTab::CustomPlaylist;
     }
 
-    // 注册添加歌单的回调
     void setOnCreatePlaylist(CreatePlaylistCallback cb) { on_create_playlist_ = cb; }
 
-    // 主色调接口 (默认 Apple 玫红)
-    void setAccentColor(ImU32 col) { accent_color_ = col; }
-    ImU32 getAccentColor() const { return accent_color_; }
+    // DAC 硬件连接状态
+    void setDacConnected(bool connected, const std::string& name = "ES9038PRO Balanced") {
+        dac_connected_ = connected;
+        dac_name_ = name;
+    }
+    bool isDacConnected() const { return dac_connected_; }
+
+    // 主题色获取与设置
+    void setAccentColor(ImU32 col) { UIConfig::Color::Accent = col; }
+    ImU32 getAccentColor() const { return UIConfig::Color::Accent; }
 
 private:
+    // 上部分菜单与歌单独立滚动视图
+    void renderTopNav(const std::vector<Playlist>& playlists, float width, float height);
+
+    // 下部分固定 DAC 状态视图
+    void renderBottomDac(float width, float y, float height);
+
+    // 基础排版单元
     void drawSectionHeader(const char* title);
-    bool drawNavItem(const char* icon, const char* label, bool is_selected);
+    bool drawNavItem(NavIcon icon, const char* label, bool is_selected);
 
 private:
     SidebarTab current_tab_ = SidebarTab::AllMusic;
-    uint64_t selected_playlist_id_ = 0;              // 选中歌单的唯一实体 ID
-    CreatePlaylistCallback on_create_playlist_;      // 添加歌单事件回调
+    uint64_t selected_playlist_id_ = 0;
+    CreatePlaylistCallback on_create_playlist_;
 
-    ImU32 accent_color_ = IM_COL32(250, 45, 72, 255); // 经典 Apple 玫红 (#FA2D48)
+    bool dac_connected_ = false;
+    std::string dac_name_ = "ES9038PRO Balanced";
+
+    // 动效与滑块位置追踪状态
+    float indicator_y_ = -1.0f;
+    float target_indicator_y_ = -1.0f;
+    float indicator_x_ = 0.0f;
+    float indicator_w_ = 0.0f;
+    float indicator_h_ = 34.0f;
 };
