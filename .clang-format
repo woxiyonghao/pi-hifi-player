@@ -1,0 +1,20 @@
+BasedOnStyle: LLVM
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 120
+
+# 核心开关：强制所有大括号贴在同一行末尾 (void xxx() {)
+BreakBeforeBraces: Attach
+
+# 允许简单的短函数/空块写在单行
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortBlocksOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: WithoutElse
+
+# 指针与引用左对齐 (如 int* p, Track& t)
+PointerAlignment: Left
+
+# 命名空间不增加额外缩进
+NamespaceIndentation: None
+

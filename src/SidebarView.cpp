@@ -345,7 +345,8 @@ void SidebarView::render(const std::vector<Playlist>& playlists, float width, fl
                            | ImGuiWindowFlags_NoResize 
                            | ImGuiWindowFlags_NoMove 
                            | ImGuiWindowFlags_NoCollapse
-                           | ImGuiWindowFlags_NoScrollbar;
+                           | ImGuiWindowFlags_NoScrollbar
+                           | ImGuiWindowFlags_NoBackground;
 
     ImGui::PushStyleColor(ImGuiCol_WindowBg, UIConfig::Color::WindowBg);
     ImGui::PushStyleColor(ImGuiCol_Border, IM_COL32(0, 0, 0, 0));

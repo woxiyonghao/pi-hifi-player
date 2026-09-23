@@ -20,6 +20,8 @@
 #include "SidebarView.hpp"
 #include "MusicModel.hpp"
 #include "Font.hpp"
+#include "BottomBarView.hpp"
+#include "PlayerAdmin.hpp"
 
 // C++20 [[maybe_unused]] 属性：明确告知编译器形参未直接使用，消除强警告
 int main([[maybe_unused]] int argc, [[maybe_unused]] char *argv[])
@@ -50,6 +52,9 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char *argv[])
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
 #endif
+
+    [[maybe_unused]] auto& player = PlayerAdmin::getInstance();
+    
 
     // 开启前后双缓冲 (防止画面撕裂)，配置 24 位深度缓冲
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
@@ -121,6 +126,9 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char *argv[])
         sidebar.setSelectedPlaylistId(next_id); });
     float sim_time = 0.0f; // 动圈正弦波模拟激励源的时间步长
 
+    // bottom bar
+    BottomBarView bottom_bar;
+
     std::cout << "[Ready] 麦景图动圈渲染管线就绪，进入 60fps 主循环。按 ESC 退出。" << std::endl;
 
     // =========================================================================
@@ -154,7 +162,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char *argv[])
          // 右侧主舞台临时展示 (用于验证左侧点击与 Model 数据联动)
         {
             ImDrawList* dl = ImGui::GetBackgroundDrawList();
-            dl->AddRectFilled(ImVec2(230.0f, 0.0f), ImVec2(1024.0f, 600.0f), IM_COL32(10, 14, 20, 255));
+            dl->AddRectFilled(ImVec2(0.0f, 0.0f), ImVec2(1024.0f, 600.0f), IM_COL32(10, 14, 20, 255));
             std::string stage_title = "当前视图: ";
             switch (sidebar.getCurrentTab()) {
                 case SidebarTab::ScanMusic:      stage_title += "[扫描音乐 - 正在检索 SD卡/SSD 音频文件]"; break;
@@ -187,6 +195,10 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char *argv[])
             }
             dl->AddText(ImVec2(260.0f, 40.0f), IM_COL32(230, 240, 255, 255), stage_title.c_str());
         }
+
+
+        // 渲染底部bottombar
+        bottom_bar.render();
 
         // [6.5] 提交渲染指令，进行后台缓冲清屏 (经典麦景图夜空深蓝黑底色: #040810)
         ImGui::Render();
