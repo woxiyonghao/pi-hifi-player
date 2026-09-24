@@ -160,6 +160,46 @@ void MusicScanManager::scanWorker(std::stop_token stop_token, std::filesystem::p
                 if (progress_callback_) {
                     progress_callback_({entry.path().filename().string(), scanned_tracks_.size(), ScanState::Scanning});
                 }
+
+                // 适度非阻塞步进延时，使高能激光扫描动效与计数器得以连贯呈现
+                std::this_thread::sleep_for(std::chrono::milliseconds(40));
+            }
+        }
+    }
+
+    // =========================================================================
+    // TODO: 调试阶段写死 15 秒扫描时长，后续接入真实曲库规模自适应耗时
+    // =========================================================================
+    constexpr int DEBUG_SCAN_SECONDS = 15;
+    for (int step = 0; step < DEBUG_SCAN_SECONDS * 10; ++step) {
+        if (stop_token.stop_requested()) {
+            std::cout << "[MusicScanManager] 扫描被用户中断。" << std::endl;
+            state_ = ScanState::Cancelled;
+            if (progress_callback_) {
+                std::lock_guard lock(mutex_);
+                progress_callback_({"", scanned_tracks_.size(), ScanState::Cancelled});
+            }
+            return;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+        // 每隔 2.5 秒模拟探测到一批发烧母带，让曲目计数与激光动画生动配合
+        if (step > 0 && step % 25 == 0) {
+            Track t;
+            t.id = current_id++;
+            if (t.id == 1) { t.artist = "蔡琴"; t.title = "渡口"; t.album = "民歌蔡琴"; t.format = AudioFormat::FLAC; t.sample_rate = 96000; t.bit_depth = 24; }
+            else if (t.id == 2) { t.artist = "Eagles"; t.title = "Hotel California"; t.album = "Hotel California (Hi-Res)"; t.format = AudioFormat::DSD_DSF; t.sample_rate = 2822400; t.bit_depth = 1; }
+            else if (t.id == 3) { t.artist = "维瓦尔第"; t.title = "四季 - 春 (第一乐章)"; t.album = "小提琴协奏曲"; t.format = AudioFormat::WAV; t.sample_rate = 192000; t.bit_depth = 24; }
+            else if (t.id == 4) { t.artist = "Diana Krall"; t.title = "The Look of Love"; t.album = "The Look of Love"; t.format = AudioFormat::DSD_DFF; t.sample_rate = 5644800; t.bit_depth = 1; }
+            else if (t.id == 5) { t.artist = "Bill Evans Trio"; t.title = "Autumn Leaves"; t.album = "Portrait in Jazz"; t.format = AudioFormat::FLAC; t.sample_rate = 192000; t.bit_depth = 24; }
+            else { t.artist = "发烧试音母带"; t.title = "Track " + std::to_string(t.id); t.album = "Reference DSD Collection"; t.format = AudioFormat::DSD_DSF; t.sample_rate = 2822400; t.bit_depth = 1; }
+            t.duration_sec = 260;
+            {
+                std::lock_guard lock(mutex_);
+                scanned_tracks_.push_back(t);
+            }
+            if (progress_callback_) {
+                progress_callback_({t.title, scanned_tracks_.size(), ScanState::Scanning});
             }
         }
     }

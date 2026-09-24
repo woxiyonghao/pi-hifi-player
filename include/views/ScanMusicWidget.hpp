@@ -25,8 +25,8 @@ private:
     // 样式 1：待机未扫描状态 (纯矢量 🔍 放大镜 + 上下左右平滑巡游 + 侧边栏同款 Alpha 胶囊按键)
     void renderIdleState(ImDrawList* dl, ImVec2 center, std::vector<Playlist>& playlists);
 
-    // 样式 2：扫描中状态 (预留：Icon 大幅度悬浮巡游 + 底部雷达能量波)
-    void renderScanningState(ImDrawList* dl, ImVec2 center);
+    // 样式 2：扫描中状态 (Icon 大幅度巡游穿梭 + 底部主题色激光曲速光流动画)
+    void renderScanningState(ImDrawList* dl, ImVec2 p_min, ImVec2 p_max, ImVec2 center);
 
     // 样式 3：扫描完成状态 (预留：发烧规格仪表盘 + 导入结果)
     void renderCompletedState(ImDrawList* dl, ImVec2 p_min, ImVec2 p_max, std::vector<Playlist>& playlists);
@@ -34,8 +34,11 @@ private:
     // -------------------------------------------------------------------------
     // 矢量图形绘制工具
     // -------------------------------------------------------------------------
-    // 绘制纯 GPU 矢量发烧大号放大镜 🔍 (支持 2D 上下左右多维浮动)
-    void drawSearchIcon(ImDrawList* dl, ImVec2 center, float radius, float offset_x, float offset_y);
+    // 绘制纯 GPU 矢量发烧大号放大镜 🔍 (支持 2D 上下左右多维浮动与雷达探针)
+    void drawSearchIcon(ImDrawList* dl, ImVec2 center, float radius, float offset_x, float offset_y, bool is_scanning = false);
+
+    // 绘制底部星球大战风格主题色曲速跃迁激光流 (Procedural Warp Laser System)
+    void drawLaserWarpAnimation(ImDrawList* dl, ImVec2 emitter_pos, ImVec2 p_min, ImVec2 p_max);
 
 private:
     char default_scan_path_[256] = "";
