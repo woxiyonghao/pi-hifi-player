@@ -77,7 +77,7 @@ void BottomBarView::renderLeftControls(ImDrawList* dl, float start_x, float cent
     auto& player = PlayerAdmin::getInstance();
     float cur_x = start_x;
 
-    // 2.1 播放模式切换按钮 (纯悬浮 + 灰白/玫红平滑淡入淡出动画 + 支持大尺寸)
+    // 2.1 播放模式切换按钮 (纯悬浮 + 悬停玫红 / 移开灰白即时响应)
     {
         float btn_sz = 36.0f; // 按钮触控区域
         float btn_radius = btn_sz * 0.5f;
@@ -86,63 +86,23 @@ void BottomBarView::renderLeftControls(ImDrawList* dl, float start_x, float cent
 
         ImGui::SetCursorScreenPos(btn_min);
         if (ImGui::InvisibleButton("##btn_mode", ImVec2(btn_sz, btn_sz))) {
-            prev_display_mode_ = player.getPlayMode();
             player.cyclePlayMode();
-            last_display_mode_ = player.getPlayMode();
-            mode_fade_anim_ = 0.0f; // 触发图标切换淡入淡出
         }
         bool hov = ImGui::IsItemHovered();
 
-        // 1. 平滑计算 Hover ↔ Blur 动画插值因子 (温润呼吸阻尼，消除闪跳感)
-        float dt = ImGui::GetIO().DeltaTime;
-        if (hov) {
-            mode_hover_anim_ = std::min(1.0f, mode_hover_anim_ + dt * 4.5f);
-        } else {
-            mode_hover_anim_ = std::max(0.0f, mode_hover_anim_ - dt * 3.5f);
-        }
-
-        // 2. 颜色插值：Blur态(纯正中性灰白，绝不偏蓝) ➔ Hover态(标志性玫红)
-        ImU32 col_blur = IM_COL32(190, 190, 190, 210); // 纯净中性灰白，无偏蓝底色
+        // 颜色直接响应：悬停时 Apple 标志性玫红，移开时中性纯正灰白 (彻底去掉淡入淡出，0 延迟、0 闪跳)
+        ImU32 col_blur = IM_COL32(180, 180, 180, 255); // 纯正中性高级灰白
         ImU32 col_hover = UIConfig::Color::Accent;     // #FA2D48 纯粹玫红
+        ImU32 dynamic_col = hov ? col_hover : col_blur;
 
-        auto lerpColor = [](ImU32 c1, ImU32 c2, float t) -> ImU32 {
-            int r = ((c1 >> IM_COL32_R_SHIFT) & 0xFF) +
-                    static_cast<int>((((c2 >> IM_COL32_R_SHIFT) & 0xFF) - ((c1 >> IM_COL32_R_SHIFT) & 0xFF)) * t);
-            int g = ((c1 >> IM_COL32_G_SHIFT) & 0xFF) +
-                    static_cast<int>((((c2 >> IM_COL32_G_SHIFT) & 0xFF) - ((c1 >> IM_COL32_G_SHIFT) & 0xFF)) * t);
-            int b = ((c1 >> IM_COL32_B_SHIFT) & 0xFF) +
-                    static_cast<int>((((c2 >> IM_COL32_B_SHIFT) & 0xFF) - ((c1 >> IM_COL32_B_SHIFT) & 0xFF)) * t);
-            int a = ((c1 >> IM_COL32_A_SHIFT) & 0xFF) +
-                    static_cast<int>((((c2 >> IM_COL32_A_SHIFT) & 0xFF) - ((c1 >> IM_COL32_A_SHIFT) & 0xFF)) * t);
-            return IM_COL32(r, g, b, a);
-        };
-
-        ImU32 dynamic_col = lerpColor(col_blur, col_hover, mode_hover_anim_);
-
-        // 3. 推进模式切换动画
-        if (mode_fade_anim_ < 1.0f) {
-            mode_fade_anim_ = std::min(1.0f, mode_fade_anim_ + dt * 6.0f);
-        }
-
-        auto setAlpha = [](ImU32 col, float ratio) -> ImU32 {
-            ImU32 a = (col >> IM_COL32_A_SHIFT) & 0xFF;
-            int new_a = std::clamp(static_cast<int>(a * ratio), 0, 255);
-            return (col & ~IM_COL32_A_MASK) | (new_a << IM_COL32_A_SHIFT);
-        };
-
-        // 4. 纯净矢量图标绘制 (传入 scale = 1.35f 放大图标本身)
+        // 纯净矢量图标绘制 (传入 scale = 1.35f 放大图标本身)
         const float icon_scale = 1.35f;
-        if (mode_fade_anim_ < 1.0f) {
-            DrawPlayModeIcon(dl, btn_center, prev_display_mode_, setAlpha(dynamic_col, 1.0f - mode_fade_anim_), icon_scale);
-            DrawPlayModeIcon(dl, btn_center, last_display_mode_, setAlpha(dynamic_col, mode_fade_anim_), icon_scale);
-        } else {
-            DrawPlayModeIcon(dl, btn_center, player.getPlayMode(), dynamic_col, icon_scale);
-        }
+        DrawPlayModeIcon(dl, btn_center, player.getPlayMode(), dynamic_col, icon_scale);
 
-        cur_x += btn_sz + 10.0f;
+        cur_x += btn_sz + 6.0f; // 间距统一为 6px 紧凑舒适微距
     }
-     // =========================================================================
-    // 2.2 上一首按钮 (双左向三角形 ◀◀ + 灰白/玫红平滑淡入淡出)
+    // =========================================================================
+    // 2.2 上一首按钮 (双左向三角形 ◀◀ + 悬停玫红 / 移开灰白即时响应)
     // =========================================================================
     {
         float btn_sz = 36.0f;
@@ -154,29 +114,12 @@ void BottomBarView::renderLeftControls(ImDrawList* dl, float start_x, float cent
             player.previous(); // 触发上一首切歌
         }
         bool hov = ImGui::IsItemHovered();
-        // 1. 丝滑计算 Hover ↔ Blur 动画插值 (温润呼吸阻尼，消除闪跳感)
-        float dt = ImGui::GetIO().DeltaTime;
-        if (hov) {
-            prev_hover_anim_ = std::min(1.0f, prev_hover_anim_ + dt * 4.5f);
-        } else {
-            prev_hover_anim_ = std::max(0.0f, prev_hover_anim_ - dt * 3.5f);
-        }
-        // 2. 颜色插值：Blur态(纯正中性灰白) ➔ Hover态(纯粹玫红)
-        ImU32 col_blur = IM_COL32(190, 190, 190, 210);
+
+        ImU32 col_blur = IM_COL32(180, 180, 180, 255);
         ImU32 col_hover = UIConfig::Color::Accent;
-        auto lerpColor = [](ImU32 c1, ImU32 c2, float t) -> ImU32 {
-            int r = ((c1 >> IM_COL32_R_SHIFT) & 0xFF) +
-                    static_cast<int>((((c2 >> IM_COL32_R_SHIFT) & 0xFF) - ((c1 >> IM_COL32_R_SHIFT) & 0xFF)) * t);
-            int g = ((c1 >> IM_COL32_G_SHIFT) & 0xFF) +
-                    static_cast<int>((((c2 >> IM_COL32_G_SHIFT) & 0xFF) - ((c1 >> IM_COL32_G_SHIFT) & 0xFF)) * t);
-            int b = ((c1 >> IM_COL32_B_SHIFT) & 0xFF) +
-                    static_cast<int>((((c2 >> IM_COL32_B_SHIFT) & 0xFF) - ((c1 >> IM_COL32_B_SHIFT) & 0xFF)) * t);
-            int a = ((c1 >> IM_COL32_A_SHIFT) & 0xFF) +
-                    static_cast<int>((((c2 >> IM_COL32_A_SHIFT) & 0xFF) - ((c1 >> IM_COL32_A_SHIFT) & 0xFF)) * t);
-            return IM_COL32(r, g, b, a);
-        };
-        ImU32 icon_col = lerpColor(col_blur, col_hover, prev_hover_anim_);
-         // 3. 绘制并排双左向三角形 ◀◀ (拉长三角形冲程，流线型更饱满)
+        ImU32 icon_col = hov ? col_hover : col_blur;
+
+        // 绘制并排双左向三角形 ◀◀ (拉长三角形冲程，流线型更饱满)
         const float scale = 1.35f;
         auto P = [&](float dx, float dy) -> ImVec2 {
             return ImVec2(btn_center.x + dx * scale, btn_center.y + dy * scale);

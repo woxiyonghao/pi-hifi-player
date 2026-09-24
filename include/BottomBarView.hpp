@@ -27,11 +27,4 @@ class BottomBarView {
     // 4. 右区：音量调节条 (小喇叭 + 发烧可拖拽滑块 + 百分比)
     void renderRightVolume(ImDrawList* dl, float right_limit, float center_y);
 
-    // 模式切换平滑淡入淡出动画状态
-    PlayMode last_display_mode_ = PlayMode::LoopList;
-    PlayMode prev_display_mode_ = PlayMode::LoopList;
-    float mode_fade_anim_ = 1.0f; // 1.0f 表示常态完成，0.0f ~ 1.0f 表示过渡中
-    // Hover ↔ Blur 玫红/灰白平滑呼吸淡入淡出 (0.0=灰白, 1.0=玫红)
-    float mode_hover_anim_ = 0.0f;
-    float prev_hover_anim_ = 0.0f; // 上一首按钮 Hover 动画
 };
