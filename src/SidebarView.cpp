@@ -186,46 +186,25 @@ void SidebarView::renderTopNav(const std::vector<Playlist>& playlists, float wid
     dl->ChannelsSetCurrent(1);
 
     // [1] 五大核心功能项
-    drawSectionHeader("功能");
-    if (drawNavItem(NavIcon::Search, "扫描音乐", current_tab_ == SidebarTab::ScanMusic)) {
-        current_tab_ = SidebarTab::ScanMusic;
-    }
-    if (drawNavItem(NavIcon::Equalizer, "Equalizer (EQ)", current_tab_ == SidebarTab::Equalizer)) {
-        current_tab_ = SidebarTab::Equalizer;
-    }
-    if (drawNavItem(NavIcon::DAC, "DACSettings", current_tab_ == SidebarTab::DACSettings)) {
-        current_tab_ = SidebarTab::DACSettings;
-    }
-    if (drawNavItem(NavIcon::Theme, "ThemeSettings", current_tab_ == SidebarTab::ThemeSettings)) {
-        current_tab_ = SidebarTab::ThemeSettings;
-    }
-    if (drawNavItem(NavIcon::System, "SystemSettings", current_tab_ == SidebarTab::SystemSettings)) {
-        current_tab_ = SidebarTab::SystemSettings;
+    auto feature_target = feature_widget_.render(current_tab_, [this](SidebarTab tab) {
+        current_tab_ = tab;
+    });
+
+     if (feature_target) {
+        target_indicator_y_ = feature_target->y;
+        indicator_x_ = feature_target->x;
+        indicator_w_ = feature_target->width;
+        indicator_h_ = feature_target->height;
     }
 
     // [2] 歌单列表
-    drawSectionHeader("播放列表");
-    if (drawNavItem(NavIcon::Music, "所有音乐", current_tab_ == SidebarTab::AllMusic)) {
-        current_tab_ = SidebarTab::AllMusic;
+    auto playlist_target = playlist_widget_.render(playlists, current_tab_, selected_playlist_id_);
+    if (playlist_target) {
+        target_indicator_y_ = playlist_target->y;
+        indicator_x_ = playlist_target->x;
+        indicator_w_ = playlist_target->width;
+        indicator_h_ = playlist_target->height;
     }
-
-    for (const auto& playlist : playlists) {
-        bool is_sel = (current_tab_ == SidebarTab::CustomPlaylist && selected_playlist_id_ == playlist.getId());
-        if (drawNavItem(NavIcon::Playlist, playlist.getName().c_str(), is_sel)) {
-            current_tab_ = SidebarTab::CustomPlaylist;
-            selected_playlist_id_ = playlist.getId();
-        }
-    }
-
-    // [3] 添加歌单按钮
-    ImGui::Dummy(ImVec2(0.0f, 4.0f));
-    if (drawNavItem(NavIcon::Add, "添加播放列表", false)) {
-        if (on_create_playlist_) {
-            on_create_playlist_();
-        }
-    }
-
-    ImGui::Dummy(ImVec2(0.0f, 6.0f));
 
     // 切回背景通道 0：绘制发光 + 平滑滑移的选中指示胶囊
     dl->ChannelsSetCurrent(0);
@@ -290,51 +269,6 @@ void SidebarView::renderTopNav(const std::vector<Playlist>& playlists, float wid
 }
 
 // ==============================================================================
-// 独立模块 2：下部分固定 DAC 状态视图 (包裹在 Xcode 风格液态玻璃容器中)
-// ==============================================================================
-void SidebarView::renderBottomDac(float width, float y, float height) {
-    ImDrawList* dl = ImGui::GetWindowDrawList();
-
-    float left_x = UIConfig::Layout::ContainerMarginX;
-    float right_x = width - UIConfig::Layout::ContainerMarginX;
-    float top_y = y;
-    float bot_y = y + height;
-    float rounding = UIConfig::Layout::ContainerRounding;
-
-    // 交互悬停检测
-    ImGui::SetCursorScreenPos(ImVec2(left_x, top_y));
-    ImGui::InvisibleButton("##DacContainerButton", ImVec2(right_x - left_x, bot_y - top_y));
-    bool hovered = ImGui::IsItemHovered();
-
-    // 1. 绘制下部分 DAC 容器的 Xcode 风格液态玻璃底板与平滑边框
-    dl->AddRectFilled(ImVec2(left_x, top_y), ImVec2(right_x, bot_y), 
-                      UIConfig::Color::ContainerBg, rounding);
-
-    if (hovered) {
-        dl->AddRectFilled(ImVec2(left_x, top_y), ImVec2(right_x, bot_y), 
-                          UIConfig::Color::GlassHover, rounding);
-    }
-
-    dl->AddRect(ImVec2(left_x, top_y), ImVec2(right_x, bot_y), 
-                UIConfig::Color::ContainerBorder, rounding, 0, 1.0f);
-
-    // 2. 内部状态指示灯与文字排版
-    float center_y = (top_y + bot_y) * 0.5f;
-    float led_x = left_x + 18.0f;
-
-    if (dac_connected_) {
-        // [已连接]：发光绿灯 + 高亮设备名称
-        dl->AddCircleFilled(ImVec2(led_x, center_y), 5.5f, IM_COL32(52, 199, 89, 70));
-        dl->AddCircleFilled(ImVec2(led_x, center_y), 3.0f, UIConfig::Color::DacConnected);
-        dl->AddText(ImVec2(led_x + 12.0f, center_y - 7.0f), UIConfig::Color::TextNormal, dac_name_.c_str());
-    } else {
-        // [未连接]：微光灰点 + 次级提示文本
-        dl->AddCircleFilled(ImVec2(led_x, center_y), 3.0f, UIConfig::Color::DacDisconnected);
-        dl->AddText(ImVec2(led_x + 12.0f, center_y - 7.0f), UIConfig::Color::TextMuted, "DAC: 未连接");
-    }
-}
-
-// ==============================================================================
 // 顶层主渲染入口：包含上下两个独立 Xcode 风格液态玻璃卡片容器
 // ==============================================================================
 void SidebarView::render(const std::vector<Playlist>& playlists, float width, float height) {
@@ -366,7 +300,7 @@ void SidebarView::render(const std::vector<Playlist>& playlists, float width, fl
     renderTopNav(playlists, width, top_height);
 
     // 2. 渲染下部分固定 DAC 容器 (左右间隔 16px，上下间隔 16px)
-    renderBottomDac(width, dac_y, dac_height);
+    dac_widget_.render(width, dac_y, dac_height);
 
     ImGui::End();
     ImGui::PopStyleVar(2);
