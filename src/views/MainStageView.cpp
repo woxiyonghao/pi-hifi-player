@@ -13,6 +13,20 @@ MainStageView::MainStageView() {
 #endif
 }
 
+void MainStageView::renderScanMusicView(float x, float y, float w, float h, std::vector<Playlist>& playlists) {
+    float margin_x = UIConfig::Layout::ContainerMarginX;
+    float margin_y = UIConfig::Layout::ContainerMarginY;
+    ImVec2 card_min(x + margin_x, y + margin_y);
+    ImVec2 card_max(x + w - margin_x, y + h - 86.0f);
+
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    // 绘制卡片边框背景
+    drawLiquidCard(dl, card_min, card_max, nullptr, nullptr);
+
+    // 将内容委托给独立的 ScanMusicWidget 渲染！
+    scan_widget_.render(dl, card_min, card_max, playlists);
+}
+
 void MainStageView::drawLiquidCard(ImDrawList* dl, ImVec2 p_min, ImVec2 p_max, const char* title, const char* subtitle) {
     // 液态玻璃微光磨砂底板与 1px 折射边框
     dl->AddRectFilled(p_min, p_max, UIConfig::Color::ContainerBg, UIConfig::Layout::ContainerRounding);
@@ -44,116 +58,46 @@ void MainStageView::render(SidebarTab current_tab,
     bg_dl->AddRectFilled(ImVec2(stage_x, stage_y), ImVec2(stage_x + stage_w, stage_y + stage_h), 
                          UIConfig::Color::MainStageBg);
 
-    // 2. 根据当前导航项智能分发子面板渲染
-    switch (current_tab) {
-        case SidebarTab::ScanMusic:
-            renderScanMusicView(stage_x, stage_y, stage_w, stage_h, playlists);
-            break;
-        case SidebarTab::Equalizer:
-            renderEqualizerView(stage_x, stage_y, stage_w, stage_h);
-            break;
-        case SidebarTab::DACSettings:
-            renderDACSettingsView(stage_x, stage_y, stage_w, stage_h);
-            break;
-        case SidebarTab::ThemeSettings:
-            renderThemeSettingsView(stage_x, stage_y, stage_w, stage_h);
-            break;
-        case SidebarTab::SystemSettings:
-            renderSystemSettingsView(stage_x, stage_y, stage_w, stage_h);
-            break;
-        case SidebarTab::AllMusic:
-        case SidebarTab::CustomPlaylist:
-            renderPlaylistView(selected_playlist_id, playlists, stage_x, stage_y, stage_w, stage_h);
-            break;
-    }
-}
+    // 2. 创建主舞台专属透明顶层无边框窗口 (彻底消灭 Dear ImGui 自动创建的 Debug 窗口)
+    ImGui::SetNextWindowPos(ImVec2(stage_x, stage_y));
+    ImGui::SetNextWindowSize(ImVec2(stage_w, stage_h));
 
-void MainStageView::renderScanMusicView(float x, float y, float w, float h, std::vector<Playlist>& playlists) {
-    float margin_x = UIConfig::Layout::ContainerMarginX;
-    float margin_y = UIConfig::Layout::ContainerMarginY;
-    ImVec2 card_min(x + margin_x, y + margin_y);
-    ImVec2 card_max(x + w - margin_x, y + h - 86.0f); // 预留底部 BottomBar 胶囊空间
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar 
+                           | ImGuiWindowFlags_NoResize 
+                           | ImGuiWindowFlags_NoMove 
+                           | ImGuiWindowFlags_NoCollapse
+                           | ImGuiWindowFlags_NoScrollbar
+                           | ImGuiWindowFlags_NoBackground;
 
-    ImDrawList* dl = ImGui::GetWindowDrawList();
-    drawLiquidCard(dl, card_min, card_max, "本地发烧曲库自动检索", "支持 FLAC、WAV、DSD(DSF/DFF)、ALAC 等无损与母带规格");
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
 
-    auto& scanner = MusicScanManager::getInstance();
-
-    // 在卡片内部开启 ImGui 控件上下文
-    ImGui::SetNextWindowPos(ImVec2(card_min.x + 20.0f, card_min.y + 70.0f));
-    ImGui::SetNextWindowSize(ImVec2(card_max.x - card_min.x - 40.0f, card_max.y - card_min.y - 85.0f));
-    
-    ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove;
-    if (ImGui::BeginChild("ScanMusicContent", ImVec2(0, 0), false, flags)) {
-        // 路径输入框
-        ImGui::AlignTextToFramePadding();
-        ImGui::Text("扫描目录:");
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(380.0f);
-        ImGui::InputText("##ScanPath", scan_path_buf_, sizeof(scan_path_buf_));
-
-        ImGui::SameLine(0.0f, 15.0f);
-        if (!scanner.isScanning()) {
-            if (ImGui::Button(" 开始高速检索 ", ImVec2(130.0f, 0))) {
-                scanner.startScan(scan_path_buf_);
-            }
-        } else {
-            ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(235, 75, 75, 200));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(255, 95, 95, 230));
-            if (ImGui::Button(" 中止扫描 ", ImVec2(110.0f, 0))) {
-                scanner.cancelScan();
-            }
-            ImGui::PopStyleColor(2);
-        }
-
-        // 状态与统计栏
-        ImGui::Spacing();
-        ImGui::Separator();
-        ImGui::Spacing();
-
-        ScanState state = scanner.getState();
-        size_t count = scanner.getFoundCount();
-
-        if (state == ScanState::Scanning) {
-            ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "● 正在高速递归检索发烧母带... 已发现: %zu 首", count);
-        } else if (state == ScanState::Completed) {
-            ImGui::TextColored(ImVec4(0.2f, 0.9f, 0.4f, 1.0f), "✔ 扫描完成！共索引发烧音频: %zu 首", count);
-            if (count > 0 && !playlists.empty()) {
-                ImGui::SameLine(0.0f, 20.0f);
-                if (ImGui::Button(" 📥 导入全部扫描曲目至全部音乐 ", ImVec2(220.0f, 0))) {
-                    auto scanned = scanner.getScannedTracks();
-                    for (const auto& track : scanned) {
-                        playlists[0].addTrack(track);
-                    }
-                }
-            }
-        } else if (state == ScanState::Cancelled) {
-            ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.2f, 1.0f), "⚠ 扫描已被用户中止。已保留已发现曲目: %zu 首", count);
-        } else if (state == ScanState::Failed) {
-            ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "✕ 路径无效或无法访问，请检查目录权限！");
-        } else {
-            ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.8f, 1.0f), "状态: 待机就绪，点击上方按钮开启后台非阻塞扫描。");
-        }
-
-        // 扫描结果列表滚动区域
-        ImGui::Spacing();
-        auto scanned_tracks = scanner.getScannedTracks();
-        if (!scanned_tracks.empty()) {
-            ImGui::BeginChild("ScannedListScroll", ImVec2(0, 0), true);
-            for (size_t i = 0; i < scanned_tracks.size(); ++i) {
-                const auto& t = scanned_tracks[i];
-                ImGui::TextColored(ImVec4(0.6f, 0.7f, 0.8f, 1.0f), "%02zu.", i + 1);
-                ImGui::SameLine();
-                ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 1.0f), "%s", t.title.c_str());
-                ImGui::SameLine();
-                ImGui::TextColored(ImVec4(0.7f, 0.75f, 0.85f, 0.9f), "- %s", t.artist.c_str());
-                ImGui::SameLine();
-                ImGui::TextColored(ImVec4(0.2f, 0.8f, 1.0f, 0.9f), "[%s]", t.getFormatBadge().c_str());
-            }
-            ImGui::EndChild();
+    if (ImGui::Begin("##MainStageMasterRoot", nullptr, flags)) {
+        // 根据当前导航项智能分发子面板渲染
+        switch (current_tab) {
+            case SidebarTab::ScanMusic:
+                renderScanMusicView(stage_x, stage_y, stage_w, stage_h, playlists);
+                break;
+            case SidebarTab::Equalizer:
+                renderEqualizerView(stage_x, stage_y, stage_w, stage_h);
+                break;
+            case SidebarTab::DACSettings:
+                renderDACSettingsView(stage_x, stage_y, stage_w, stage_h);
+                break;
+            case SidebarTab::ThemeSettings:
+                renderThemeSettingsView(stage_x, stage_y, stage_w, stage_h);
+                break;
+            case SidebarTab::SystemSettings:
+                renderSystemSettingsView(stage_x, stage_y, stage_w, stage_h);
+                break;
+            case SidebarTab::AllMusic:
+            case SidebarTab::CustomPlaylist:
+                renderPlaylistView(selected_playlist_id, playlists, stage_x, stage_y, stage_w, stage_h);
+                break;
         }
     }
-    ImGui::EndChild();
+    ImGui::End();
+    ImGui::PopStyleVar(2);
 }
 
 void MainStageView::renderPlaylistView(uint64_t pid, std::vector<Playlist>& playlists, float x, float y, float w, float h) {
@@ -187,11 +131,14 @@ void MainStageView::renderPlaylistView(uint64_t pid, std::vector<Playlist>& play
     auto& player = PlayerAdmin::getInstance();
     const auto& current_track = player.getCurrentTrack();
 
-    ImGui::SetNextWindowPos(ImVec2(card_min.x + 20.0f, card_min.y + 75.0f));
-    ImGui::SetNextWindowSize(ImVec2(card_max.x - card_min.x - 40.0f, card_max.y - card_min.y - 90.0f));
+    float content_x = card_min.x + 20.0f;
+    float content_y = card_min.y + 75.0f;
+    float content_w = card_max.x - card_min.x - 40.0f;
+    float content_h = card_max.y - card_min.y - 90.0f;
 
-    ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove;
-    if (ImGui::BeginChild("TrackListContent", ImVec2(0, 0), false, flags)) {
+    ImGui::SetCursorScreenPos(ImVec2(content_x, content_y));
+    ImGuiWindowFlags child_flags = ImGuiWindowFlags_NoBackground;
+    if (ImGui::BeginChild("##TrackListContentChild", ImVec2(content_w, content_h), false, child_flags)) {
         const auto& tracks = target_playlist->getTracks();
         if (tracks.empty()) {
             ImGui::Spacing();
