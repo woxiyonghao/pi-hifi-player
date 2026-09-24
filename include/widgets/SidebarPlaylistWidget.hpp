@@ -6,7 +6,7 @@
 #include <functional>
 #include <optional>
 #include <vector>
-#include "SidebarTypes.hpp"
+#include "types/SidebarTypes.hpp"
 
 // 供父容器绘制发光背景胶囊使用的坐标目标
 struct PlaylistIndicatorTarget {

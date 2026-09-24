@@ -4,7 +4,7 @@
 #include <optional>
 #include <string>
 #include <vector>
-#include "SidebarTypes.hpp"
+#include "types/SidebarTypes.hpp"
 // 供父级（SidebarView）绘制背景滑动发光胶囊使用的坐标目标
 struct FeatureIndicatorTarget {
     float x = 0.0f;
