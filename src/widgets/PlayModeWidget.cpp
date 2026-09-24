@@ -61,14 +61,20 @@ void PlayModeWidget::drawIcon(ImDrawList* dl, ImVec2 center, PlayMode mode, ImU3
 
 bool PlayModeWidget::render(ImDrawList* dl, ImVec2 center, ImVec2 size, Callback on_click) {
     auto& player = PlayerAdmin::getInstance();
-    const ImU32 col_blur = IM_COL32(130, 127, 123, 255);
+    // Blur 态：轻盈通透的灰白磨砂半透质感 (带有清晰 Alpha，不抢视觉重心)
+    const ImU32 col_blur = IM_COL32(215, 222, 235, 175);
+    // Hover 态：纯正主题色玫瑰红 (Alpha = 255)
     const ImU32 col_hover = UIConfig::Color::Accent;
 
     ImVec2 btn_min(center.x - size.x * 0.5f, center.y - size.y * 0.5f);
+    ImVec2 btn_max(center.x + size.x * 0.5f, center.y + size.y * 0.5f);
     ImGui::SetCursorScreenPos(btn_min);
 
     bool clicked = ImGui::InvisibleButton("##btn_play_mode_widget", size);
-    bool hov = ImGui::IsItemHovered();
+    bool hov = ImGui::IsItemHovered() || ImGui::IsMouseHoveringRect(btn_min, btn_max);
+    if (!clicked && hov && ImGui::IsMouseClicked(0)) {
+        clicked = true;
+    }
 
     if (clicked) {
         if (on_click) {
@@ -76,6 +82,14 @@ bool PlayModeWidget::render(ImDrawList* dl, ImVec2 center, ImVec2 size, Callback
         } else {
             player.cyclePlayMode();
         }
+    }
+
+    // Hover 态：液态玻璃微光底板 + 1px 折射微光边框 + 主题色高亮
+    if (hov) {
+        dl->AddRectFilled(btn_min, btn_max, UIConfig::Color::GlassHover, 8.0f);
+        dl->AddRect(btn_min, btn_max, UIConfig::Color::GlassBorder, 8.0f, 0, 1.0f);
+        // 环境微发光
+        dl->AddCircleFilled(center, 13.0f, IM_COL32(250, 45, 72, 35));
     }
 
     ImU32 dynamic_col = hov ? col_hover : col_blur;

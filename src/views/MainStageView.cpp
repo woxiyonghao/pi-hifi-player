@@ -58,16 +58,18 @@ void MainStageView::render(SidebarTab current_tab,
     bg_dl->AddRectFilled(ImVec2(stage_x, stage_y), ImVec2(stage_x + stage_w, stage_y + stage_h), 
                          UIConfig::Color::MainStageBg);
 
-    // 2. 创建主舞台专属透明顶层无边框窗口 (彻底消灭 Dear ImGui 自动创建的 Debug 窗口)
+    // 2. 创建主舞台专属透明顶层无边框窗口 (严格限制高度不重叠底部 BottomBar，消除事件劫持)
     ImGui::SetNextWindowPos(ImVec2(stage_x, stage_y));
-    ImGui::SetNextWindowSize(ImVec2(stage_w, stage_h));
+    float safe_stage_h = std::min(stage_h, 524.0f); // BottomBar 位于 y = 536，卡片底位于 y = 514
+    ImGui::SetNextWindowSize(ImVec2(stage_w, safe_stage_h));
 
     ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar 
                            | ImGuiWindowFlags_NoResize 
                            | ImGuiWindowFlags_NoMove 
                            | ImGuiWindowFlags_NoCollapse
                            | ImGuiWindowFlags_NoScrollbar
-                           | ImGuiWindowFlags_NoBackground;
+                           | ImGuiWindowFlags_NoBackground
+                           | ImGuiWindowFlags_NoBringToFrontOnFocus;
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);

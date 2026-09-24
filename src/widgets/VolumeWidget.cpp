@@ -44,8 +44,10 @@ void VolumeWidget::render(ImDrawList* dl, float right_limit, float center_y) {
     float vol = player.getVolume();
     bool is_muted = player.isMuted();
 
-    const ImU32 col_blur = IM_COL32(130, 127, 123, 255); // 控制栏同款高级暖灰
-    const ImU32 col_hover = UIConfig::Color::Accent;      // 悬停玫红
+    // Blur 态：轻盈通透的灰白磨砂半透质感 (带有清晰 Alpha，不抢视觉重心)
+    const ImU32 col_blur = IM_COL32(215, 222, 235, 175);
+    // Hover 态：纯正主题色玫瑰红 (Alpha = 255)
+    const ImU32 col_hover = UIConfig::Color::Accent;
     const ImU32 col_text = UIConfig::Color::TextMuted;    // 次级文字灰
 
     // 几何排版参数：
@@ -65,12 +67,26 @@ void VolumeWidget::render(ImDrawList* dl, float right_limit, float center_y) {
     // -------------------------------------------------------------------------
     float spk_cx = start_x + spk_w * 0.5f;
     ImVec2 spk_min(start_x, center_y - 14.0f);
+    ImVec2 spk_max(start_x + spk_w, center_y + 14.0f);
     ImGui::SetCursorScreenPos(spk_min);
-    if (ImGui::InvisibleButton("##btn_spk_mute_widget", ImVec2(spk_w, 28.0f))) {
-        player.toggleMute();
+    bool clicked_spk = ImGui::InvisibleButton("##btn_spk_mute_widget", ImVec2(spk_w, 28.0f));
+    bool spk_hov = ImGui::IsItemHovered() || ImGui::IsMouseHoveringRect(spk_min, spk_max);
+    if (!clicked_spk && spk_hov && ImGui::IsMouseClicked(0)) {
+        clicked_spk = true;
     }
-    bool spk_hov = ImGui::IsItemHovered();
-    ImU32 spk_col = spk_hov ? col_hover : col_blur;
+    if (clicked_spk) {
+        player.toggleMute();
+        vol = player.getVolume();
+        is_muted = player.isMuted();
+    }
+
+    if (spk_hov) {
+        dl->AddRectFilled(spk_min, spk_max, UIConfig::Color::GlassHover, 6.0f);
+        dl->AddRect(spk_min, spk_max, UIConfig::Color::GlassBorder, 6.0f, 0, 1.0f);
+        dl->AddCircleFilled(ImVec2(spk_cx, center_y), 11.0f, IM_COL32(250, 45, 72, 35));
+    }
+
+    ImU32 spk_col = (spk_hov || is_muted) ? col_hover : col_blur;
     drawSpeaker(dl, ImVec2(spk_cx, center_y), vol, is_muted, spk_col);
 
     // -------------------------------------------------------------------------
@@ -83,14 +99,15 @@ void VolumeWidget::render(ImDrawList* dl, float right_limit, float center_y) {
 
     // 交互响应区 (纵向扩大至 28px，手指触控与鼠标皆舒适)
     ImVec2 slider_min(track_x0 - 4.0f, center_y - 14.0f);
+    ImVec2 slider_max(track_x1 + 4.0f, center_y + 14.0f);
     ImVec2 slider_size(track_w + 8.0f, 28.0f);
     ImGui::SetCursorScreenPos(slider_min);
     ImGui::InvisibleButton("##volume_slider_widget", slider_size);
-    bool slider_hov = ImGui::IsItemHovered();
+    bool slider_hov = ImGui::IsItemHovered() || ImGui::IsMouseHoveringRect(slider_min, slider_max);
     bool slider_act = ImGui::IsItemActive();
 
     // 拖拽与点击实时计算音量
-    if (slider_act && ImGui::IsMouseDown(0)) {
+    if ((slider_act || (slider_hov && ImGui::IsMouseClicked(0))) && ImGui::IsMouseDown(0)) {
         float mouse_x = ImGui::GetIO().MousePos.x;
         float new_vol = std::clamp((mouse_x - track_x0) / track_w, 0.0f, 1.0f);
         player.setVolume(new_vol);
@@ -122,9 +139,12 @@ void VolumeWidget::render(ImDrawList* dl, float right_limit, float center_y) {
         dl->AddRectFilled(ImVec2(track_x0, track_y0), ImVec2(knob_x, track_y1), fill_col, 2.0f);
     }
 
-    // 滑块手柄 (Thumb 纯白发光圆点，悬停/拖动时微扩)
+    // 滑块手柄 (Thumb 纯白发光圆点，悬停/拖动时微扩并产生玫瑰红微光晕)
     float knob_r = (slider_hov || slider_act) ? 5.5f : 4.5f;
-    dl->AddCircleFilled(ImVec2(knob_x, center_y), knob_r, IM_COL32(240, 240, 245, 255));
+    if (slider_hov || slider_act) {
+        dl->AddCircleFilled(ImVec2(knob_x, center_y), knob_r + 3.5f, IM_COL32(250, 45, 72, 50));
+    }
+    dl->AddCircleFilled(ImVec2(knob_x, center_y), knob_r, IM_COL32(245, 245, 250, 255));
     dl->AddCircle(ImVec2(knob_x, center_y), knob_r, IM_COL32(0, 0, 0, 70), 0, 1.0f);
 
     // -------------------------------------------------------------------------
@@ -142,7 +162,7 @@ void VolumeWidget::render(ImDrawList* dl, float right_limit, float center_y) {
     }
     ImVec2 text_size = ImGui::CalcTextSize(text_str.c_str());
     ImVec2 text_pos(track_x1 + gap2, center_y - text_size.y * 0.5f);
-    dl->AddText(text_pos, is_muted ? col_hover : col_text, text_str.c_str());
+    dl->AddText(text_pos, (is_muted || slider_hov || slider_act) ? col_hover : col_text, text_str.c_str());
     if (Fonts::Small) {
         ImGui::PopFont();
     }
