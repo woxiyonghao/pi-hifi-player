@@ -1,6 +1,6 @@
 #include "widgets/PlayPauseWidget.hpp"
 #include "widgets/DrawUtils.hpp"
-#include "UIConfig.hpp"
+#include "public/UIConfig.hpp"
 
 void PlayPauseWidget::drawIcon(ImDrawList* dl, ImVec2 center, bool is_playing, ImU32 color) {
     if (is_playing) {

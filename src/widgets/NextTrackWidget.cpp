@@ -1,6 +1,6 @@
 #include "widgets/NextTrackWidget.hpp"
 #include "widgets/DrawUtils.hpp"
-#include "UIConfig.hpp"
+#include "public/UIConfig.hpp"
 
 void NextTrackWidget::drawIcon(ImDrawList* dl, ImVec2 center, ImU32 color) {
     const float tri_h = 5.0f;

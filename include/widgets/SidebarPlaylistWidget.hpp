@@ -1,6 +1,6 @@
 #pragma once
 
-#include "MusicModel.hpp"
+#include "types/MusicModel.hpp"
 #include "imgui.h"
 #include <cstdint>
 #include <functional>

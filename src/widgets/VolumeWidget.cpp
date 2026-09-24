@@ -1,6 +1,6 @@
 #include "widgets/VolumeWidget.hpp"
-#include "Font.hpp"
-#include "UIConfig.hpp"
+#include "public/Font.hpp"
+#include "public/UIConfig.hpp"
 #include <algorithm>
 #include <cmath>
 #include <string>

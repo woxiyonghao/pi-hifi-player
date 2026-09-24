@@ -1,8 +1,8 @@
 #pragma once
 
-#include "MusicModel.hpp"
+#include "types/MusicModel.hpp"
 #include "types/SidebarTypes.hpp"
-#include "UIConfig.hpp"
+#include "public/UIConfig.hpp"
 #include "imgui.h"
 #include "widgets/SidebarDacWidget.hpp"
 #include "widgets/SidebarFeatureWidget.hpp"

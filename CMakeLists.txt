@@ -55,6 +55,12 @@ add_executable(${PROJECT_NAME} ${APP_SOURCES} ${IMGUI_SOURCES})
 target_include_directories(
     ${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/public
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/types
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/views
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/tools
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/themes
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/widgets
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/imgui
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/imgui/backends
     ${SDL2_INCLUDE_DIRS}

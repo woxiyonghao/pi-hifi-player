@@ -1,6 +1,6 @@
 #pragma once
 
-#include "PlayerAdmin.hpp"
+#include "tools/PlayerAdmin.hpp"
 #include "imgui.h"
 
 class VolumeWidget {

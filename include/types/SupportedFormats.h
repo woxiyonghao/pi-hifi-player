@@ -1,6 +1,6 @@
 #pragma once
 
-#include "MusicModel.hpp"
+#include "types/MusicModel.hpp"
 #include <array>
 #include <optional>
 #include <string_view>

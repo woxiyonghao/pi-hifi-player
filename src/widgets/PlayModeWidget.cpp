@@ -1,6 +1,6 @@
 #include "widgets/PlayModeWidget.hpp"
 #include "widgets/DrawUtils.hpp"
-#include "UIConfig.hpp"
+#include "public/UIConfig.hpp"
 
 void PlayModeWidget::drawIcon(ImDrawList* dl, ImVec2 center, PlayMode mode, ImU32 color, float scale) {
     const float th = 1.6f * scale;

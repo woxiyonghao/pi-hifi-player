@@ -1,8 +1,8 @@
 
 #pragma once
 
-#include "PlayerAdmin.hpp"
-#include "UIConfig.hpp"
+#include "tools/PlayerAdmin.hpp"
+#include "public/UIConfig.hpp"
 #include "imgui.h"
 #include "widgets/PlayModeWidget.hpp"
 #include "widgets/PrevTrackWidget.hpp"

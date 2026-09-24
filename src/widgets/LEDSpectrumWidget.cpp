@@ -1,5 +1,5 @@
 #include "widgets/LEDSpectrumWidget.hpp"
-#include "UIConfig.hpp"
+#include "public/UIConfig.hpp"
 #include <algorithm>
 #include <cmath>
 
