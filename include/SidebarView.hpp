@@ -9,6 +9,8 @@
 #include "widgets/SidebarPlaylistWidget.hpp"
 #include <functional>
 #include <vector>
+
+
 class SidebarView {
   public:
     using CreatePlaylistCallback = std::function<void()>;
@@ -47,20 +49,11 @@ class SidebarView {
     // 上部分菜单与歌单独立滚动视图
     void renderTopNav(const std::vector<Playlist>& playlists, float width, float height);
 
-    // 下部分固定 DAC 状态视图
-    void renderBottomDac(float width, float y, float height);
-
-    // 基础排版单元
-    void drawSectionHeader(const char* title);
-    bool drawNavItem(NavIcon icon, const char* label, bool is_selected);
 
   private:
     SidebarTab current_tab_ = SidebarTab::AllMusic;
     uint64_t selected_playlist_id_ = 0;
     CreatePlaylistCallback on_create_playlist_;
-
-    bool dac_connected_ = false;
-    std::string dac_name_ = "ES9038PRO Balanced";
 
     // 动效与滑块位置追踪状态
     float indicator_y_ = -1.0f;
