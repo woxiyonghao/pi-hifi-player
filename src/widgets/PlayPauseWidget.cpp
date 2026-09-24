@@ -59,14 +59,6 @@ bool PlayPauseWidget::render(ImDrawList* dl, ImVec2 center, ImVec2 size, Callbac
         }
     }
 
-    // Hover 态：液态玻璃微光底板 + 1px 折射微光边框 + 主题色高亮
-    if (hov) {
-        dl->AddRectFilled(btn_min, btn_max, UIConfig::Color::GlassHover, 8.0f);
-        dl->AddRect(btn_min, btn_max, UIConfig::Color::GlassBorder, 8.0f, 0, 1.0f);
-        // 环境微发光
-        dl->AddCircleFilled(center, 14.0f, IM_COL32(250, 45, 72, 35));
-    }
-
     ImU32 icon_col = hov ? col_hover : col_blur;
     drawIcon(dl, center, player.isPlaying(), icon_col);
     return clicked;

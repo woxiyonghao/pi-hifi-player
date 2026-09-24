@@ -80,12 +80,6 @@ void VolumeWidget::render(ImDrawList* dl, float right_limit, float center_y) {
         is_muted = player.isMuted();
     }
 
-    if (spk_hov) {
-        dl->AddRectFilled(spk_min, spk_max, UIConfig::Color::GlassHover, 6.0f);
-        dl->AddRect(spk_min, spk_max, UIConfig::Color::GlassBorder, 6.0f, 0, 1.0f);
-        dl->AddCircleFilled(ImVec2(spk_cx, center_y), 11.0f, IM_COL32(250, 45, 72, 35));
-    }
-
     ImU32 spk_col = (spk_hov || is_muted) ? col_hover : col_blur;
     drawSpeaker(dl, ImVec2(spk_cx, center_y), vol, is_muted, spk_col);
 
@@ -139,11 +133,8 @@ void VolumeWidget::render(ImDrawList* dl, float right_limit, float center_y) {
         dl->AddRectFilled(ImVec2(track_x0, track_y0), ImVec2(knob_x, track_y1), fill_col, 2.0f);
     }
 
-    // 滑块手柄 (Thumb 纯白发光圆点，悬停/拖动时微扩并产生玫瑰红微光晕)
+    // 滑块手柄 (Thumb 纯白实心圆点)
     float knob_r = (slider_hov || slider_act) ? 5.5f : 4.5f;
-    if (slider_hov || slider_act) {
-        dl->AddCircleFilled(ImVec2(knob_x, center_y), knob_r + 3.5f, IM_COL32(250, 45, 72, 50));
-    }
     dl->AddCircleFilled(ImVec2(knob_x, center_y), knob_r, IM_COL32(245, 245, 250, 255));
     dl->AddCircle(ImVec2(knob_x, center_y), knob_r, IM_COL32(0, 0, 0, 70), 0, 1.0f);
 
