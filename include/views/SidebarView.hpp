@@ -38,7 +38,7 @@ class SidebarView {
     ImU32 getAccentColor() const { return UIConfig::Color::Accent; }
 
      // DAC 硬件连接状态
-    void setDacConnected(bool connected, const std::string& name = "ES9038PRO") {
+    void setDacConnected(bool connected, const std::string& name = "AK4499EX") {
         dac_widget_.setConnected(connected, name);
     }
     bool isDacConnected() const {

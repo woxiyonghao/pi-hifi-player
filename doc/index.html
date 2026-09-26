@@ -34,7 +34,7 @@
             <span class="px-2 py-0.5 text-[11px] font-bold rounded-full bg-amber-950 text-amber-400 border border-amber-800">分体式双箱</span>
             <span class="px-2 py-0.5 text-[11px] font-bold rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800">7按键+铝旋钮</span>
           </div>
-          <p class="text-xs text-slate-400">Box 1: 3D打印桌面数播中枢 (树莓派5 + 7寸QLED + 7独立物理按键 + 实心铝旋钮) ｜ Box 2: 全铝纯模拟解码前级 (ES9038PRO + 纯铜双变压器)</p>
+          <p class="text-xs text-slate-400">Box 1: 3D打印桌面数播中枢 (树莓派5 + 7寸QLED + 7独立物理按键 + 实心铝旋钮) ｜ Box 2: 全铝纯模拟解码前级 (AK4191EQ + AK4499EX + 纯铜双变压器)</p>
         </div>
       </div>
 
@@ -111,9 +111,9 @@
             </span>
             <span class="text-xl font-black text-sky-400 font-mono">¥1,153.80</span>
           </div>
-          <h3 class="text-base font-bold text-white">ES9038PRO + 箭猪环牛 + R牛</h3>
+          <h3 class="text-base font-bold text-white">AK4191EQ + AK4499EX + 箭猪环牛 + R牛</h3>
           <p class="text-xs text-slate-400 mt-1 leading-relaxed">
-            极致发烧音质核心！8通道并联、纯铜双牛数模彻底分离、WAGO 免焊安全分线，I2S 硬解直达山水 AU-707KX。
+            极致发烧音质核心！AKM Velvet Sound VERITA 旗舰分体架构、数模彻底分离、纯铜双牛独立供电、WAGO 免焊安全分线，I2S 硬解直达山水 AU-707KX。
           </p>
           <div class="mt-3 pt-3 border-t border-slate-800 flex items-center justify-between text-xs font-medium text-slate-400">
             <span>英国箭猪双15V (¥188)</span>
@@ -175,7 +175,7 @@
             </div>
             <h2 class="text-2xl font-black text-white">树莓派 5 代 40-Pin 物理排针与外设实操连接图</h2>
             <p class="text-xs text-slate-400 mt-1 max-w-3xl leading-relaxed">
-              仿真实物芯片 + 两侧引出线标注设计。中心为树莓派 5 实物板卡外观，引线连接至左侧 <b>7 个独立微动按键 (连续 8P 彩排线一体直插)</b>、左下方 <b>ES9038PRO 4P I2S 纯铜插头</b> 与右侧 <b>EC11 实心铝音量旋钮</b>，防呆防插反！
+              仿真实物芯片 + 两侧引出线标注设计。中心为树莓派 5 实物板卡外观，引线连接至左侧 <b>7 个独立微动按键 (连续 8P 彩排线一体直插)</b>、左下方 <b>AK4499EX 4P I2S 纯铜插头</b> 与右侧 <b>EC11 实心铝音量旋钮</b>，防呆防插反！
             </p>
           </div>
           <div class="flex items-center gap-2">
@@ -313,11 +313,11 @@
             <line x1="608" y1="531" x2="380" y2="531" stroke="#c084fc" stroke-width="2"/><circle cx="608" cy="531" r="3" fill="#c084fc"/>
             <line x1="608" y1="657" x2="380" y2="657" stroke="#f59e0b" stroke-width="2"/><circle cx="608" cy="657" r="3" fill="#f59e0b"/>
 
-            <!-- 外部模块 1：ES9038PRO 4P 输入插排展示框 (左下方) -->
+            <!-- 外部模块 1：AK4499EX 4P 输入插排展示框 (左下方) -->
             <g transform="translate(35, 475)">
               <rect width="345" height="150" rx="12" fill="#0f172a" stroke="#0284c7" stroke-width="2"/>
               <rect x="0" y="0" width="345" height="32" rx="12" fill="#0369a1"/>
-              <text x="172" y="21" text-anchor="middle" font-size="12" font-weight="bold" fill="#fff">ES9038PRO 解码板 4P 输入端子</text>
+              <text x="172" y="21" text-anchor="middle" font-size="12" font-weight="bold" fill="#fff">AK4499EX 解码板 4P 输入端子</text>
               
               <text x="20" y="55" font-size="11" fill="#38bdf8" font-weight="bold">1. BCK / SCLK  ➔ 接 Pin 12 (GPIO 18)</text>
               <text x="20" y="80" font-size="11" fill="#38bdf8" font-weight="bold">2. LRCK / WS   ➔ 接 Pin 35 (GPIO 19)</text>
@@ -503,7 +503,7 @@
               Thread 2: Decoder & Cache
             </div>
             <p class="text-slate-400 leading-relaxed">
-              基于 FFmpeg (<code>libavcodec</code>/<code>libavformat</code>) 解析 FLAC/WAV/DSD/APE 或 CD 音频，重采样至 ES9038PRO 原生支持的最佳位深并填充环形缓冲。
+              基于 FFmpeg (<code>libavcodec</code>/<code>libavformat</code>) 解析 FLAC/WAV/DSD/APE 或 CD 音频，重采样至 AK4499EX 原生支持的最佳位深并填充环形缓冲。
             </p>
           </div>
           <div class="bg-slate-950 p-4 rounded-xl border border-amber-900/40 space-y-2">
@@ -614,7 +614,7 @@
             McIntosh Precision Power Meter · Bit-Perfect 192kHz/24Bit ALSA
           </div>
           <div class="absolute bottom-4 right-6 text-[10px] font-mono text-sky-400/80 pointer-events-none">
-            ES9038PRO 8-CH PARALLEL BALANCED
+            AK4191EQ + AK4499EX VELVET SOUND
           </div>
         </div>
 
@@ -704,14 +704,14 @@
                 <span class="px-2 py-0.5 rounded bg-amber-950 text-amber-400 font-bold text-[10px]">模拟运放</span>
                 <div>
                   <div class="font-bold text-white">英国箭猪 (Noratel) 50VA 环牛 (双 15V)</div>
-                  <div class="text-slate-400 text-[11px] mt-0.5">十倍充沛功率余量，专供 ES9038PRO 的 LPF 运放与输出缓冲级，醇厚暖甜英国声底。</div>
+                  <div class="text-slate-400 text-[11px] mt-0.5">十倍充沛功率余量，专供 AK4499EX 的 LPF 运放与输出缓冲级，醇厚暖甜英国声底。</div>
                 </div>
               </div>
               <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 flex items-start gap-3">
                 <span class="px-2 py-0.5 rounded bg-amber-950 text-amber-400 font-bold text-[10px]">数字时钟</span>
                 <div>
                   <div class="font-bold text-white">庆达全铜 R-20 变压器 (双 9V 三线)</div>
-                  <div class="text-slate-400 text-[11px] mt-0.5">零漏磁纯铜结构，专供 9038 主芯片与双飞秒晶振，杜绝任何数模串扰，背景声底极黑。</div>
+                  <div class="text-slate-400 text-[11px] mt-0.5">零漏磁纯铜结构，专供 AK4191EQ / AK4499EX 核心数字与双飞秒时钟，杜绝任何数模串扰，背景声底极黑。</div>
                 </div>
               </div>
               <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 flex items-start gap-3">
@@ -738,7 +738,7 @@
                 方案 A (标配极致)：超短屏蔽 I2S 线 (4P 航空头或屏蔽杜邦线)
               </div>
               <p class="text-slate-400 text-[11px] leading-relaxed">
-                线长控制在 15~20cm 以内，连接 BCLK/LRCLK/DOUT/GND 四根线。纯硬件直连，无操作系统驱动协议开销，时序精准无匹，直接由 ES9038PRO 飞秒晶振自同步锁相！
+                线长控制在 15~20cm 以内，连接 BCLK/LRCLK/DOUT/GND 四根线。纯硬件直连，无操作系统驱动协议开销，时序精准无匹，直接由 AK4499EX 飞秒晶振自同步锁相！
               </p>
             </div>
 
@@ -807,20 +807,20 @@
         tips: "拍下【QLED触控屏（带开发配件）】¥301.71 即可，内含 Micro-HDMI 扁平转接线与供电触控线。"
       },
       {
-        id: "dac_9038pro",
-        name: "ES9038PRO 软控全平衡解码成品板",
-        spec: "【阶段二】8通道并联 / 132dB 动态 / XLR 平衡 + RCA / 双时钟 / DIP-8运放座配齐",
+        id: "dac_ak4499ex",
+        name: "AK4191EQ + AK4499EX 旗舰软控全平衡解码成品板",
+        spec: "【阶段二】AKM Velvet Sound VERITA / 数模彻底分离 / XLR 平衡 + RCA / 双时钟 / DIP-8运放座配齐",
         category: "phase2",
         price: 899,
-        pddPrice: "¥850 - ¥920",
+        pddPrice: "¥850 - ¥950",
         tbPrice: "¥899 (实价校准·全配齐成品板)",
         confirmed: true,
         selected: true,
-        pddKeyword: "ES9038PRO 解码板 成品 软控",
-        tbKeyword: "ES9038PRO 软控 全平衡 解码板 成品",
-        desc: "已校准真实成交价！配齐 ES9038PRO 芯片、双超低相噪晶振时钟、DIP-8 镀金运放座（插满运放）、软控 OLED 显示屏及遥控，I2S 输入通电即响！",
+        pddKeyword: "AK4499EX AK4191 解码板 成品 软控",
+        tbKeyword: "AK4499EX AK4191 软控 全平衡 解码板 成品",
+        desc: "已校准真实成交价！配齐 AK4191EQ 数字滤波调制器 + AK4499EX 模拟 DAC 核心、双超低相噪飞秒晶振时钟、DIP-8 镀金运放座（插满运放）、软控 OLED 显示屏及遥控，I2S 输入通电即响！",
         img: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Yamaha_MM-MC_RIAA_preamp_board%2C_around_1987_%282%29.jpg/640px-Yamaha_MM-MC_RIAA_preamp_board%2C_around_1987_%282%29.jpg",
-        tips: "¥899 是配齐芯片、时钟、运放并出厂调试完毕的真正完整成品板，免焊调试。"
+        tips: "¥899 是配齐 AK4191+AK4499EX 芯片、时钟、运放并出厂调试完毕的真正完整成品板，免焊调试。"
       },
       {
         id: "noratel_50va",
@@ -834,14 +834,14 @@
         selected: true,
         pddKeyword: "箭猪 环牛 50W 双15V",
         tbKeyword: "箭猪 环牛 双15V",
-        desc: "已在【壹伴工作室】确认！50VA 充足功率（十倍余量），专供 ES9038PRO 模拟运放。纯正英国暖声底，人声饱满多汁，自带多色无氧铜耐高温引线，直接螺丝紧固免焊接！",
+        desc: "已在【壹伴工作室】确认！50VA 充足功率（十倍余量），专供 AK4499EX 模拟运放。纯正英国暖声底，人声饱满多汁，自带多色无氧铜耐高温引线，直接螺丝紧固免焊接！",
         img: "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4b/Toroidal_transformer.jpg/640px-Toroidal_transformer.jpg",
         tips: "在【壹伴工作室】直接拍下 50VA 【双 15V】规格 ¥188 即可。"
       },
       {
         id: "qingda_r20",
         name: "【数字核心供电】全铜 R型发烧变压器 R-20 (双9V三线)",
-        spec: "【阶段二】20VA 双9V三线 (9V-0-9V) / 庆达企业店 / 专供 9038 芯片与飞秒时钟 / 零漏磁",
+        spec: "【阶段二】20VA 双9V三线 (9V-0-9V) / 庆达企业店 / 专供 AK4191 / AK4499EX 核心数字与飞秒时钟 / 零漏磁",
         category: "phase2",
         price: 58,
         pddPrice: "¥50 - ¥60",
@@ -850,7 +850,7 @@
         selected: true,
         pddKeyword: "R型变压器 双9V 20W",
         tbKeyword: "全铜R牛 变压器 双9V",
-        desc: "已实拍锁定！发烧级 R型环氧纯铜结构，几乎零漏磁零辐射。输入 220V，输出双 9V 三线，专供 ES9038PRO 数字逻辑及单片机软控，自带金属底脚螺丝孔，接线极其清爽！",
+        desc: "已实拍锁定！发烧级 R型环氧纯铜结构，几乎零漏磁零辐射。输入 220V，输出双 9V 三线，专供 AK4191EQ / AK4499EX 数字逻辑及单片机软控，自带金属底脚螺丝孔，接线极其清爽！",
         img: "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4b/Toroidal_transformer.jpg/640px-Toroidal_transformer.jpg",
         tips: "选择【普通黄色外观】+【R-20】+【9V】+【双电压(输出3根线)】，实付 ¥58 包邮。"
       },

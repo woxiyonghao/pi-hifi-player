@@ -36,6 +36,6 @@ class MainStageView {
     void drawLiquidCard(ImDrawList* dl, ImVec2 p_min, ImVec2 p_max, const char* title, const char* subtitle = nullptr);
 
   private:
-    char scan_path_buf_[256] = "/Users/mk10/Music";
+    char scan_path_buf_[256] = "";
     ScanMusicWidget scan_widget_;
 };

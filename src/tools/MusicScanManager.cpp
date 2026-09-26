@@ -103,7 +103,11 @@ Track MusicScanManager::parseBasicMetadata(uint64_t id, const std::filesystem::d
 void MusicScanManager::scanWorker(std::stop_token stop_token, std::filesystem::path root_path) {
     std::error_code ec;
 
-    // 1. 基础路径有效性检查
+    // 1. 基础路径有效性检查 (若目录不存在则自动尝试创建，确保跨机器兼容)
+    if (!std::filesystem::exists(root_path, ec)) {
+        std::filesystem::create_directories(root_path, ec);
+    }
+
     if (!std::filesystem::exists(root_path, ec) || !std::filesystem::is_directory(root_path, ec)) {
         std::cerr << "[MusicScanManager] 目标路径不存在或非目录: " << root_path << std::endl;
         state_ = ScanState::Failed;

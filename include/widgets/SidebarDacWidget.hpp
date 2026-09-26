@@ -18,7 +18,7 @@ public:
     void render(float width, float y, float height);
 
     // 硬件连接状态与设备名称
-    void setConnected(bool connected, const std::string& name = "ES9038PRO") {
+    void setConnected(bool connected, const std::string& name = "AK4499EX") {
         connected_ = connected;
         dac_name_ = name;
     }
@@ -32,6 +32,6 @@ public:
 
 private:
     bool connected_ = false;
-    std::string dac_name_ = "ES9038PRO";
+    std::string dac_name_ = "AK4499EX";
     ClickCallback on_click_;
 };

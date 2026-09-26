@@ -5,12 +5,17 @@
 #include <cstdio>
 
 MainStageView::MainStageView() {
-    // 树莓派真机默认扫描路径适配
+    // 动态获取当前用户主目录，自适应不同开发机 (macOS) 与树莓派 (Linux)
+    const char* home = std::getenv("HOME");
+    if (home) {
+        std::snprintf(scan_path_buf_, sizeof(scan_path_buf_), "%s/Music", home);
+    } else {
 #if defined(HIFI_PLATFORM_RPI)
-    std::snprintf(scan_path_buf_, sizeof(scan_path_buf_), "/home/pi/Music");
+        std::snprintf(scan_path_buf_, sizeof(scan_path_buf_), "/home/pi/Music");
 #else
-    std::snprintf(scan_path_buf_, sizeof(scan_path_buf_), "/Users/mk10/Music");
+        std::snprintf(scan_path_buf_, sizeof(scan_path_buf_), "/Music");
 #endif
+    }
 }
 
 void MainStageView::renderScanMusicView(float x, float y, float w, float h, std::vector<Playlist>& playlists) {
@@ -196,7 +201,7 @@ void MainStageView::renderDACSettingsView(float x, float y, float w, float h) {
     ImVec2 card_max(x + w - margin_x, y + h - 86.0f);
 
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    drawLiquidCard(dl, card_min, card_max, "ES9038PRO 旗舰平衡解码前级设置", "硬件数字滤波滚降特性与飞秒双时钟同步管理");
+    drawLiquidCard(dl, card_min, card_max, "AK4191EQ + AK4499EX 旗舰平衡解码前级设置", "AKM Velvet Sound 数字滤波滚降特性与飞秒双时钟同步管理");
 }
 
 void MainStageView::renderThemeSettingsView(float x, float y, float w, float h) {

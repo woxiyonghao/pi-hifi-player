@@ -104,7 +104,7 @@ void VUMeterRenderer::render(float screen_w, float screen_h, float raw_level_l, 
     dl->AddText(ImVec2(24.0f, screen_h - 32.0f), McIntoshColor::FooterBadge,
                 "McIntosh Precision Power Meter · Bit-Perfect 192kHz/24Bit ALSA");
     
-    const char* right_badge = "ES9038PRO 8-CH PARALLEL BALANCED";
+    const char* right_badge = "AK4191EQ + AK4499EX VELVET SOUND";
     ImVec2 badge_sz = ImGui::CalcTextSize(right_badge);
     dl->AddText(ImVec2(screen_w - badge_sz.x - 24.0f, screen_h - 32.0f), McIntoshColor::FooterBadge, right_badge);
 }
