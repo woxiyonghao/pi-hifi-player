@@ -5,9 +5,9 @@ Conflicts=getty@tty1.service
 
 [Service]
 Type=simple
-User=pi
-Group=pi
-WorkingDirectory=/home/pi/pi-hifi-music
+User=winheo
+Group=winheo
+WorkingDirectory=/home/winheo/pi-hifi-music
 
 # 环境变量：强制 SDL2 使用底层 Linux 内核 KMS/DRM 驱动直通 HDMI 输出 (无需任何桌面环境)
 Environment="SDL_VIDEODRIVER=kmsdrm"
@@ -22,7 +22,7 @@ TTYReset=yes
 TTYVHangup=yes
 
 # 启动可执行文件
-ExecStart=/home/pi/pi-hifi-music/build/PiHifiPlayer
+ExecStart=/home/winheo/pi-hifi-music/build/PiHifiPlayer
 
 # 进程异常退出自动复活
 Restart=always
