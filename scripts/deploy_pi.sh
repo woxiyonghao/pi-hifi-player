@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # Mac 本地代码增量部署与树莓派 5 编译脚本
-# 用法：./scripts/deploy_pi.sh [树莓派IP或主机名] [用户名] (默认: winheo-pi.local winheo)
+# 用法：./scripts/deploy_pi.sh [树莓派IP或主机名] (默认: pi-hifi.local)
 # ==============================================================================
 set -e
 
-PI_HOST="${1:-winheo-pi.local}"
-PI_USER="${2:-winheo}"
+PI_HOST="${1:-pi-hifi.local}"
+PI_USER="pi"
 REMOTE_DIR="/home/${PI_USER}/pi-hifi-music"
 
 echo "=== [1/3] 检查网络连接与创建远程目录 (${PI_USER}@${PI_HOST}) ==="
