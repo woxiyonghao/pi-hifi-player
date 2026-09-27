@@ -21,7 +21,7 @@ if(APPLE)
 elseif(UNIX AND NOT APPLE)
     message(STATUS ">> [HiFi Build] 当前检测为 Linux / 树莓派 5 生产部署平台")
      # 针对树莓派 5 Cortex-A76 架构开启极端性能优化
-    add_compile_options(-O3 -pipe -march=armv8.2-a+crypto -mcpu=cortex-a76)
+    add_compile_options(-O3 -pipe -mcpu=cortex-a76+crypto)
 
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(SDL2 REQUIRED sdl2)

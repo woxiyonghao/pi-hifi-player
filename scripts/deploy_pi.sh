@@ -1,27 +1,32 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # Mac 本地代码增量部署与树莓派 5 编译脚本
-# 用法：./scripts/deploy_pi.sh [树莓派IP或主机名] (默认: pi-hifi.local)
+# 用法：./scripts/deploy_pi.sh [树莓派IP或主机名] [用户名] (默认: 192.168.1.169 winheo)
 # ==============================================================================
 set -e
 
-PI_HOST="${1:-pi-hifi.local}"
-PI_USER="pi"
+# 默认优先使用已探测到的局域网 IP，其次回退到 mDNS 主机名 winheo-pi.local
+PI_HOST="${1:-192.168.1.169}"
+PI_USER="${2:-winheo}"
 REMOTE_DIR="/home/${PI_USER}/pi-hifi-music"
 
-echo "=== [1/3] 检查网络连接与创建远程目录 (${PI_USER}@${PI_HOST}) ==="
-ssh "${PI_USER}@${PI_HOST}" "mkdir -p ${REMOTE_DIR}"
+# 设置 SSH 基础选项 (5秒超时检测，防止一直卡住)
+SSH_OPTS="-o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new"
+
+echo "=== [1/3] 连接树莓派并准备远程目录 (${PI_USER}@${PI_HOST}) ==="
+ssh ${SSH_OPTS} "${PI_USER}@${PI_HOST}" "mkdir -p ${REMOTE_DIR}"
 
 echo "=== [2/3] 增量同步代码与脚本到树莓派 5 ==="
 rsync -avz --delete \
+    -e "ssh ${SSH_OPTS}" \
     --exclude "build/" \
     --exclude ".git/" \
     --exclude ".cache/" \
     --exclude "*.DS_Store" \
     ./ "${PI_USER}@${PI_HOST}:${REMOTE_DIR}/"
 
-echo "=== [3/3] 远程检查依赖、编译并热重启 ==="
-ssh -t "${PI_USER}@${PI_HOST}" bash -c "'
+echo "=== [3/3] 远程检查环境、原生编译与热重启 ==="
+ssh -t ${SSH_OPTS} "${PI_USER}@${PI_HOST}" bash -c "'
     set -e
     cd ${REMOTE_DIR}
 

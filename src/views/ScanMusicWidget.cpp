@@ -1,6 +1,7 @@
 #include "views/ScanMusicWidget.hpp"
 #include "public/Font.hpp"
 #include "public/UIConfig.hpp"
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
