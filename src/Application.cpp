@@ -32,6 +32,10 @@ bool Application::init() {
 }
 
 bool Application::initSDL() {
+    // 强制开启 SDL2 触摸转鼠标模拟提示，适配各类触控屏
+    SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "1");
+    SDL_SetHint(SDL_HINT_MOUSE_TOUCH_EVENTS, "1");
+
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_EVENTS) != 0) {
         std::cerr << "[SDL] 初始化失败: " << SDL_GetError() << std::endl;
         return false;
@@ -135,6 +139,28 @@ void Application::pollEvents() {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
         ImGui_ImplSDL2_ProcessEvent(&event);
+
+        // 原生多点触摸 (TouchScreen) 转 ImGui 鼠标交互事件 (针对微雪触控屏)
+        ImGuiIO& io = ImGui::GetIO();
+        if (event.type == SDL_FINGERDOWN) {
+            float x = event.tfinger.x * 1024.0f;
+            float y = event.tfinger.y * 600.0f;
+            io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
+            io.AddMousePosEvent(x, y);
+            io.AddMouseButtonEvent(0, true);
+        } else if (event.type == SDL_FINGERUP) {
+            float x = event.tfinger.x * 1024.0f;
+            float y = event.tfinger.y * 600.0f;
+            io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
+            io.AddMousePosEvent(x, y);
+            io.AddMouseButtonEvent(0, false);
+        } else if (event.type == SDL_FINGERMOTION) {
+            float x = event.tfinger.x * 1024.0f;
+            float y = event.tfinger.y * 600.0f;
+            io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
+            io.AddMousePosEvent(x, y);
+        }
+
         if (event.type == SDL_QUIT) {
             running_ = false;
         }
