@@ -372,6 +372,46 @@ void drawSmoothSolarSphere(ImDrawList* dl, ImVec2 center, float pulse) {
     dl->AddCircleFilled(center, 3.2f * pulse, IM_COL32(255, 255, 255, 255), 32);
 }
 
+// 绘制纯矢量 32px 刷新图标 (1:1 还原截图二逆时针带圆头循环箭头)
+void drawRefreshIcon(ImDrawList* dl, ImVec2 center, float size, ImU32 col, float rotation_rad = 0.0f) {
+    const float arc_r = size * 0.25f; // 半径约 8px
+    const float thickness = 2.2f;
+
+    // 旋转偏移量 (悬停动效或静态 0)
+    float base_a_min = -1.95f + rotation_rad;
+    float base_a_max = 2.45f + rotation_rad;
+
+    // 1. 252° 圆弧段
+    dl->PathArcTo(center, arc_r, base_a_min, base_a_max, 28);
+    dl->PathStroke(col, 0, thickness);
+
+    // 2. 尾端平滑圆头 (7:30 位置)
+    ImVec2 tail_pos(center.x + arc_r * std::cos(base_a_max), center.y + arc_r * std::sin(base_a_max));
+    dl->AddCircleFilled(tail_pos, thickness * 0.5f, col, 12);
+
+    // 3. 顶端逆时针箭头 (10:30 位置，指向左下方)
+    float head_ang = base_a_min;
+    ImVec2 head_pos(center.x + arc_r * std::cos(head_ang), center.y + arc_r * std::sin(head_ang));
+
+    // 切线向量 (逆时针朝向) 与法线向量 (径向向外)
+    float cos_a = std::cos(head_ang);
+    float sin_a = std::sin(head_ang);
+    ImVec2 dir_tan(sin_a, -cos_a);   // 逆时针切线
+    ImVec2 dir_norm(cos_a, sin_a);  // 径向外法线
+
+    const float arrow_len = 5.2f;
+    const float arrow_half_w = 3.6f;
+
+    ImVec2 tip(head_pos.x + dir_tan.x * (arrow_len * 0.65f),
+               head_pos.y + dir_tan.y * (arrow_len * 0.65f));
+    ImVec2 back_c(head_pos.x - dir_tan.x * (arrow_len * 0.35f),
+                  head_pos.y - dir_tan.y * (arrow_len * 0.35f));
+    ImVec2 w1(back_c.x + dir_norm.x * arrow_half_w, back_c.y + dir_norm.y * arrow_half_w);
+    ImVec2 w2(back_c.x - dir_norm.x * arrow_half_w, back_c.y - dir_norm.y * arrow_half_w);
+
+    dl->AddTriangleFilled(tip, w1, w2, col);
+}
+
 } // anonymous namespace
 
 void ScanMusicWidget::drawLaserWarpAnimation(ImDrawList* dl, ImVec2 emitter_pos, ImVec2 p_min, ImVec2 p_max) {
@@ -594,4 +634,43 @@ void ScanMusicWidget::renderCompletedState([[maybe_unused]] ImDrawList* dl, ImVe
     }
 
     ImGui::EndChild();
+
+    // =========================================================================
+    // 7. 右上角发烧级 32px 矢量刷新 (Rescan) 按钮
+    // 距顶 12px，距右 12px，仅在扫描完成界面显示，配色严格适配 App 发烧液态玻璃规范
+    // =========================================================================
+    const float btn_size = 32.0f;
+    ImVec2 btn_p0(p_max.x - 12.0f - btn_size, p_min.y + 12.0f);
+    ImVec2 btn_c(btn_p0.x + btn_size * 0.5f, btn_p0.y + btn_size * 0.5f);
+
+    ImGui::SetCursorScreenPos(btn_p0);
+    bool clicked_refresh = ImGui::InvisibleButton("##scan_completed_refresh_btn", ImVec2(btn_size, btn_size));
+    bool hov_refresh = ImGui::IsItemHovered();
+    bool act_refresh = ImGui::IsItemActive();
+
+    if (clicked_refresh) {
+        MusicScanManager::getInstance().startScan(AppConfig::Path::getMusicDir());
+    }
+
+    const ImU32 accent = UIConfig::Color::Accent;
+    const ImU32 r = (accent >> IM_COL32_R_SHIFT) & 0xFF;
+    const ImU32 g = (accent >> IM_COL32_G_SHIFT) & 0xFF;
+    const ImU32 b = (accent >> IM_COL32_B_SHIFT) & 0xFF;
+
+    if (hov_refresh || act_refresh) {
+        // 悬停态：主题色环境光晕 Bloom + 玫瑰红液态玻璃底板 + 1px 折射微光边
+        dl->AddCircleFilled(btn_c, 19.0f, IM_COL32(r, g, b, 45), 32);
+        dl->AddCircleFilled(btn_c, 16.0f, IM_COL32(r, g, b, 85), 32);
+        dl->AddCircleFilled(btn_c, 16.0f, UIConfig::Color::GlassActive, 32);
+        dl->AddCircle(btn_c, 16.0f, accent, 32, 1.0f);
+    } else {
+        // Blur 态：深空曜石液态玻璃底板 + 极细通透光边 (适配截图二圆黑底并融入数播暗夜主题)
+        dl->AddCircleFilled(btn_c, 16.0f, IM_COL32(22, 26, 36, 220), 32);
+        dl->AddCircle(btn_c, 16.0f, IM_COL32(255, 255, 255, 35), 32, 1.0f);
+    }
+
+    ImU32 icon_col = (hov_refresh || act_refresh) ? IM_COL32(255, 255, 255, 255)
+                                                   : IM_COL32(215, 222, 235, 190);
+    float rot = hov_refresh ? -std::fmod(static_cast<float>(ImGui::GetTime()) * 4.0f, 6.2831853f) : 0.0f;
+    drawRefreshIcon(dl, btn_c, btn_size, icon_col, rot);
 }

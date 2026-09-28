@@ -562,56 +562,34 @@ void EQConfigView::renderSliders(ImDrawList* dl, ImVec2 card_min, ImVec2 card_ma
         }
 
         // ---------------------------------------------------------------------
-        // 5. 推子物理手柄 (Tactile Slider Thumb - 柔和发烧级液态玻璃平滑胶囊)
+        // 5. 推子物理手柄 (Tactile Slider Thumb)
         // ---------------------------------------------------------------------
         const float thumb_w = (hov || act) ? 30.0f : 28.0f;
         const float thumb_h = (hov || act) ? 14.0f : 12.0f;
-        const float r_thumb = thumb_h * 0.5f; // 纯圆润平滑胶囊，绝无生硬直角
+        const float r_thumb = thumb_h * 0.5f; // 纯圆润平滑胶囊
 
         ImVec2 th_min(cx - thumb_w * 0.5f, thumb_y - thumb_h * 0.5f);
         ImVec2 th_max(cx + thumb_w * 0.5f, thumb_y + thumb_h * 0.5f);
 
-        // 1. 软弥散环境投射阴影 (双层柔焦外阴影)
+        // 1. 软弥散环境投射阴影
         dl->AddRectFilled(ImVec2(th_min.x - 1.0f, th_min.y + 1.5f),
                           ImVec2(th_max.x + 1.0f, th_max.y + 3.5f),
                           IM_COL32(0, 0, 0, 75), r_thumb + 1.0f);
 
-        // 2. 悬停/激活时主题色柔光 Bloom 环绕光晕
+        // 2. 悬停/激活时主题色柔光 Bloom 环绕外发光
         if (hov || act) {
-            dl->AddRectFilled(ImVec2(th_min.x - 2.5f, th_min.y - 2.5f),
-                              ImVec2(th_max.x + 2.5f, th_max.y + 2.5f),
-                              IM_COL32(r, g, b, 45), r_thumb + 2.5f);
+            dl->AddRectFilled(ImVec2(th_min.x - 3.0f, th_min.y - 3.0f),
+                              ImVec2(th_max.x + 3.0f, th_max.y + 3.0f),
+                              IM_COL32(r, g, b, 65), r_thumb + 3.0f);
         }
 
-        // 3. 手柄主体：发烧级深空曜石液态玻璃底质
-        ImU32 th_bg = (act || hov) ? IM_COL32(46, 54, 70, 245) : IM_COL32(32, 38, 50, 235);
+        // 3. 手柄主体：blur 时保持原样深空曜石液态玻璃底色；hover 时变成纯正主题色 (无中间线、无边框线段)
+        ImU32 th_bg = (act || hov) ? accent : IM_COL32(32, 38, 50, 235);
         dl->AddRectFilled(th_min, th_max, th_bg, r_thumb);
 
         // 4. 上半部通透镜面漫反射微光 (Glass Sheen)
-        dl->AddRectFilled(th_min, ImVec2(th_max.x, thumb_y), IM_COL32(255, 255, 255, 22), r_thumb);
-
-        // 5. 顶部 1px 晶圆级边缘高光
-        dl->AddLine(ImVec2(cx - thumb_w * 0.32f, th_min.y + 1.0f),
-                    ImVec2(cx + thumb_w * 0.32f, th_min.y + 1.0f),
-                    IM_COL32(255, 255, 255, 75), 1.0f);
-
-        // 6. 1px 优雅液态玻璃轮廓外圈
-        ImU32 th_border = (act || hov) ? IM_COL32(r, g, b, 210) : IM_COL32(255, 255, 255, 55);
-        dl->AddRect(th_min, th_max, th_border, r_thumb, 0, 1.0f);
-
-        // 7. 中心极简触感指示槽 (取代生硬大白粗横线与红点，采用细腻内嵌发光微胶囊)
-        const float notch_w = (hov || act) ? 8.0f : 6.5f;
-        const float notch_h = 2.0f;
-        ImVec2 n_min(cx - notch_w * 0.5f, thumb_y - notch_h * 0.5f);
-        ImVec2 n_max(cx + notch_w * 0.5f, thumb_y + notch_h * 0.5f);
-
-        ImU32 notch_col;
-        if (is_enabled_) {
-            notch_col = (act || hov) ? IM_COL32(255, 255, 255, 255) : IM_COL32(r, g, b, 230);
-        } else {
-            notch_col = IM_COL32(180, 190, 205, 120);
-        }
-        dl->AddRectFilled(n_min, n_max, notch_col, 1.0f);
+        ImU32 sheen_col = (act || hov) ? IM_COL32(255, 255, 255, 55) : IM_COL32(255, 255, 255, 22);
+        dl->AddRectFilled(th_min, ImVec2(th_max.x, thumb_y), sheen_col, r_thumb);
 
         // ---------------------------------------------------------------------
         // 6. 底部频段标签 (e.g. 31Hz, 1kHz, 16kHz)
