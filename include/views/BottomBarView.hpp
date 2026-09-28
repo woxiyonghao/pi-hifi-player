@@ -8,7 +8,6 @@
 #include "widgets/PrevTrackWidget.hpp"
 #include "widgets/PlayPauseWidget.hpp"
 #include "widgets/NextTrackWidget.hpp"
-#include "widgets/LEDSpectrumWidget.hpp"
 #include "widgets/VolumeWidget.hpp"
 class BottomBarView {
   public:
@@ -37,8 +36,6 @@ class BottomBarView {
     PlayPauseWidget play_pause_widget_;
     // 下一曲
     NextTrackWidget next_widget_;
-    // led矩阵
-    LEDSpectrumWidget spectrum_widget_; 
     // 音量按钮
     VolumeWidget volume_widget_;
 };

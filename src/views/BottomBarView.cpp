@@ -2,6 +2,7 @@
 #include "Font.hpp"
 #include "PlayerAdmin.hpp"
 #include "UIConfig.hpp"
+#include "widgets/GlassCardRenderer.hpp"
 #include <algorithm>
 #include <cmath>
 #include <string>
@@ -12,8 +13,7 @@ BottomBarView::BottomBarView() {}
 // 1. 绘制外部液态玻璃磨砂胶囊底板与 1px 微光折射边框
 // ==============================================================================
 void BottomBarView::drawCapsuleBackground(ImDrawList* dl, ImVec2 p_min, ImVec2 p_max, float rounding) {
-    dl->AddRectFilled(p_min, p_max, UIConfig::Color::ContainerBg, rounding);
-    dl->AddRect(p_min, p_max, UIConfig::Color::ContainerBorder, rounding, 0, 1.0f);
+    GlassCardRenderer::drawCard(dl, p_min, p_max, rounding, "bottom_bar");
 }
 
 // ==============================================================================
@@ -48,7 +48,6 @@ void BottomBarView::render(float screen_w, float screen_h) {
     float bot_y = screen_h - margin_y;
     float top_y = bot_y - height_;
     float center_y = (top_y + bot_y) * 0.5f;
-    float center_x = (left_x + right_x) * 0.5f;
 
     // 1. 设置窗口位置与大小
     ImGui::SetNextWindowPos(ImVec2(left_x, top_y));
@@ -69,9 +68,6 @@ void BottomBarView::render(float screen_w, float screen_h) {
 
     // 左区：播放操作控制块
     renderLeftControls(dl, left_x + rounding + 4.0f, center_y);
-
-    // 中区：LED 律动频谱仪 (截图红框位置)
-    spectrum_widget_.render(dl, ImVec2(center_x, center_y));
 
     // 右区：发烧音量调节组件 (小喇叭 + 可拖拽滑块条 + 百分比)
     float right_limit = right_x - rounding - 4.0f;

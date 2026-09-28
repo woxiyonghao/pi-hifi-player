@@ -240,8 +240,8 @@ void PlayerAdmin::getSpectrumLevels(float* out_levels, size_t count) const {
 
     // 虚拟模拟数据环境下的拟真律动频谱 (供未导入实体音乐文件时的 UI 验证)
     static const float base_weights[12] = {
-        0.85f, 0.70f, 0.90f, 0.60f, 0.75f, 0.50f,
-        0.65f, 0.80f, 0.55f, 0.70f, 0.45f, 0.60f
+        1.15f, 1.05f, 1.10f, 0.95f, 1.05f, 0.90f,
+        0.95f, 1.05f, 0.90f, 1.00f, 0.85f, 0.95f
     };
     static float s_smooth_levels[12] = {0.0f};
     float t = static_cast<float>(ImGui::GetTime());
@@ -249,8 +249,8 @@ void PlayerAdmin::getSpectrumLevels(float* out_levels, size_t count) const {
         float freq = 4.2f + (i % 3) * 1.8f;
         float wave = std::abs(std::sin(t * freq + i * 0.9f)) * 0.65f + 
                      std::abs(std::cos(t * (freq * 0.6f) - i * 1.3f)) * 0.35f;
-        float w = (i < 12) ? base_weights[i] : 0.6f;
-        float target = std::clamp(wave * w, 0.05f, 0.95f);
+        float w = (i < 12) ? base_weights[i] : 0.8f;
+        float target = std::clamp(wave * w * 1.15f, 0.05f, 1.0f);
         if (i < 12) {
             s_smooth_levels[i] = s_smooth_levels[i] * 0.75f + target * 0.25f;
             out_levels[i] = s_smooth_levels[i];

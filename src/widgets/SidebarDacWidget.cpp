@@ -1,4 +1,5 @@
 #include "widgets/SidebarDacWidget.hpp"
+#include "widgets/GlassCardRenderer.hpp"
 #include "UIConfig.hpp"
 
 void SidebarDacWidget::render(float width, float y, float height) {
@@ -19,17 +20,13 @@ void SidebarDacWidget::render(float width, float y, float height) {
         on_click_();
     }
 
-    // 1. 绘制 Xcode 风格液态玻璃底板与平滑边框
-    dl->AddRectFilled(ImVec2(left_x, top_y), ImVec2(right_x, bot_y), 
-                      UIConfig::Color::ContainerBg, rounding);
+    // 1. 绘制玻璃卡片底板 (自适应液态玻璃或毛玻璃)
+    GlassCardRenderer::drawCard(dl, ImVec2(left_x, top_y), ImVec2(right_x, bot_y), rounding, "sidebar");
 
     if (hovered) {
         dl->AddRectFilled(ImVec2(left_x, top_y), ImVec2(right_x, bot_y), 
                           UIConfig::Color::GlassHover, rounding);
     }
-
-    dl->AddRect(ImVec2(left_x, top_y), ImVec2(right_x, bot_y), 
-                UIConfig::Color::ContainerBorder, rounding, 0, 1.0f);
 
     // 2. 内部状态指示灯与文字排版
     float center_y = (top_y + bot_y) * 0.5f;

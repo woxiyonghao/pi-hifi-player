@@ -43,6 +43,7 @@ private:
     void pollEvents();
     void update(float dt);
     void render();
+    void renderBackground(float screen_w, float screen_h);
 
 private:
     SDL_Window* window_ = nullptr;

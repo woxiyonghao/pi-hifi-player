@@ -1,6 +1,7 @@
 #include "SidebarView.hpp"
 #include "Font.hpp"
 #include "UIConfig.hpp"
+#include "widgets/GlassCardRenderer.hpp"
 #include <string>
 #include <algorithm>
 
@@ -19,11 +20,8 @@ void SidebarView::renderTopNav(const std::vector<Playlist>& playlists, float wid
     float bot_y = top_y + height;
     float rounding = UIConfig::Layout::ContainerRounding;
 
-    // 1. 绘制上部分主容器的 Xcode 风格液态玻璃底板与平滑边框
-    dl_master->AddRectFilled(ImVec2(left_x, top_y), ImVec2(right_x, bot_y), 
-                             UIConfig::Color::ContainerBg, rounding);
-    dl_master->AddRect(ImVec2(left_x, top_y), ImVec2(right_x, bot_y), 
-                       UIConfig::Color::ContainerBorder, rounding, 0, 1.0f);
+    // 1. 绘制上部分主容器的玻璃底板 (自适应液态玻璃或毛玻璃)
+    GlassCardRenderer::drawCard(dl_master, ImVec2(left_x, top_y), ImVec2(right_x, bot_y), rounding, "sidebar");
 
     // 2. 内部内容区域 (内边距 6px，支持超长时隐藏滚动条平滑滚动)
     float inner_pad = 6.0f;

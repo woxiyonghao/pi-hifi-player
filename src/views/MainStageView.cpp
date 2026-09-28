@@ -1,6 +1,7 @@
 #include "views/MainStageView.hpp"
 #include "public/Font.hpp"
 #include "public/UIConfig.hpp"
+#include "widgets/GlassCardRenderer.hpp"
 #include <algorithm>
 #include <cstdio>
 
@@ -22,9 +23,8 @@ void MainStageView::renderScanMusicView(float x, float y, float w, float h, std:
 }
 
 void MainStageView::drawLiquidCard(ImDrawList* dl, ImVec2 p_min, ImVec2 p_max, const char* title, const char* subtitle) {
-    // 液态玻璃微光磨砂底板与 1px 折射边框
-    dl->AddRectFilled(p_min, p_max, UIConfig::Color::ContainerBg, UIConfig::Layout::ContainerRounding);
-    dl->AddRect(p_min, p_max, UIConfig::Color::ContainerBorder, UIConfig::Layout::ContainerRounding, 0, 1.0f);
+    // 渲染顶级深空高密度毛玻璃卡片
+    GlassCardRenderer::drawCard(dl, p_min, p_max, UIConfig::Layout::ContainerRounding, "main_stage");
 
     // 绘制标题
     if (title) {
@@ -47,12 +47,7 @@ void MainStageView::render(SidebarTab current_tab,
                            uint64_t selected_playlist_id, 
                            std::vector<Playlist>& playlists,
                            float stage_x, float stage_y, float stage_w, float stage_h) {
-    // 1. 铺设右侧主舞台深空暗色基底
-    ImDrawList* bg_dl = ImGui::GetBackgroundDrawList();
-    bg_dl->AddRectFilled(ImVec2(stage_x, stage_y), ImVec2(stage_x + stage_w, stage_y + stage_h), 
-                         UIConfig::Color::MainStageBg);
-
-    // 2. 创建主舞台专属透明顶层无边框窗口 (严格限制高度不重叠底部 BottomBar，消除事件劫持)
+    // 创建主舞台专属透明顶层无边框窗口 (严格限制高度不重叠底部 BottomBar，消除事件劫持)
     ImGui::SetNextWindowPos(ImVec2(stage_x, stage_y));
     float safe_stage_h = std::min(stage_h, 524.0f); // BottomBar 位于 y = 536，卡片底位于 y = 514
     ImGui::SetNextWindowSize(ImVec2(stage_w, safe_stage_h));

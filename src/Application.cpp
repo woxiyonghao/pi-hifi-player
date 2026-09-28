@@ -1,7 +1,9 @@
 #include "Application.hpp"
 #include "public/Font.hpp"
+#include "public/UIConfig.hpp"
 #include <iostream>
 #include <cmath>
+#include <algorithm>
 
 #if defined(__APPLE__)
 #include <OpenGL/gl3.h> // macOS 使用原生 OpenGL 3.2 Core
@@ -178,27 +180,129 @@ void Application::update(float dt) {
     sim_time_ += 0.035f;
 }
 
+void Application::renderBackground(float screen_w, float screen_h) {
+    ImDrawList* bg_dl = ImGui::GetBackgroundDrawList();
+
+    // 1. 铺设整个 App 的基准发烧底色 (完全对齐原设计的区域与色值规范)
+    // 左侧侧边栏暗色基底 (0 ~ 230)
+    bg_dl->AddRectFilled(ImVec2(0.0f, 0.0f), ImVec2(UIConfig::Layout::SidebarWidth, screen_h), UIConfig::Color::WindowBg);
+    // 右侧主舞台深空基底 (230 ~ screen_w)
+    bg_dl->AddRectFilled(ImVec2(UIConfig::Layout::SidebarWidth, 0.0f), ImVec2(screen_w, screen_h), UIConfig::Color::MainStageBg);
+
+    // 2. 如果未播放，保持现在的颜色 (0 个方块，0 动效，完全纯净)
+    auto& player = PlayerAdmin::getInstance();
+    if (!player.isPlaying()) {
+        return;
+    }
+
+    // 3. 如果播放，在整个 App 的底，渲染音乐动效 (LED 矩阵频谱律动)
+    // 获取 12 频段实时音频幅度
+    float levels12[12] = {0.0f};
+    player.getSpectrumLevels(levels12, 12);
+
+    // 几何排版参数：左右对齐发烧容器外边距 (16px ~ 1008px)
+    const float margin_x = UIConfig::Layout::ContainerMarginX; // 16.0f
+    const float total_w = screen_w - margin_x * 2.0f;          // 992.0f
+    const int num_cols = 48;                                   // 48 列超宽音轨点阵
+    const float gap_x = 4.0f;                                  // 列间距
+    const float col_w = (total_w - (num_cols - 1) * gap_x) / num_cols; // ~16.75px
+    
+    const int num_rows = 69;                                   // 69 行分段 LED (全屏满屏高度贯通)
+    const float seg_h = 6.0f;                                  // 每个方块高度
+    const float gap_y = 2.5f;                                  // 方块纵向间距
+    const float seg_round = 1.2f;                              // 圆角微弧度
+    const float bot_y = screen_h - 8.0f;                       // 距底部屏幕边缘 8px 起振 (最高行达 y = 8px)
+
+    const ImU32 accent = UIConfig::Color::Accent;
+    const ImU32 r = (accent >> IM_COL32_R_SHIFT) & 0xFF;
+    const ImU32 g = (accent >> IM_COL32_G_SHIFT) & 0xFF;
+    const ImU32 b = (accent >> IM_COL32_B_SHIFT) & 0xFF;
+
+    // 常规点亮方块色 (半透明玫红，柔和穿透毛玻璃卡片，通透而不遮挡前景文字)
+    const ImU32 lit_color = IM_COL32(r, g, b, 140);
+    // 柱顶峰值高亮点 (Peak indicator, 强化动态层次感)
+    const ImU32 peak_color = IM_COL32(std::min(255u, r + 20), std::min(255u, g + 60), std::min(255u, b + 60), 220);
+    // 播放时隐约的点阵暗底 (极低透明度，凸显专业仪器质感)
+    const ImU32 unlit_color = IM_COL32(255, 255, 255, 5);
+
+    // 全屏全景氛围微辉光 (随着整体低频能量呼吸涌动)
+    float bass_energy = (levels12[0] + levels12[1] + levels12[2]) / 3.0f;
+    int glow_alpha = static_cast<int>(bass_energy * 32.0f);
+    if (glow_alpha > 0) {
+        bg_dl->AddRectFilledMultiColor(
+            ImVec2(margin_x, 0.0f),
+            ImVec2(screen_w - margin_x, screen_h),
+            IM_COL32(r, g, b, 0),
+            IM_COL32(r, g, b, 0),
+            IM_COL32(r, g, b, glow_alpha),
+            IM_COL32(r, g, b, glow_alpha)
+        );
+    }
+
+    // 平滑插值绘制 48 列分段 LED 矩阵
+    for (int c = 0; c < num_cols; ++c) {
+        float x0 = margin_x + c * (col_w + gap_x);
+        float x1 = x0 + col_w;
+
+        // 平滑余弦插值获取当前列的连续频段能量
+        float norm_x = static_cast<float>(c) / static_cast<float>(num_cols - 1);
+        float pos = norm_x * 11.0f;
+        int idx0 = static_cast<int>(pos);
+        int idx1 = std::min(idx0 + 1, 11);
+        float frac = pos - static_cast<float>(idx0);
+        float smooth_t = (1.0f - std::cos(frac * 3.14159265f)) * 0.5f;
+        float level = levels12[idx0] * (1.0f - smooth_t) + levels12[idx1] * smooth_t;
+
+        // 大动态激荡曲线：确保高频与低频爆发时能满屏激荡涌动 (贯穿整个 600px 屏幕)
+        float dynamic_level = std::clamp(std::pow(level, 0.65f) * 1.35f, 0.0f, 1.0f);
+
+        int active_count = static_cast<int>(std::round(dynamic_level * num_rows));
+        active_count = std::clamp(active_count, 0, num_rows);
+
+        for (int r_idx = 0; r_idx < num_rows; ++r_idx) {
+            float y1 = bot_y - r_idx * (seg_h + gap_y);
+            float y0 = y1 - seg_h;
+
+            bool is_lit = (r_idx < active_count);
+            bool is_peak = (r_idx == active_count - 1 && active_count > 0);
+
+            if (is_lit) {
+                ImU32 col = is_peak ? peak_color : lit_color;
+                bg_dl->AddRectFilled(ImVec2(x0, y0), ImVec2(x1, y1), col, seg_round);
+            } else if ((unlit_color & IM_COL32_A_MASK) != 0) {
+                bg_dl->AddRectFilled(ImVec2(x0, y0), ImVec2(x1, y1), unlit_color, seg_round);
+            }
+        }
+    }
+}
+
 void Application::render() {
     // 1. 开启 ImGui 帧缓冲
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplSDL2_NewFrame();
     ImGui::NewFrame();
 
+    int display_w = 0, display_h = 0;
+    SDL_GL_GetDrawableSize(window_, &display_w, &display_h);
+    const float screen_w = (display_w > 0) ? static_cast<float>(display_w) : 1024.0f;
+    const float screen_h = (display_h > 0) ? static_cast<float>(display_h) : 600.0f;
+
+    // [全景底层背景与音乐律动动效] (位于所有窗口最底层)
+    renderBackground(screen_w, screen_h);
+
     // 2. 调度发烧 UI 三驾马车布局渲染
     // [左侧] 导航与歌单侧边栏 (230 × 600)
-    sidebar_.render(playlists_, 230.0f, 600.0f);
+    sidebar_.render(playlists_, 230.0f, screen_h);
 
     // [右上方] 中央主舞台区域 (794 × 600)
     main_stage_.render(sidebar_.getCurrentTab(), sidebar_.getSelectedPlaylistId(), playlists_, 
-                       230.0f, 0.0f, 794.0f, 600.0f);
+                       230.0f, 0.0f, screen_w - 230.0f, screen_h);
 
     // [底部] 播放控制胶囊栏 (1024 × 600 屏幕下部)
-    bottom_bar_.render(1024.0f, 600.0f);
+    bottom_bar_.render(screen_w, screen_h);
 
     // 3. 提交绘图并进行 OpenGL 光栅化清屏
     ImGui::Render();
-    int display_w = 0, display_h = 0;
-    SDL_GL_GetDrawableSize(window_, &display_w, &display_h);
     glViewport(0, 0, display_w, display_h);
     glClearColor(0.015f, 0.03f, 0.06f, 1.0f); // 经典麦景图深蓝黑底
     glClear(GL_COLOR_BUFFER_BIT);
