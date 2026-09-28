@@ -10,7 +10,7 @@
 #include <filesystem>
 #include <map>
 #include <tools/PlayerAdmin.hpp>
-ScanMusicWidget::ScanMusicWidget() {}
+ScanMusicWidget::ScanMusicWidget() = default;
 
 namespace {
 
@@ -28,19 +28,19 @@ struct SectionMeta {
 inline SectionMeta getSectionMeta(AudioFormat fmt) {
     switch (fmt) {
     case AudioFormat::DSD_DSF:
-        return {"DSD 母带直通 (DSF)", "SACD 原生 1-bit 直通流 · 顶级发烧规格", "DSD Direct"};
+        return {"DSD-DSF", "SACD-1-bit", "DSD Direct"};
     case AudioFormat::DSD_DFF:
-        return {"DSD 原始镜像 (DFF)", "SACD 纯模拟原始比特流镜像", "1-bit Stream"};
+        return {"DSD-DFF", "SACD", "1-bit Stream"};
     case AudioFormat::ALAC:
-        return {"Apple 无损音乐 (ALAC)", "Apple Lossless Audio Codec · 纯净通透", "Apple 无损"};
+        return {"Apple-ALAC", "Apple-Lossless-Audio-Codec ", "Apple 无损"};
     case AudioFormat::FLAC:
-        return {"FLAC 高解析录音室母带", "Free Lossless · 24bit/192kHz 高清数字母带", "Studio Master"};
+        return {"FLAC ", "Free-Lossless-24bit/192kHz ", "Studio Master"};
     case AudioFormat::WAV:
-        return {"WAV 原始脉冲母带", "Uncompressed PCM · 无压缩线性发烧母带", "Uncompressed"};
+        return {"WAV", "Uncompressed-PCM", "Uncompressed"};
     case AudioFormat::MP3:
-        return {"标准高品质音频 (MP3)", "MPEG Audio · 便携随身收藏曲目", "流行热播"};
+        return {"MP3", "MPEG-Audio", "流行热播"};
     default:
-        return {"其他未分类音频", "本地发烧扫描音频资产", "本地音频"};
+        return {"UNKNOWED", "", "本地音频"};
     }
 }
 } // namespace
@@ -392,7 +392,8 @@ void ScanMusicWidget::drawSectionHeader(ImDrawList* dl, ImVec2 pos, const char* 
     if (Fonts::Small) ImGui::PopFont();
 }
 
-bool ScanMusicWidget::drawGridItem(ImDrawList* dl, ImVec2 pos, ImVec2 size, const Track& track, const char* category_tag) {
+bool ScanMusicWidget::drawGridItem(ImDrawList* dl, ImVec2 pos, ImVec2 size, const Track& track,
+                                   const char* category_tag) {
     const float rounding = 10.0f;
     const float cover_w = size.x;
     ImVec2 cover_p0 = pos;
@@ -406,7 +407,8 @@ bool ScanMusicWidget::drawGridItem(ImDrawList* dl, ImVec2 pos, ImVec2 size, cons
     // 封面底板
     ImU32 cover_bg = is_hovered ? IM_COL32(38, 45, 58, 255) : IM_COL32(24, 28, 38, 255);
     dl->AddRectFilled(cover_p0, cover_p1, cover_bg, rounding);
-    dl->AddRect(cover_p0, cover_p1, is_hovered ? UIConfig::Color::GlassBorder : IM_COL32(255, 255, 255, 20), rounding, 0, 1.0f);
+    dl->AddRect(cover_p0, cover_p1, is_hovered ? UIConfig::Color::GlassBorder : IM_COL32(255, 255, 255, 20), rounding,
+                0, 1.0f);
 
     ImVec2 cover_center((cover_p0.x + cover_p1.x) * 0.5f, (cover_p0.y + cover_p1.y) * 0.5f);
 
@@ -428,14 +430,7 @@ bool ScanMusicWidget::drawGridItem(ImDrawList* dl, ImVec2 pos, ImVec2 size, cons
     }
 
     // 文字排版
-    float text_y = cover_p1.y + 8.0f;
-
-    // Line 1: 上方提示小标 (如 "Studio Master")
-    if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-    dl->AddText(ImVec2(pos.x, text_y), UIConfig::Color::TextMuted, category_tag);
-    text_y += 16.0f;
-    if (Fonts::Small) ImGui::PopFont();
-
+    float text_y = cover_p1.y + 16.0f;
     // Line 2: 歌曲主标题
     if (Fonts::Regular) ImGui::PushFont(Fonts::Regular);
     ImU32 title_col = is_hovered ? UIConfig::Color::Accent : UIConfig::Color::TextActive;
@@ -447,7 +442,7 @@ bool ScanMusicWidget::drawGridItem(ImDrawList* dl, ImVec2 pos, ImVec2 size, cons
         title_display += "...";
     }
     dl->AddText(ImVec2(pos.x, text_y), title_col, title_display.c_str());
-    text_y += 18.0f;
+    text_y += 24.0f;
     if (Fonts::Regular) ImGui::PopFont();
 
     // Line 3: 歌手名
@@ -465,7 +460,8 @@ bool ScanMusicWidget::drawGridItem(ImDrawList* dl, ImVec2 pos, ImVec2 size, cons
     return is_clicked;
 }
 
-void ScanMusicWidget::renderCompletedState(ImDrawList* dl, ImVec2 p_min, ImVec2 p_max, std::vector<Playlist>& playlists) {
+void ScanMusicWidget::renderCompletedState([[maybe_unused]] ImDrawList* dl, ImVec2 p_min, ImVec2 p_max,
+                                           std::vector<Playlist>& playlists) {
     auto& scanner = MusicScanManager::getInstance();
     const auto scanned_tracks = scanner.getScannedTracks();
 
@@ -487,27 +483,8 @@ void ScanMusicWidget::renderCompletedState(ImDrawList* dl, ImVec2 p_min, ImVec2 
     ImGui::SetCursorScreenPos(ImVec2(p_min.x + pad_x, p_min.y + pad_y));
 
     // 开启主纵向滚动容器
-    ImGui::BeginChild("##ScanCompletedScrollRoot", ImVec2(content_w, content_h), false, ImGuiWindowFlags_NoBackground);
-
-    // 顶部标题与操作栏
-    if (Fonts::Large) ImGui::PushFont(Fonts::Large);
-    ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 1.0f), "曲库检索结果");
-    if (Fonts::Large) ImGui::PopFont();
-
-    ImGui::SameLine(content_w - 225.0f);
-    if (ImGui::Button(" 📥 导入全部 ", ImVec2(105.0f, 30.0f))) {
-        if (!playlists.empty()) {
-            for (const auto& t : scanned_tracks) playlists[0].addTrack(t);
-        }
-    }
-    ImGui::SameLine(0.0f, 10.0f);
-    if (ImGui::Button(" 🔄 重新检索 ", ImVec2(105.0f, 30.0f))) {
-        scanner.clear();
-    }
-
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
+    ImGui::BeginChild("##ScanCompletedScrollRoot", ImVec2(content_w, content_h), false,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoBackground);
 
     // 按照指定格式顺序依次渲染各个板块
     for (AudioFormat fmt : FORMAT_ORDER) {
@@ -519,26 +496,75 @@ void ScanMusicWidget::renderCompletedState(ImDrawList* dl, ImVec2 p_min, ImVec2 
 
         // Header
         ImVec2 header_pos = ImGui::GetCursorScreenPos();
-        drawSectionHeader(dl, header_pos, meta.title, meta.subtitle, tracks_in_fmt.size());
+        drawSectionHeader(ImGui::GetWindowDrawList(), header_pos, meta.title, meta.subtitle, tracks_in_fmt.size());
         ImGui::Dummy(ImVec2(0.0f, 48.0f));
 
         // 卡片横向滚动行
         std::string row_id = "##FormatRow_" + std::to_string(static_cast<int>(fmt));
+
+        // 1. 显式告知 ImGui 此行的实际总内容宽度，确保滚动范围绝对精准且在首帧立即可用
+        float total_row_w = static_cast<float>(tracks_in_fmt.size()) * (card_w + item_gap_x);
+        ImGui::SetNextWindowContentSize(ImVec2(total_row_w, 0.0f));
+
+        // 2. 将滚动条尺寸临时推入为 0 (完全隐藏横向滚动条，不绘制灰色轨道且不占高度)
+        ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 0.0f);
+
+        // 3. 启用 ImGuiWindowFlags_HorizontalScrollbar 允许横向排版与计算滚动范围
         ImGui::BeginChild(row_id.c_str(), ImVec2(content_w, card_h + 12.0f), false,
                           ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_NoBackground);
+
+        // 4. 支持鼠标拖拽、触控屏手指滑动 (Touch & Mouse Drag Scrolling)
+        static bool is_dragging_row = false;
+        static std::string active_drag_row_id = "";
+
+        bool is_row_hovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
+        if (is_row_hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            is_dragging_row = true;
+            active_drag_row_id = row_id;
+        }
+
+        if (is_dragging_row && active_drag_row_id == row_id) {
+            if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+                float delta_x = ImGui::GetIO().MouseDelta.x;
+                if (delta_x != 0.0f) {
+                    ImGui::SetScrollX(ImGui::GetScrollX() - delta_x);
+                }
+            } else {
+                is_dragging_row = false;
+                active_drag_row_id = "";
+            }
+        }
+
+        // 5. 支持滚轮与触控板双指滑动
+        if (is_row_hovered) {
+            float wheel_y = ImGui::GetIO().MouseWheel;
+            float wheel_x = ImGui::GetIO().MouseWheelH;
+            if (wheel_y != 0.0f) {
+                ImGui::SetScrollX(ImGui::GetScrollX() - wheel_y * 50.0f);
+            }
+            if (wheel_x != 0.0f) {
+                ImGui::SetScrollX(ImGui::GetScrollX() + wheel_x * 50.0f);
+            }
+        }
 
         for (size_t i = 0; i < tracks_in_fmt.size(); ++i) {
             if (i > 0) ImGui::SameLine(0.0f, item_gap_x);
             ImVec2 item_pos = ImGui::GetCursorScreenPos();
-            if (drawGridItem(dl, item_pos, ImVec2(card_w, card_h), tracks_in_fmt[i], meta.default_tag)) {
-                // 点击卡片直接播放
-                if (!playlists.empty()) {
+            if (drawGridItem(ImGui::GetWindowDrawList(), item_pos, ImVec2(card_w, card_h), tracks_in_fmt[i],
+                             meta.default_tag)) {
+                // 区分纯点击与滑动拖拽：仅在未拖拽时触发播放
+                bool was_dragged = (std::abs(ImGui::GetMouseDragDelta(0).x) > 4.0f || std::abs(ImGui::GetMouseDragDelta(0).y) > 4.0f);
+                if (!was_dragged && !playlists.empty()) {
                     playlists[0].addTrack(tracks_in_fmt[i]);
                     PlayerAdmin::getInstance().playTrack(tracks_in_fmt[i]);
                 }
             }
         }
         ImGui::EndChild();
+
+        // 6. 弹出样式变量，恢复全局设置
+        ImGui::PopStyleVar();
+
         ImGui::Dummy(ImVec2(0.0f, section_gap_y));
     }
 
