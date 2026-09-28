@@ -641,15 +641,22 @@ void ScanMusicWidget::renderCompletedState([[maybe_unused]] ImDrawList* dl, ImVe
     // =========================================================================
     const float btn_size = 32.0f;
     ImVec2 btn_p0(p_max.x - 12.0f - btn_size, p_min.y + 12.0f);
+    ImVec2 btn_p1(btn_p0.x + btn_size, btn_p0.y + btn_size);
     ImVec2 btn_c(btn_p0.x + btn_size * 0.5f, btn_p0.y + btn_size * 0.5f);
 
-    ImGui::SetCursorScreenPos(btn_p0);
-    bool clicked_refresh = ImGui::InvisibleButton("##scan_completed_refresh_btn", ImVec2(btn_size, btn_size));
-    bool hov_refresh = ImGui::IsItemHovered();
-    bool act_refresh = ImGui::IsItemActive();
+    // 采用屏幕坐标直接判定，杜绝由于外部 BeginChild 嵌套导致的事件命中丢失
+    bool hov_refresh = ImGui::IsMouseHoveringRect(btn_p0, btn_p1, false);
+    bool act_refresh = hov_refresh && ImGui::IsMouseDown(ImGuiMouseButton_Left);
+    bool clicked_refresh = hov_refresh && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
 
+    if (hov_refresh) {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+    }
+
+    // 点击刷新图标：清空曲库扫描结果并重置为 Idle 待机检索态 (回到「全盘检索」主界面)
     if (clicked_refresh) {
-        MusicScanManager::getInstance().startScan(AppConfig::Path::getMusicDir());
+        ImGui::GetIO().MouseClicked[0] = false;
+        MusicScanManager::getInstance().clear();
     }
 
     const ImU32 accent = UIConfig::Color::Accent;
