@@ -24,7 +24,8 @@ std::string MusicItem::truncateTextWithEllipsis(const std::string& text, float m
 }
 
 void MusicItem::drawVinylCdIcon(ImDrawList* dl, ImVec2 center, float radius, ImU32 col, float rotation_rad) {
-    const float thickness = std::max(1.8f, radius * 0.08f);
+    // 参照底部控制栏矢量图标线宽比例，采用更精致细腻的 2.0px 优雅发烧级线条
+    const float thickness = 2.0f;
     const float r_in = radius * 0.28f;
     const float r_mid = radius * 0.65f;
 
@@ -83,38 +84,24 @@ bool MusicItem::render(ImDrawList* dl, ImVec2 pos, ImVec2 size, const Track& tra
     ImVec2 cover_center((cover_p0.x + cover_p1.x) * 0.5f, (cover_p0.y + cover_p1.y) * 0.5f);
     ImVec2 cd_center(cover_center.x, cover_p0.y + 66.0f);
 
-    // 状态持久化插值：鼠标悬停时平滑放大微动效 (60fps 弹簧动效，移开时平滑回缩)
-    ImGuiStorage* storage = ImGui::GetStateStorage();
-    ImGuiID anim_id = ImGui::GetID(("##anim_scale_" + std::to_string(track.id)).c_str());
-    float hover_factor = storage->GetFloat(anim_id, 0.0f);
-    float target_factor = is_hovered ? 1.0f : 0.0f;
-    float dt = ImGui::GetIO().DeltaTime;
-    hover_factor += (target_factor - hover_factor) * std::clamp(dt * 15.0f, 0.0f, 1.0f);
-    if (std::abs(target_factor - hover_factor) < 0.005f) {
-        hover_factor = target_factor;
-    }
-    storage->SetFloat(anim_id, hover_factor);
+    // 2. 唱片矢量图标：尺寸放大 (hover 时放大至 46px，blur 时 40px)，完全去除淡入淡出，消除视觉滞后
+    // 色彩严格参照 PlayModeWidget：
+    // Blur 态：轻盈通透的灰白磨砂半透质感 IM_COL32(215, 222, 235, 175)
+    // Hover 态：纯正主题色玫瑰红 UIConfig::Color::Accent (IM_COL32(250, 45, 72, 255))
+    const ImU32 col_blur = IM_COL32(215, 222, 235, 175);
+    const ImU32 col_hover = UIConfig::Color::Accent;
+    const ImU32 cd_col = is_hovered ? col_hover : col_blur;
 
-    // 2. 绘制唱片/CD 光盘主图标 (常态半径 40px，悬停时呼吸放大至 46px，伴随优雅旋转)
-    const float cd_base_radius = 40.0f;
-    const float cd_hover_expand = 6.0f;
-    const float cd_radius = cd_base_radius + cd_hover_expand * hover_factor;
-
-    float rot = (hover_factor > 0.01f) ? (static_cast<float>(ImGui::GetTime()) * 1.8f) : 0.0f;
-    ImU32 cd_col = ImColor(
-        185.0f + (250.0f - 185.0f) * hover_factor,
-        200.0f + (45.0f - 200.0f) * hover_factor,
-        220.0f + (72.0f - 220.0f) * hover_factor,
-        160.0f + 30.0f * hover_factor
-    );
+    const float cd_radius = is_hovered ? 46.0f : 40.0f;
+    float rot = is_hovered ? (static_cast<float>(ImGui::GetTime()) * 1.8f) : 0.0f;
     drawVinylCdIcon(dl, cd_center, cd_radius, cd_col, rot);
 
-    // 3. 发烧格式指示胶囊徽标 (Format Badge Capsule，悬停时亦协同平滑放大)
+    // 3. 发烧格式指示胶囊徽标 (Format Badge Capsule)
     std::string badge = track.getFormatBadge();
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
     ImVec2 b_sz = ImGui::CalcTextSize(badge.c_str());
-    float badge_w = b_sz.x + 16.0f + 2.0f * hover_factor;
-    float badge_h = 20.0f + 1.0f * hover_factor;
+    float badge_w = b_sz.x + (is_hovered ? 18.0f : 16.0f);
+    float badge_h = is_hovered ? 21.0f : 20.0f;
     ImVec2 b_p0(cover_center.x - badge_w * 0.5f, cover_p1.y - 28.0f);
     ImVec2 b_p1(cover_center.x + badge_w * 0.5f, b_p0.y + badge_h);
 
@@ -124,32 +111,28 @@ bool MusicItem::render(ImDrawList* dl, ImVec2 pos, ImVec2 size, const Track& tra
                 is_hovered ? UIConfig::Color::TextActive : IM_COL32(175, 190, 210, 210), badge.c_str());
     if (Fonts::Small) ImGui::PopFont();
 
-    // 4. 悬停态：在唱片中心浮现超圆滑 Apple 质感主题色 ▶ 播放按钮 (伴随透明度与尺寸浮现)
-    if (hover_factor > 0.02f) {
+    // 4. 悬停态：在唱片中心直接浮现超圆滑 Apple 质感主题色 ▶ 播放按钮 (无淡入淡出延时)
+    if (is_hovered) {
         ImVec2 play_center = cd_center;
-        const float btn_radius = 21.0f + 2.5f * hover_factor;
-        int alpha = std::clamp(static_cast<int>(255.0f * hover_factor), 0, 255);
+        const float btn_radius = 23.5f;
 
         // 柔和暗影与外发光
-        int shadow_alpha = std::clamp(static_cast<int>(95.0f * hover_factor), 0, 255);
-        int glow_alpha = std::clamp(static_cast<int>(75.0f * hover_factor), 0, 255);
-        dl->AddCircleFilled(ImVec2(play_center.x, play_center.y + 2.0f), btn_radius, IM_COL32(0, 0, 0, shadow_alpha), 48);
-        dl->AddCircle(play_center, btn_radius + 1.5f, IM_COL32(250, 45, 72, glow_alpha), 48, 2.0f);
+        dl->AddCircleFilled(ImVec2(play_center.x, play_center.y + 2.0f), btn_radius, IM_COL32(0, 0, 0, 95), 48);
+        dl->AddCircle(play_center, btn_radius + 1.5f, IM_COL32(250, 45, 72, 75), 48, 2.0f);
 
         // 主体高饱圆环 (48 细分平滑无棱角)
-        dl->AddCircleFilled(play_center, btn_radius, IM_COL32(250, 45, 72, alpha), 48);
+        dl->AddCircleFilled(play_center, btn_radius, UIConfig::Color::Accent, 48);
 
         // 圆润播放三角形 (流线饱满圆滑倒角 + 0.8px 光学居中补偿)
-        const float scale_tri = 0.85f + 0.15f * hover_factor;
-        const float tri_h = 7.5f * scale_tri;
-        const float tri_w = 12.0f * scale_tri;
+        const float tri_h = 7.5f;
+        const float tri_w = 12.0f;
         const float opt_x = 0.8f;
         const float r_play = 2.6f;
 
         ImVec2 tri_p0(play_center.x - tri_w * 0.5f + opt_x, play_center.y - tri_h);
         ImVec2 tri_p1(play_center.x + tri_w * 0.5f + opt_x, play_center.y);
         ImVec2 tri_p2(play_center.x - tri_w * 0.5f + opt_x, play_center.y + tri_h);
-        DrawRoundedTriangle(dl, tri_p0, tri_p1, tri_p2, r_play, IM_COL32(255, 255, 255, alpha));
+        DrawRoundedTriangle(dl, tri_p0, tri_p1, tri_p2, r_play, IM_COL32(255, 255, 255, 255));
     }
 
     // 5. 文字排版区域
