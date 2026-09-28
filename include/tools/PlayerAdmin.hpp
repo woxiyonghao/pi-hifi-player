@@ -60,6 +60,11 @@ public:
     void playTrack(const Track& track);
     // 载入歌单并从指定索引开始播放 (默认从第 0 首开始)
     void playPlaylist(const Playlist& playlist, size_t start_index = 0);
+    // 载入歌曲列表并从指定索引开始播放
+    void playTracks(const std::vector<Track>& tracks, size_t start_index = 0);
+    // 获取当前播放队列
+    const std::vector<Track>& getPlaybackQueue() const { return playback_queue_; }
+    size_t getCurrentTrackIndex() const { return current_track_index_; }
     // 切歌控制 (根据当前的 PlayMode 决定下一首逻辑)
     void next();
     void previous();
@@ -101,6 +106,14 @@ public:
     // 使用 C++17/20 std::optional 优雅表达“可能有歌曲，也可能为空”
     const std::optional<Track>& getCurrentTrack() const { return current_track_; }
 
+    // -------------------------------------------------------------------------
+    // [10段图形均衡器控制 (RBJ Audio EQ 二阶 IIR 滤波)]
+    // -------------------------------------------------------------------------
+    void setEqEnabled(bool enabled);
+    bool isEqEnabled() const;
+    void setEqBands(const std::array<float, 10>& gains_db);
+    std::array<float, 10> getEqBands() const;
+
     // 获取实时音频 12 频段振幅包络 (0.0f ~ 1.0f)
     void getSpectrumLevels(float* out_levels, size_t count = 12) const;
 private:
@@ -110,6 +123,7 @@ private:
     // 当前在播曲目与歌单队列引用
     std::optional<Track> current_track_ = std::nullopt;
     const Playlist* current_playlist_   = nullptr;
+    std::vector<Track> playback_queue_;
     size_t current_track_index_         = 0;
     // 时间轴 (单位: 秒)
     double current_time_sec_ = 0.0;

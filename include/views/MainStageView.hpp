@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ScanMusicWidget.hpp"
+#include "EQConfigView.hpp"
 #include "imgui.h"
 #include "public/UIConfig.hpp"
 #include "tools/MusicScanManager.hpp"
@@ -37,4 +38,5 @@ class MainStageView {
 
   private:
     ScanMusicWidget scan_widget_;
+    EQConfigView eq_view_;
 };

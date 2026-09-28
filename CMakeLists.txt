@@ -46,6 +46,8 @@ set(
     third_party/imgui/imgui_widgets.cpp
     third_party/imgui/backends/imgui_impl_sdl2.cpp
     third_party/imgui/backends/imgui_impl_opengl3.cpp
+        src/views/EQConfigView.cpp
+        include/views/EQConfigView.hpp
 )
 
 # 收集项目自身所有 C++ 源码

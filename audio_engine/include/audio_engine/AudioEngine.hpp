@@ -58,6 +58,12 @@ public:
     double getDurationSec() const;
     float getProgress() const;
 
+    // 10段图形均衡器控制 (RBJ Audio EQ 二阶 IIR 滤波)
+    void setEqEnabled(bool enabled);
+    bool isEqEnabled() const;
+    void setEqBands(const std::array<float, 10>& gains_db);
+    std::array<float, 10> getEqBands() const;
+
     AudioFormatSpec getCurrentSpec() const;
     std::string getCurrentFilePath() const;
 
@@ -100,8 +106,14 @@ private:
     std::array<float, 12> spectrum_levels_{};
     mutable std::mutex spectrum_mutex_;
 
+    // 10段图形均衡器状态
+    std::atomic<bool> is_eq_enabled_{false};
+    std::array<float, 10> eq_gains_{};
+    mutable std::mutex eq_mutex_;
+
     void decodeWorker(std::stop_token stop_token);
     void onSinkDataNeeded(float* output, size_t frame_count);
+    void applyEqualizer(float* samples, size_t frame_count);
     void updateSpectrumAnalysis(const float* samples, size_t frame_count);
     std::unique_ptr<IAudioDecoder> createDecoderForFile(const std::string& filepath);
 };

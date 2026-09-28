@@ -13,7 +13,7 @@ SidebarFeatureWidget::SidebarFeatureWidget() {
     // 预装 5 大核心功能项
     features_ = {
         { SidebarTab::ScanMusic,      "扫描音乐" },
-        { SidebarTab::Equalizer,      "Equalizer (EQ)" },
+        { SidebarTab::Equalizer,      "均衡器" },
         { SidebarTab::DACSettings,    "DACSettings" },
         { SidebarTab::ThemeSettings,  "ThemeSettings" },
         { SidebarTab::SystemSettings, "SystemSettings" }

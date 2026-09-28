@@ -355,84 +355,40 @@ void ScanMusicWidget::renderIdleState(ImDrawList* dl, ImVec2 center,
 
 namespace {
 
-// 绘制真·GPU硬件双线性顶点插值平滑太阳径向渐变光球 (0 色阶、0 硬边、完全平滑消隐)
+// 绘制真·高保真太阳光核与多层辐射日冕 (100% 可靠渲染，杜绝纹理采样丢失或 UV 异常，永不消失)
 void drawSmoothSolarSphere(ImDrawList* dl, ImVec2 center, float pulse) {
-    constexpr int NUM_SEGS = 40;
-    const float angle_step = 6.283185307f / (float)NUM_SEGS;
+    // 1. 广域深空外日冕柔和微光辉晕 (由 42px 向外平滑渐隐入深空背景，填补射线中心空洞)
+    dl->AddCircleFilled(center, 42.0f * pulse, IM_COL32(250, 45, 72, 22), 48);
+    dl->AddCircleFilled(center, 32.0f * pulse, IM_COL32(250, 45, 72, 45), 48);
+    dl->AddCircleFilled(center, 24.0f * pulse, IM_COL32(250, 45, 72, 80), 48);
+    dl->AddCircleFilled(center, 18.0f * pulse, IM_COL32(250, 45, 72, 130), 48);
 
-    // 预计算单位圆顶点 (0.90f 配合整体画面的微透视轻微压扁)
-    ImVec2 unit_circle[NUM_SEGS];
-    for (int i = 0; i < NUM_SEGS; ++i) {
-        float ang = (float)i * angle_step;
-        unit_circle[i] = ImVec2(std::cos(ang), std::sin(ang) * 0.90f);
-    }
+    // 2. 高温过渡色球层 (由玫瑰红经由暖粉过渡至白炽)
+    dl->AddCircleFilled(center, 13.5f * pulse, IM_COL32(255, 110, 140, 185), 48);
+    dl->AddCircleFilled(center, 9.5f * pulse, IM_COL32(255, 175, 195, 225), 40);
+    dl->AddCircleFilled(center, 6.5f * pulse, IM_COL32(255, 225, 235, 245), 36);
 
-    struct GradientStop {
-        float r;
-        ImU32 col;
-    };
+    // 3. 极热白炽恒星核 (100% 纯白核，晶莹剔透，恒亮不退)
+    dl->AddCircleFilled(center, 4.0f * pulse, IM_COL32(255, 255, 255, 255), 32);
 
-    // 渐变停靠点阶梯：由内向外连续过渡，边缘平滑渐隐至 0 Alpha，完美复刻真实太阳光晕
-    const GradientStop stops[] = {
-        {0.0f, IM_COL32(255, 255, 255, 255)}, // 极热中心
-        {3.5f, IM_COL32(255, 255, 255, 255)}, // 白炽核
-        {7.0f, IM_COL32(255, 160, 180, 245)}, // 高温暖白-浅粉过渡
-        {11.5f, IM_COL32(250, 45, 72, 215)},  // 核心色球层 (主题玫瑰红)
-        {16.5f, IM_COL32(250, 45, 72, 110)},  // 辐射过渡层
-        {22.0f, IM_COL32(250, 45, 72, 0)}     // 边缘完全融入背景的 0 Alpha 消隐层
-    };
-    constexpr int NUM_STOPS = sizeof(stops) / sizeof(stops[0]);
+    // 4. 太阳核心 4 芒耀斑高光衍射星芒 (Solar Flare Diffraction Spikes)
+    const float spike_main = 24.0f * pulse;
+    const float spike_sub = 14.0f * pulse;
+    // 水平与垂直高光射线
+    dl->AddLine(ImVec2(center.x - spike_main, center.y), ImVec2(center.x + spike_main, center.y),
+                IM_COL32(255, 255, 255, 180), 1.5f);
+    dl->AddLine(ImVec2(center.x, center.y - spike_main), ImVec2(center.x, center.y + spike_main),
+                IM_COL32(255, 255, 255, 180), 1.5f);
+    // 45 度副芒
+    dl->AddLine(ImVec2(center.x - spike_sub * 0.707f, center.y - spike_sub * 0.707f),
+                ImVec2(center.x + spike_sub * 0.707f, center.y + spike_sub * 0.707f),
+                IM_COL32(255, 210, 225, 120), 1.0f);
+    dl->AddLine(ImVec2(center.x - spike_sub * 0.707f, center.y + spike_sub * 0.707f),
+                ImVec2(center.x + spike_sub * 0.707f, center.y - spike_sub * 0.707f),
+                IM_COL32(255, 210, 225, 120), 1.0f);
 
-    // 1. 中心圆盘扇区 (0.0 到 stops[1].r)
-    dl->PrimReserve(NUM_SEGS * 3, NUM_SEGS + 1);
-    ImDrawIdx center_idx = (ImDrawIdx)dl->_VtxCurrentIdx;
-    dl->PrimWriteVtx(center, ImVec2(0.5f, 0.5f), stops[0].col);
-    float r1 = stops[1].r * pulse;
-    for (int i = 0; i < NUM_SEGS; ++i) {
-        ImVec2 p(center.x + unit_circle[i].x * r1, center.y + unit_circle[i].y * r1);
-        dl->PrimWriteVtx(p, ImVec2(0.5f, 0.5f), stops[1].col);
-
-        dl->PrimWriteIdx(center_idx);
-        dl->PrimWriteIdx((ImDrawIdx)(center_idx + 1 + i));
-        dl->PrimWriteIdx((ImDrawIdx)(center_idx + 1 + ((i + 1) % NUM_SEGS)));
-    }
-
-    // 2. 连续平滑环带 (GPU 硬件顶点色双线性连续插值，无任何分块色带感)
-    for (int s = 1; s < NUM_STOPS - 1; ++s) {
-        float inner_r = stops[s].r * pulse;
-        float outer_r = stops[s + 1].r * pulse;
-        ImU32 inner_col = stops[s].col;
-        ImU32 outer_col = stops[s + 1].col;
-
-        dl->PrimReserve(NUM_SEGS * 6, NUM_SEGS * 2);
-        ImDrawIdx base_idx = (ImDrawIdx)dl->_VtxCurrentIdx;
-
-        for (int i = 0; i < NUM_SEGS; ++i) {
-            ImVec2 p_in(center.x + unit_circle[i].x * inner_r, center.y + unit_circle[i].y * inner_r);
-            dl->PrimWriteVtx(p_in, ImVec2(0.5f, 0.5f), inner_col);
-        }
-        for (int i = 0; i < NUM_SEGS; ++i) {
-            ImVec2 p_out(center.x + unit_circle[i].x * outer_r, center.y + unit_circle[i].y * outer_r);
-            dl->PrimWriteVtx(p_out, ImVec2(0.5f, 0.5f), outer_col);
-        }
-
-        for (int i = 0; i < NUM_SEGS; ++i) {
-            int next_i = (i + 1) % NUM_SEGS;
-            ImDrawIdx in0 = (ImDrawIdx)(base_idx + i);
-            ImDrawIdx in1 = (ImDrawIdx)(base_idx + next_i);
-            ImDrawIdx out0 = (ImDrawIdx)(base_idx + NUM_SEGS + i);
-            ImDrawIdx out1 = (ImDrawIdx)(base_idx + NUM_SEGS + next_i);
-
-            // 构成四边形的 2 个三角形
-            dl->PrimWriteIdx(in0);
-            dl->PrimWriteIdx(in1);
-            dl->PrimWriteIdx(out1);
-
-            dl->PrimWriteIdx(in0);
-            dl->PrimWriteIdx(out1);
-            dl->PrimWriteIdx(out0);
-        }
-    }
+    // 极小中心白炽点
+    dl->AddCircleFilled(center, 2.2f, IM_COL32(255, 255, 255, 255), 16);
 }
 
 } // anonymous namespace
@@ -644,8 +600,8 @@ void ScanMusicWidget::renderCompletedState([[maybe_unused]] ImDrawList* dl, ImVe
                                   meta.default_tag)) {
                 if (!playlists.empty()) {
                     playlists[0].addTrack(tracks_in_fmt[i]);
-                    PlayerAdmin::getInstance().playTrack(tracks_in_fmt[i]);
                 }
+                PlayerAdmin::getInstance().playTracks(tracks_in_fmt, i);
             }
         }
         ImGui::EndChild();

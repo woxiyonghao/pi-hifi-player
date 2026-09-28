@@ -181,7 +181,27 @@ bool AudioEngine::isMuted() const {
 }
 
 bool AudioEngine::isBitPerfectDirect() const {
-    return !is_muted_.load(std::memory_order_acquire) && (volume_.load(std::memory_order_acquire) >= 0.9999f);
+    return !is_muted_.load(std::memory_order_acquire) && 
+           (volume_.load(std::memory_order_acquire) >= 0.9999f) &&
+           !is_eq_enabled_.load(std::memory_order_acquire);
+}
+
+void AudioEngine::setEqEnabled(bool enabled) {
+    is_eq_enabled_.store(enabled, std::memory_order_release);
+}
+
+bool AudioEngine::isEqEnabled() const {
+    return is_eq_enabled_.load(std::memory_order_acquire);
+}
+
+void AudioEngine::setEqBands(const std::array<float, 10>& gains_db) {
+    std::lock_guard lock(eq_mutex_);
+    eq_gains_ = gains_db;
+}
+
+std::array<float, 10> AudioEngine::getEqBands() const {
+    std::lock_guard lock(eq_mutex_);
+    return eq_gains_;
 }
 
 bool AudioEngine::isPlaying() const {
@@ -276,11 +296,16 @@ void AudioEngine::onSinkDataNeeded(float* output, size_t frame_count) {
     bool muted = is_muted_.load(std::memory_order_acquire);
     float vol = volume_.load(std::memory_order_acquire);
 
+    // 10段发烧级图形均衡器 RBJ Audio EQ 二阶 IIR 滤波处理 (支持硬件 Direct 直通)
+    if (is_eq_enabled_.load(std::memory_order_relaxed) && !muted) {
+        applyEqualizer(output, frame_count);
+    }
+
     if (muted) {
         std::memset(output, 0, samples_needed * sizeof(float));
-    } else if (vol >= 0.9999f) {
+    } else if (vol >= 0.9999f && !is_eq_enabled_.load(std::memory_order_relaxed)) {
         // 【Bit-Perfect 0dB 源码直出】：不进行任何浮点乘法计算，保持原始数据绝对纯净！
-    } else {
+    } else if (vol < 0.9999f) {
         // 【发烧级 64-bit 浮点音量衰减 + TPDF (三角概率分布) Dither 抖动】
         // 消除量化截断产生的谐波失真，维持高解析动态
         static thread_local std::mt19937 dither_gen(1337);
@@ -302,6 +327,97 @@ void AudioEngine::onSinkDataNeeded(float* output, size_t frame_count) {
     if (is_eof_.load(std::memory_order_acquire) && ring_buffer_.available_read() == 0) {
         if (eof_callback_) {
             eof_callback_();
+        }
+    }
+}
+
+struct BiquadCoeffs {
+    float b0 = 1.0f, b1 = 0.0f, b2 = 0.0f;
+    float a1 = 0.0f, a2 = 0.0f;
+};
+
+struct BiquadState {
+    float s1 = 0.0f;
+    float s2 = 0.0f;
+};
+
+static constexpr float EQ_FREQS[10] = {
+    31.25f, 62.5f, 125.0f, 250.0f, 500.0f, 1000.0f, 2000.0f, 4000.0f, 8000.0f, 16000.0f
+};
+
+static BiquadCoeffs calculatePeakingCoeffs(float freq, float sample_rate, float gain_db, float q = 1.414f) {
+    if (std::abs(gain_db) < 0.05f) {
+        return {1.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+    }
+    float w0 = 2.0f * 3.14159265358979323846f * freq / sample_rate;
+    if (w0 >= 3.14159265358979323846f * 0.95f) {
+        w0 = 3.14159265358979323846f * 0.95f;
+    }
+    float cos_w0 = std::cos(w0);
+    float sin_w0 = std::sin(w0);
+    float alpha = sin_w0 / (2.0f * q);
+    float A = std::pow(10.0f, gain_db / 40.0f);
+
+    float b0 = 1.0f + alpha * A;
+    float b1 = -2.0f * cos_w0;
+    float b2 = 1.0f - alpha * A;
+    float a0 = 1.0f + alpha / A;
+    float a1 = -2.0f * cos_w0;
+    float a2 = 1.0f - alpha / A;
+
+    float inv_a0 = 1.0f / a0;
+    return { b0 * inv_a0, b1 * inv_a0, b2 * inv_a0, a1 * inv_a0, a2 * inv_a0 };
+}
+
+void AudioEngine::applyEqualizer(float* samples, size_t frame_count) {
+    if (!is_eq_enabled_.load(std::memory_order_relaxed)) return;
+    uint32_t channels = current_spec_.channels;
+    if (channels == 0 || frame_count == 0) return;
+
+    std::array<float, 10> gains;
+    {
+        std::lock_guard lock(eq_mutex_);
+        gains = eq_gains_;
+    }
+
+    bool all_zero = true;
+    for (float g : gains) {
+        if (std::abs(g) > 0.05f) {
+            all_zero = false;
+            break;
+        }
+    }
+    if (all_zero) return;
+
+    float sample_rate = (current_spec_.sample_rate > 0) ? static_cast<float>(current_spec_.sample_rate) : 44100.0f;
+
+    BiquadCoeffs coeffs[10];
+    bool active[10];
+    for (size_t b = 0; b < 10; ++b) {
+        if (std::abs(gains[b]) < 0.05f) {
+            active[b] = false;
+        } else {
+            active[b] = true;
+            coeffs[b] = calculatePeakingCoeffs(EQ_FREQS[b], sample_rate, gains[b]);
+        }
+    }
+
+    static thread_local BiquadState eq_states[2][10]{};
+
+    for (size_t f = 0; f < frame_count; ++f) {
+        for (uint32_t ch = 0; ch < std::min(channels, 2u); ++ch) {
+            float s = samples[f * channels + ch];
+            for (size_t b = 0; b < 10; ++b) {
+                if (active[b]) {
+                    const auto& c = coeffs[b];
+                    auto& st = eq_states[ch][b];
+                    float out = c.b0 * s + st.s1;
+                    st.s1 = c.b1 * s - c.a1 * out + st.s2;
+                    st.s2 = c.b2 * s - c.a2 * out;
+                    s = out;
+                }
+            }
+            samples[f * channels + ch] = s;
         }
     }
 }

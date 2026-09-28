@@ -35,6 +35,22 @@ namespace AppConfig {
         inline void setMusicDir(const std::string& path) {
             getMusicDir() = path;
         }
+
+        // 获取用户配置文件存储目录 (全局唯一事实来源)
+        inline std::string getConfigDir() {
+            const char* home = std::getenv("HOME");
+            std::string dir;
+            if (home && home[0] != '\0') {
+                dir = std::string(home) + "/.config/hifi_player";
+            } else {
+#if defined(HIFI_PLATFORM_RPI)
+                dir = "/home/pi/.config/hifi_player";
+#else
+                dir = "./config";
+#endif
+            }
+            return dir;
+        }
     } // namespace Path
 
     namespace Audio {

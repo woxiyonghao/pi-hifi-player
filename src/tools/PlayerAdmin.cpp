@@ -14,9 +14,23 @@ PlayerAdmin::PlayerAdmin() {
 // 1. 基础播放控制实现
 // ==============================================================================
 void PlayerAdmin::play() {
-    if (current_track_.has_value()) {
-        state_ = PlaybackState::Playing;
-        audio_engine::AudioEngine::getInstance().play();
+    if (!current_track_.has_value()) {
+        if (!playback_queue_.empty()) {
+            playTrack(playback_queue_[current_track_index_]);
+        }
+        return;
+    }
+    state_ = PlaybackState::Playing;
+    auto& engine = audio_engine::AudioEngine::getInstance();
+    if (engine.isPaused()) {
+        engine.play();
+    } else if (engine.isIdle()) {
+        if (!current_track_->file_path.empty()) {
+            engine.openAndPlay(current_track_->file_path);
+            if (current_time_sec_ > 0.0) {
+                engine.seek(current_time_sec_);
+            }
+        }
     }
 }
 
@@ -50,6 +64,22 @@ void PlayerAdmin::playTrack(const Track& track) {
     current_time_sec_ = 0.0;
     state_ = PlaybackState::Playing;
 
+    // 维护当前队列一致性
+    if (playback_queue_.empty()) {
+        playback_queue_.push_back(track);
+        current_track_index_ = 0;
+    } else {
+        auto it = std::find_if(playback_queue_.begin(), playback_queue_.end(), [&](const Track& t) {
+            return t.id == track.id;
+        });
+        if (it != playback_queue_.end()) {
+            current_track_index_ = static_cast<size_t>(std::distance(playback_queue_.begin(), it));
+        } else {
+            playback_queue_.push_back(track);
+            current_track_index_ = playback_queue_.size() - 1;
+        }
+    }
+
     if (!track.file_path.empty()) {
         bool ok = audio_engine::AudioEngine::getInstance().openAndPlay(track.file_path);
         if (ok) {
@@ -61,27 +91,32 @@ void PlayerAdmin::playTrack(const Track& track) {
     }
 }
 
-void PlayerAdmin::playPlaylist(const Playlist& playlist, size_t start_index) {
-    current_playlist_ = &playlist;
-    const auto& tracks = current_playlist_->getTracks();
-
-    if (tracks.empty()) {
+void PlayerAdmin::playTracks(const std::vector<Track>& tracks, size_t start_index) {
+    playback_queue_ = tracks;
+    if (playback_queue_.empty()) {
         stop();
         return;
     }
+    current_track_index_ = std::min(start_index, playback_queue_.size() - 1);
+    playTrack(playback_queue_[current_track_index_]);
+}
 
-    // 防止越界，截断到有效范围
-    current_track_index_ = std::min(start_index, tracks.size() - 1);
-    playTrack(tracks[current_track_index_]);
+void PlayerAdmin::playPlaylist(const Playlist& playlist, size_t start_index) {
+    current_playlist_ = &playlist;
+    playTracks(playlist.getTracks(), start_index);
 }
 
 void PlayerAdmin::next() {
-    if (!current_playlist_ || current_playlist_->getTracks().empty()) {
+    if (playback_queue_.empty()) {
         return;
     }
 
-    const auto& tracks = current_playlist_->getTracks();
-    const size_t total_tracks = tracks.size();
+    const size_t total_tracks = playback_queue_.size();
+    if (total_tracks == 1) {
+        seek(0.0);
+        play();
+        return;
+    }
 
     switch (play_mode_) {
         case PlayMode::LoopSingle: {
@@ -91,14 +126,12 @@ void PlayerAdmin::next() {
             return;
         }
         case PlayMode::Shuffle: {
-            // 随机播放：随机选取一首
-            if (total_tracks > 1) {
-                size_t rand_idx = current_track_index_;
-                while (rand_idx == current_track_index_) {
-                    rand_idx = static_cast<size_t>(rand()) % total_tracks;
-                }
-                current_track_index_ = rand_idx;
+            // 随机播放：随机选取一首不同曲目
+            size_t rand_idx = current_track_index_;
+            while (rand_idx == current_track_index_) {
+                rand_idx = static_cast<size_t>(rand()) % total_tracks;
             }
+            current_track_index_ = rand_idx;
             break;
         }
         case PlayMode::Sequence: {
@@ -119,11 +152,11 @@ void PlayerAdmin::next() {
         }
     }
 
-    playTrack(tracks[current_track_index_]);
+    playTrack(playback_queue_[current_track_index_]);
 }
 
 void PlayerAdmin::previous() {
-    if (!current_playlist_ || current_playlist_->getTracks().empty()) {
+    if (playback_queue_.empty()) {
         return;
     }
 
@@ -133,8 +166,12 @@ void PlayerAdmin::previous() {
         return;
     }
 
-    const auto& tracks = current_playlist_->getTracks();
-    const size_t total_tracks = tracks.size();
+    const size_t total_tracks = playback_queue_.size();
+    if (total_tracks == 1) {
+        seek(0.0);
+        play();
+        return;
+    }
 
     // 回退到上一首（若在第 0 首则回绕到最后一首）
     if (current_track_index_ == 0) {
@@ -143,7 +180,7 @@ void PlayerAdmin::previous() {
         current_track_index_--;
     }
 
-    playTrack(tracks[current_track_index_]);
+    playTrack(playback_queue_[current_track_index_]);
 }
 
 // ==============================================================================
@@ -206,6 +243,22 @@ bool PlayerAdmin::isMuted() const {
 
 bool PlayerAdmin::isBitPerfectDirect() const {
     return audio_engine::AudioEngine::getInstance().isBitPerfectDirect();
+}
+
+void PlayerAdmin::setEqEnabled(bool enabled) {
+    audio_engine::AudioEngine::getInstance().setEqEnabled(enabled);
+}
+
+bool PlayerAdmin::isEqEnabled() const {
+    return audio_engine::AudioEngine::getInstance().isEqEnabled();
+}
+
+void PlayerAdmin::setEqBands(const std::array<float, 10>& gains_db) {
+    audio_engine::AudioEngine::getInstance().setEqBands(gains_db);
+}
+
+std::array<float, 10> PlayerAdmin::getEqBands() const {
+    return audio_engine::AudioEngine::getInstance().getEqBands();
 }
 
 // ==============================================================================

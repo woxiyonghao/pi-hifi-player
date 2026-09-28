@@ -67,20 +67,17 @@ void VolumeWidget::render(ImDrawList* dl, float right_limit, float center_y) {
     // -------------------------------------------------------------------------
     float spk_cx = start_x + spk_w * 0.5f;
     ImVec2 spk_min(start_x, center_y - 14.0f);
-    ImVec2 spk_max(start_x + spk_w, center_y + 14.0f);
     ImGui::SetCursorScreenPos(spk_min);
     bool clicked_spk = ImGui::InvisibleButton("##btn_spk_mute_widget", ImVec2(spk_w, 28.0f));
-    bool spk_hov = ImGui::IsItemHovered() || ImGui::IsMouseHoveringRect(spk_min, spk_max);
-    if (!clicked_spk && spk_hov && ImGui::IsMouseClicked(0)) {
-        clicked_spk = true;
-    }
+    bool spk_hov = ImGui::IsItemHovered();
+    bool spk_act = ImGui::IsItemActive();
     if (clicked_spk) {
         player.toggleMute();
         vol = player.getVolume();
         is_muted = player.isMuted();
     }
 
-    ImU32 spk_col = (spk_hov || is_muted) ? col_hover : col_blur;
+    ImU32 spk_col = (spk_hov || spk_act || is_muted) ? col_hover : col_blur;
     drawSpeaker(dl, ImVec2(spk_cx, center_y), vol, is_muted, spk_col);
 
     // -------------------------------------------------------------------------

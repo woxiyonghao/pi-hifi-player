@@ -67,14 +67,11 @@ bool PlayModeWidget::render(ImDrawList* dl, ImVec2 center, ImVec2 size, Callback
     const ImU32 col_hover = UIConfig::Color::Accent;
 
     ImVec2 btn_min(center.x - size.x * 0.5f, center.y - size.y * 0.5f);
-    ImVec2 btn_max(center.x + size.x * 0.5f, center.y + size.y * 0.5f);
     ImGui::SetCursorScreenPos(btn_min);
 
     bool clicked = ImGui::InvisibleButton("##btn_play_mode_widget", size);
-    bool hov = ImGui::IsItemHovered() || ImGui::IsMouseHoveringRect(btn_min, btn_max);
-    if (!clicked && hov && ImGui::IsMouseClicked(0)) {
-        clicked = true;
-    }
+    bool hov = ImGui::IsItemHovered();
+    bool act = ImGui::IsItemActive();
 
     if (clicked) {
         if (on_click) {
@@ -84,7 +81,7 @@ bool PlayModeWidget::render(ImDrawList* dl, ImVec2 center, ImVec2 size, Callback
         }
     }
 
-    ImU32 dynamic_col = hov ? col_hover : col_blur;
+    ImU32 dynamic_col = (hov || act) ? col_hover : col_blur;
     drawIcon(dl, center, player.getPlayMode(), dynamic_col, 1.25f);
     return clicked;
 }

@@ -175,7 +175,10 @@ void MainStageView::renderEqualizerView(float x, float y, float w, float h) {
     ImVec2 card_max(x + w - margin_x, y + h - 86.0f);
 
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    drawLiquidCard(dl, card_min, card_max, "10段发烧级图形均衡器 (Graphic Equalizer)", "采用 RBJ Audio EQ 二阶 IIR 滤波算法 · 支持硬件 Direct 直通");
+    drawLiquidCard(dl, card_min, card_max, "图形均衡器", "10 段专业频段精调 · 纯净硬件直通");
+
+    // 委托给独立专业 EQ 调音组件渲染
+    eq_view_.render(dl, card_min, card_max);
 }
 
 void MainStageView::renderDACSettingsView(float x, float y, float w, float h) {
