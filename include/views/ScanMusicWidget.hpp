@@ -6,6 +6,8 @@
 #include <vector>
 #include <string>
 
+#include "widgets/MusicItem.h"
+
 // ==============================================================================
 // 本地曲库检索专属交互组件 (ScanMusicWidget)
 // 包含 3 种状态驱动模式：1.待机展示 2.动态扫描中 3.完成结果
@@ -43,5 +45,4 @@ private:
 private:
     float anim_timer_ = 0.0f; // 驱动待机呼吸与悬浮的连续时间基准
     void drawSectionHeader(ImDrawList* dl, ImVec2 pos, const char* title, const char* subtitle, size_t track_count);
-    bool drawGridItem(ImDrawList* dl, ImVec2 pos, ImVec2 size, const Track& track, const char* category_tag);
 };

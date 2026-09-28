@@ -392,74 +392,6 @@ void ScanMusicWidget::drawSectionHeader(ImDrawList* dl, ImVec2 pos, const char* 
     if (Fonts::Small) ImGui::PopFont();
 }
 
-bool ScanMusicWidget::drawGridItem(ImDrawList* dl, ImVec2 pos, ImVec2 size, const Track& track,
-                                   const char* category_tag) {
-    const float rounding = 10.0f;
-    const float cover_w = size.x;
-    ImVec2 cover_p0 = pos;
-    ImVec2 cover_p1 = ImVec2(pos.x + cover_w, pos.y + cover_w);
-
-    ImGui::SetCursorScreenPos(pos);
-    std::string btn_id = "##grid_card_" + std::to_string(track.id);
-    bool is_clicked = ImGui::InvisibleButton(btn_id.c_str(), size);
-    bool is_hovered = ImGui::IsItemHovered();
-
-    // 封面底板
-    ImU32 cover_bg = is_hovered ? IM_COL32(38, 45, 58, 255) : IM_COL32(24, 28, 38, 255);
-    dl->AddRectFilled(cover_p0, cover_p1, cover_bg, rounding);
-    dl->AddRect(cover_p0, cover_p1, is_hovered ? UIConfig::Color::GlassBorder : IM_COL32(255, 255, 255, 20), rounding,
-                0, 1.0f);
-
-    ImVec2 cover_center((cover_p0.x + cover_p1.x) * 0.5f, (cover_p0.y + cover_p1.y) * 0.5f);
-
-    if (!is_hovered) {
-        // 常态：居中显示格式 Badge (如 DSD / 192kHz)
-        std::string badge = track.getFormatBadge();
-        if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-        ImVec2 b_sz = ImGui::CalcTextSize(badge.c_str());
-        dl->AddText(ImVec2(cover_center.x - b_sz.x * 0.5f, cover_center.y - b_sz.y * 0.5f),
-                    IM_COL32(180, 195, 215, 190), badge.c_str());
-        if (Fonts::Small) ImGui::PopFont();
-    } else {
-        // 悬停态：居中浮现玫红 ▶ 播放按钮
-        dl->AddCircleFilled(cover_center, 22.0f, UIConfig::Color::Accent);
-        ImVec2 tri_p0(cover_center.x - 5.0f, cover_center.y - 7.0f);
-        ImVec2 tri_p1(cover_center.x + 7.0f, cover_center.y);
-        ImVec2 tri_p2(cover_center.x - 5.0f, cover_center.y + 7.0f);
-        dl->AddTriangleFilled(tri_p0, tri_p1, tri_p2, IM_COL32(255, 255, 255, 255));
-    }
-
-    // 文字排版
-    float text_y = cover_p1.y + 16.0f;
-    // Line 2: 歌曲主标题
-    if (Fonts::Regular) ImGui::PushFont(Fonts::Regular);
-    ImU32 title_col = is_hovered ? UIConfig::Color::Accent : UIConfig::Color::TextActive;
-    std::string title_display = track.title;
-    if (ImGui::CalcTextSize(title_display.c_str()).x > cover_w) {
-        while (!title_display.empty() && ImGui::CalcTextSize((title_display + "...").c_str()).x > cover_w) {
-            title_display.pop_back();
-        }
-        title_display += "...";
-    }
-    dl->AddText(ImVec2(pos.x, text_y), title_col, title_display.c_str());
-    text_y += 24.0f;
-    if (Fonts::Regular) ImGui::PopFont();
-
-    // Line 3: 歌手名
-    if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-    std::string artist_display = track.artist;
-    if (ImGui::CalcTextSize(artist_display.c_str()).x > cover_w) {
-        while (!artist_display.empty() && ImGui::CalcTextSize((artist_display + "...").c_str()).x > cover_w) {
-            artist_display.pop_back();
-        }
-        artist_display += "...";
-    }
-    dl->AddText(ImVec2(pos.x, text_y), UIConfig::Color::TextMuted, artist_display.c_str());
-    if (Fonts::Small) ImGui::PopFont();
-
-    return is_clicked;
-}
-
 void ScanMusicWidget::renderCompletedState([[maybe_unused]] ImDrawList* dl, ImVec2 p_min, ImVec2 p_max,
                                            std::vector<Playlist>& playlists) {
     auto& scanner = MusicScanManager::getInstance();
@@ -475,8 +407,8 @@ void ScanMusicWidget::renderCompletedState([[maybe_unused]] ImDrawList* dl, ImVe
     const float pad_y = 18.0f;
     const float content_w = (p_max.x - p_min.x) - pad_x * 2.0f;
     const float content_h = (p_max.y - p_min.y) - pad_y * 2.0f;
-    const float card_w = 150.0f;
-    const float card_h = 225.0f;
+    const float card_w = MusicItem::DefaultWidth;
+    const float card_h = MusicItem::DefaultHeight;
     const float item_gap_x = 16.0f;
     const float section_gap_y = 36.0f;
 
@@ -549,12 +481,9 @@ void ScanMusicWidget::renderCompletedState([[maybe_unused]] ImDrawList* dl, ImVe
 
         for (size_t i = 0; i < tracks_in_fmt.size(); ++i) {
             if (i > 0) ImGui::SameLine(0.0f, item_gap_x);
-            ImVec2 item_pos = ImGui::GetCursorScreenPos();
-            if (drawGridItem(ImGui::GetWindowDrawList(), item_pos, ImVec2(card_w, card_h), tracks_in_fmt[i],
-                             meta.default_tag)) {
-                // 区分纯点击与滑动拖拽：仅在未拖拽时触发播放
-                bool was_dragged = (std::abs(ImGui::GetMouseDragDelta(0).x) > 4.0f || std::abs(ImGui::GetMouseDragDelta(0).y) > 4.0f);
-                if (!was_dragged && !playlists.empty()) {
+            if (MusicItem::render(ImGui::GetWindowDrawList(), ImVec2(card_w, card_h), tracks_in_fmt[i],
+                                  meta.default_tag)) {
+                if (!playlists.empty()) {
                     playlists[0].addTrack(tracks_in_fmt[i]);
                     PlayerAdmin::getInstance().playTrack(tracks_in_fmt[i]);
                 }
