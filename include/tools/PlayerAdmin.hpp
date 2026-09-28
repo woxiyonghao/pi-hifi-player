@@ -100,6 +100,9 @@ public:
     bool isPaused() const { return state_ == PlaybackState::Paused; }
     // 使用 C++17/20 std::optional 优雅表达“可能有歌曲，也可能为空”
     const std::optional<Track>& getCurrentTrack() const { return current_track_; }
+
+    // 获取实时音频 12 频段振幅包络 (0.0f ~ 1.0f)
+    void getSpectrumLevels(float* out_levels, size_t count = 12) const;
 private:
     // 核心状态
     PlaybackState state_ = PlaybackState::Idle;

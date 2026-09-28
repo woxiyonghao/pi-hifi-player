@@ -295,11 +295,143 @@ void AudioEngine::onSinkDataNeeded(float* output, size_t frame_count) {
         }
     }
 
+    // 实时频谱分析更新
+    updateSpectrumAnalysis(output, frame_count);
+
     // 播放完毕检测
     if (is_eof_.load(std::memory_order_acquire) && ring_buffer_.available_read() == 0) {
         if (eof_callback_) {
             eof_callback_();
         }
+    }
+}
+
+static void fft256(float* re, float* im) {
+    int j = 0;
+    for (int i = 0; i < 256 - 1; ++i) {
+        if (i < j) {
+            std::swap(re[i], re[j]);
+            std::swap(im[i], im[j]);
+        }
+        int k = 128;
+        while (k <= j) {
+            j -= k;
+            k >>= 1;
+        }
+        j += k;
+    }
+    for (int len = 2; len <= 256; len <<= 1) {
+        float ang = -2.0f * 3.14159265358979323846f / len;
+        float wlen_re = std::cos(ang);
+        float wlen_im = std::sin(ang);
+        for (int i = 0; i < 256; i += len) {
+            float w_re = 1.0f;
+            float w_im = 0.0f;
+            for (int k = 0; k < len / 2; ++k) {
+                float u_re = re[i + k];
+                float u_im = im[i + k];
+                float v_re = re[i + k + len / 2] * w_re - im[i + k + len / 2] * w_im;
+                float v_im = re[i + k + len / 2] * w_im + im[i + k + len / 2] * w_re;
+                re[i + k] = u_re + v_re;
+                im[i + k] = u_im + v_im;
+                re[i + k + len / 2] = u_re - v_re;
+                im[i + k + len / 2] = u_im - v_im;
+                float next_w_re = w_re * wlen_re - w_im * wlen_im;
+                float next_w_im = w_re * wlen_im + w_im * wlen_re;
+                w_re = next_w_re;
+                w_im = next_w_im;
+            }
+        }
+    }
+}
+
+void AudioEngine::updateSpectrumAnalysis(const float* samples, size_t frame_count) {
+    if (!samples || frame_count == 0 || isMuted()) {
+        std::lock_guard lock(spectrum_mutex_);
+        for (auto& lvl : spectrum_levels_) {
+            lvl *= 0.85f;
+        }
+        return;
+    }
+
+    constexpr int FFT_SIZE = 256;
+    float re[FFT_SIZE] = {0.0f};
+    float im[FFT_SIZE] = {0.0f};
+
+    size_t samples_to_use = std::min(frame_count, static_cast<size_t>(FFT_SIZE));
+    uint32_t channels = current_spec_.channels;
+
+    for (size_t i = 0; i < samples_to_use; ++i) {
+        float mono = 0.0f;
+        if (channels >= 2) {
+            mono = 0.5f * (samples[i * 2] + samples[i * 2 + 1]);
+        } else {
+            mono = samples[i];
+        }
+        // Hann window
+        float window = 0.5f * (1.0f - std::cos(2.0f * 3.14159265f * i / (FFT_SIZE - 1)));
+        re[i] = mono * window;
+    }
+
+    fft256(re, im);
+
+    // 12 个对数分布频段的 Bin 起止索引 (~86Hz 至 ~11kHz)
+    static const int band_bins[12][2] = {
+        {1, 1},    // ~86 Hz
+        {2, 2},    // ~172 Hz
+        {3, 4},    // ~258 - 344 Hz
+        {5, 7},    // ~430 - 602 Hz
+        {8, 11},   // ~688 - 946 Hz
+        {12, 16},  // ~1.0k - 1.4k Hz
+        {17, 23},  // ~1.5k - 2.0k Hz
+        {24, 32},  // ~2.1k - 2.8k Hz
+        {33, 45},  // ~2.9k - 3.9k Hz
+        {46, 64},  // ~4.0k - 5.5k Hz
+        {65, 90},  // ~5.6k - 7.7k Hz
+        {91, 127}  // ~7.8k - 11.0k Hz
+    };
+
+    // 高频人耳等响度视觉补偿增益 (Treble Pre-emphasis)
+    static const float band_weights[12] = {
+        2.5f, 2.2f, 2.0f, 1.9f, 2.0f, 2.2f,
+        2.5f, 2.9f, 3.4f, 4.0f, 4.8f, 5.8f
+    };
+
+    std::lock_guard lock(spectrum_mutex_);
+    for (int b = 0; b < 12; ++b) {
+        int b_start = band_bins[b][0];
+        int b_end = band_bins[b][1];
+        float sum_mag = 0.0f;
+        for (int k = b_start; k <= b_end; ++k) {
+            sum_mag += std::sqrt(re[k] * re[k] + im[k] * im[k]);
+        }
+        float avg_mag = sum_mag / (b_end - b_start + 1);
+        float target = std::clamp(avg_mag * band_weights[b] * 0.15f, 0.0f, 1.0f);
+
+        // 动效弹道：快速起音 (Attack) + 平滑自然衰减 (Decay)
+        if (target > spectrum_levels_[b]) {
+            spectrum_levels_[b] = target;
+        } else {
+            spectrum_levels_[b] = spectrum_levels_[b] * 0.85f + target * 0.15f;
+        }
+    }
+}
+
+void AudioEngine::getSpectrumLevels(float* out_levels, size_t count) {
+    if (!out_levels || count == 0) return;
+
+    if (!isPlaying()) {
+        std::fill(out_levels, out_levels + count, 0.0f);
+        return;
+    }
+
+    std::lock_guard lock(spectrum_mutex_);
+    size_t copy_cnt = std::min(count, spectrum_levels_.size());
+    for (size_t i = 0; i < copy_cnt; ++i) {
+        out_levels[i] = spectrum_levels_[i];
+    }
+    for (size_t i = copy_cnt; i < count; ++i) {
+        out_levels[i] = 0.0f;
     }
 }
 

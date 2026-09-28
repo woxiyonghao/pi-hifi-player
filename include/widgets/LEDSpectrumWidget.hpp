@@ -22,5 +22,5 @@ public:
     // 纯矢量分段式 LED 点阵绘制 (12列 x 10行)
     static void drawMatrix(ImDrawList* dl, ImVec2 center, float total_w, float total_h,
                            int num_cols, int num_rows, ImU32 lit_color, ImU32 unlit_color,
-                           bool is_animating);
+                           bool is_playing, const float* spectrum_levels = nullptr);
 };

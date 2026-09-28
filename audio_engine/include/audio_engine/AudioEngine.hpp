@@ -64,6 +64,9 @@ public:
     // 播放完毕回调 (EOF)
     void setEofCallback(std::function<void()> callback);
 
+    // 实时 12 频段音频频谱振幅分析 (0.0f ~ 1.0f)
+    void getSpectrumLevels(float* out_levels, size_t count);
+
 private:
     AudioEngine();
     ~AudioEngine();
@@ -93,8 +96,13 @@ private:
 
     std::function<void()> eof_callback_;
 
+    // 实时频谱分析状态
+    std::array<float, 12> spectrum_levels_{};
+    mutable std::mutex spectrum_mutex_;
+
     void decodeWorker(std::stop_token stop_token);
     void onSinkDataNeeded(float* output, size_t frame_count);
+    void updateSpectrumAnalysis(const float* samples, size_t frame_count);
     std::unique_ptr<IAudioDecoder> createDecoderForFile(const std::string& filepath);
 };
 

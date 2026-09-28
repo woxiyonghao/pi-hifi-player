@@ -1,5 +1,7 @@
 #include "PlayerAdmin.hpp"
+#include "imgui.h"
 #include <random> // 提供随机数引擎供 Shuffle 模式使用
+#include <cmath>
 
 PlayerAdmin::PlayerAdmin() {
     // 注册音频底层 EOF 事件：曲目硬件推流完毕后自动切下一首
@@ -215,5 +217,45 @@ void PlayerAdmin::cyclePlayMode() {
         case PlayMode::LoopSingle: play_mode_ = PlayMode::Shuffle;    break;
         case PlayMode::Shuffle:    play_mode_ = PlayMode::Sequence;   break;
         case PlayMode::Sequence:   play_mode_ = PlayMode::LoopList;   break;
+    }
+}
+
+// ==============================================================================
+// 6. 实时频谱振幅分析获取
+// ==============================================================================
+void PlayerAdmin::getSpectrumLevels(float* out_levels, size_t count) const {
+    if (!out_levels || count == 0) return;
+
+    // 如果未播放，严格清零 (显示 0 个方块)
+    if (!isPlaying()) {
+        std::fill(out_levels, out_levels + count, 0.0f);
+        return;
+    }
+
+    auto& engine = audio_engine::AudioEngine::getInstance();
+    if (engine.isPlaying()) {
+        engine.getSpectrumLevels(out_levels, count);
+        return;
+    }
+
+    // 虚拟模拟数据环境下的拟真律动频谱 (供未导入实体音乐文件时的 UI 验证)
+    static const float base_weights[12] = {
+        0.85f, 0.70f, 0.90f, 0.60f, 0.75f, 0.50f,
+        0.65f, 0.80f, 0.55f, 0.70f, 0.45f, 0.60f
+    };
+    static float s_smooth_levels[12] = {0.0f};
+    float t = static_cast<float>(ImGui::GetTime());
+    for (size_t i = 0; i < count; ++i) {
+        float freq = 4.2f + (i % 3) * 1.8f;
+        float wave = std::abs(std::sin(t * freq + i * 0.9f)) * 0.65f + 
+                     std::abs(std::cos(t * (freq * 0.6f) - i * 1.3f)) * 0.35f;
+        float w = (i < 12) ? base_weights[i] : 0.6f;
+        float target = std::clamp(wave * w, 0.05f, 0.95f);
+        if (i < 12) {
+            s_smooth_levels[i] = s_smooth_levels[i] * 0.75f + target * 0.25f;
+            out_levels[i] = s_smooth_levels[i];
+        } else {
+            out_levels[i] = target;
+        }
     }
 }
