@@ -56,8 +56,8 @@ public:
     // -------------------------------------------------------------------------
     // 异步扫描控制核心接口
     // -------------------------------------------------------------------------
-    // 启动非阻塞扫描任务 (若正在扫描中则返回 false)
-    bool startScan(const std::filesystem::path& root_path);
+    // 启动非阻塞扫描任务 (可缺省参数，自动使用 AppConfig::Path::getMusicDir())
+    bool startScan(const std::filesystem::path& root_path = "");
 
     // 请求中止扫描 (利用 C++20 stop_token 协作取消)
     void cancelScan();

@@ -1,7 +1,7 @@
 #include "tools/MusicScanManager.hpp"
 #include "public/AppConfig.hpp"
-#include <iostream>
 #include <algorithm>
+#include <iostream>
 
 MusicScanManager::~MusicScanManager() {
     cancelScan();
@@ -13,7 +13,8 @@ bool MusicScanManager::startScan(const std::filesystem::path& root_path) {
         return false;
     }
 
-    std::filesystem::path scan_target = root_path.empty() ? std::filesystem::path(AppConfig::Path::getMusicDir()) : root_path;
+    std::filesystem::path scan_target =
+        root_path.empty() ? std::filesystem::path(AppConfig::Path::getMusicDir()) : root_path;
 
     // 停止并回收上一次的工作线程
     if (worker_thread_.joinable()) {
@@ -28,9 +29,8 @@ bool MusicScanManager::startScan(const std::filesystem::path& root_path) {
     }
 
     // C++20 std::jthread 使用 lambda 完美接收 stop_token 并调用成员函数
-    worker_thread_ = std::jthread([this, scan_target](std::stop_token stop_token) {
-        scanWorker(stop_token, scan_target);
-    });
+    worker_thread_ =
+        std::jthread([this, scan_target](std::stop_token stop_token) { scanWorker(stop_token, scan_target); });
     return true;
 }
 
@@ -61,7 +61,8 @@ std::vector<Track> MusicScanManager::getScannedTracks() const {
     return scanned_tracks_;
 }
 
-Track MusicScanManager::parseBasicMetadata(uint64_t id, const std::filesystem::directory_entry& entry, AudioFormat format) {
+Track MusicScanManager::parseBasicMetadata(uint64_t id, const std::filesystem::directory_entry& entry,
+                                           AudioFormat format) {
     Track track;
     track.id = id;
     track.file_path = entry.path().string();
@@ -74,9 +75,9 @@ Track MusicScanManager::parseBasicMetadata(uint64_t id, const std::filesystem::d
     constexpr std::string_view delimiter = " - ";
     if (auto pos = stem.find(delimiter); pos != std::string::npos) {
         track.artist = stem.substr(0, pos);
-        track.title  = stem.substr(pos + delimiter.length());
+        track.title = stem.substr(pos + delimiter.length());
     } else {
-        track.title  = stem;
+        track.title = stem;
         track.artist = "未知艺术家";
     }
 
@@ -93,7 +94,7 @@ Track MusicScanManager::parseBasicMetadata(uint64_t id, const std::filesystem::d
         track.sample_rate = 2822400; // DSD64 (1-bit / 2.8224MHz)
         track.bit_depth = 1;
     } else if (format == AudioFormat::FLAC || format == AudioFormat::WAV) {
-        track.sample_rate = 96000;   // 默认 Hi-Res 24bit/96kHz 规格占位
+        track.sample_rate = 96000; // 默认 Hi-Res 24bit/96kHz 规格占位
         track.bit_depth = 24;
     } else {
         track.sample_rate = 44100;
@@ -121,6 +122,7 @@ void MusicScanManager::scanWorker(std::stop_token stop_token, std::filesystem::p
     }
 
     std::cout << "[MusicScanManager] 开始扫描发烧音乐目录: " << root_path << std::endl;
+    auto start_time = std::chrono::steady_clock::now();
 
     // 2. 递归遍历 (跳过无权限目录，避免抛出异常)
     auto options = std::filesystem::directory_options::skip_permission_denied;
@@ -149,8 +151,15 @@ void MusicScanManager::scanWorker(std::stop_token stop_token, std::filesystem::p
 
         const auto& entry = *iter;
 
-        // 仅处理常规文件
-        if (entry.is_regular_file(ec)) {
+        // 智能剪枝：若为目录且属于隐藏目录或已知系统/开发大仓目录，直接跳过其子目录递归
+        if (entry.is_directory(ec)) {
+            std::string dir_name = entry.path().filename().string();
+            if ((!dir_name.empty() && dir_name.front() == '.') || dir_name == "Library" || dir_name == "node_modules" ||
+                dir_name == "Applications" || dir_name == "VirtualBox VMs") {
+                iter.disable_recursion_pending();
+                continue;
+            }
+        } else if (entry.is_regular_file(ec)) {
             std::string ext = entry.path().extension().string();
 
             // 利用 SupportedFormats 大小写不敏感比对
@@ -163,55 +172,45 @@ void MusicScanManager::scanWorker(std::stop_token stop_token, std::filesystem::p
                     scanned_tracks_.push_back(track);
                 }
 
+                std::cout << "[MusicScanManager] 发现曲目 #" << track.id 
+                          << " | 歌名: " << track.title 
+                          << " | 歌手: " << track.artist 
+                          << " | 专辑: " << track.album 
+                          << " | 规格: " << track.getFormatBadge() 
+                          << " | 路径: " << track.file_path << std::endl;
+
                 // 触发实时进度回调
                 if (progress_callback_) {
                     progress_callback_({entry.path().filename().string(), scanned_tracks_.size(), ScanState::Scanning});
                 }
-
-                // 适度非阻塞步进延时，使高能激光扫描动效与计数器得以连贯呈现
-                std::this_thread::sleep_for(std::chrono::milliseconds(40));
             }
         }
     }
 
     // =========================================================================
-    // TODO: 调试阶段写死 15 秒扫描时长，后续接入真实曲库规模自适应耗时
+    // 3. 动态时间约束：若实际扫描耗时低于 3 秒，保持扫描动效至满 3 秒
     // =========================================================================
-    constexpr int DEBUG_SCAN_SECONDS = 15;
-    for (int step = 0; step < DEBUG_SCAN_SECONDS * 10; ++step) {
-        if (stop_token.stop_requested()) {
-            std::cout << "[MusicScanManager] 扫描被用户中断。" << std::endl;
-            state_ = ScanState::Cancelled;
-            if (progress_callback_) {
-                std::lock_guard lock(mutex_);
-                progress_callback_({"", scanned_tracks_.size(), ScanState::Cancelled});
-            }
-            return;
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    constexpr auto MIN_SCAN_DURATION = std::chrono::milliseconds(3000);
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time);
 
-        // 每隔 2.5 秒模拟探测到一批发烧母带，让曲目计数与激光动画生动配合
-        if (step > 0 && step % 25 == 0) {
-            Track t;
-            t.id = current_id++;
-            if (t.id == 1) { t.artist = "蔡琴"; t.title = "渡口"; t.album = "民歌蔡琴"; t.format = AudioFormat::FLAC; t.sample_rate = 96000; t.bit_depth = 24; }
-            else if (t.id == 2) { t.artist = "Eagles"; t.title = "Hotel California"; t.album = "Hotel California (Hi-Res)"; t.format = AudioFormat::DSD_DSF; t.sample_rate = 2822400; t.bit_depth = 1; }
-            else if (t.id == 3) { t.artist = "维瓦尔第"; t.title = "四季 - 春 (第一乐章)"; t.album = "小提琴协奏曲"; t.format = AudioFormat::WAV; t.sample_rate = 192000; t.bit_depth = 24; }
-            else if (t.id == 4) { t.artist = "Diana Krall"; t.title = "The Look of Love"; t.album = "The Look of Love"; t.format = AudioFormat::DSD_DFF; t.sample_rate = 5644800; t.bit_depth = 1; }
-            else if (t.id == 5) { t.artist = "Bill Evans Trio"; t.title = "Autumn Leaves"; t.album = "Portrait in Jazz"; t.format = AudioFormat::FLAC; t.sample_rate = 192000; t.bit_depth = 24; }
-            else { t.artist = "发烧试音母带"; t.title = "Track " + std::to_string(t.id); t.album = "Reference DSD Collection"; t.format = AudioFormat::DSD_DSF; t.sample_rate = 2822400; t.bit_depth = 1; }
-            t.duration_sec = 260;
-            {
-                std::lock_guard lock(mutex_);
-                scanned_tracks_.push_back(t);
+    if (elapsed < MIN_SCAN_DURATION) {
+        auto remaining = MIN_SCAN_DURATION - elapsed;
+        auto sleep_until = std::chrono::steady_clock::now() + remaining;
+        while (std::chrono::steady_clock::now() < sleep_until) {
+            if (stop_token.stop_requested()) {
+                std::cout << "[MusicScanManager] 扫描被用户中断。" << std::endl;
+                state_ = ScanState::Cancelled;
+                if (progress_callback_) {
+                    std::lock_guard lock(mutex_);
+                    progress_callback_({"", scanned_tracks_.size(), ScanState::Cancelled});
+                }
+                return;
             }
-            if (progress_callback_) {
-                progress_callback_({t.title, scanned_tracks_.size(), ScanState::Scanning});
-            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(30));
         }
     }
 
-    // 3. 扫描顺利完成
+    // 4. 扫描顺利完成
     state_ = ScanState::Completed;
     std::cout << "[MusicScanManager] 扫描完成！共发现 " << scanned_tracks_.size() << " 首发烧曲目。" << std::endl;
 
