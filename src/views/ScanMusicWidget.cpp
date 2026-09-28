@@ -355,40 +355,21 @@ void ScanMusicWidget::renderIdleState(ImDrawList* dl, ImVec2 center,
 
 namespace {
 
-// 绘制真·高保真太阳光核与多层辐射日冕 (100% 可靠渲染，杜绝纹理采样丢失或 UV 异常，永不消失)
+// 绘制高保真纯净太阳光球与多层辐射日冕 (纯净球形光晕，去除多余白色线条)
 void drawSmoothSolarSphere(ImDrawList* dl, ImVec2 center, float pulse) {
-    // 1. 广域深空外日冕柔和微光辉晕 (由 42px 向外平滑渐隐入深空背景，填补射线中心空洞)
-    dl->AddCircleFilled(center, 42.0f * pulse, IM_COL32(250, 45, 72, 22), 48);
-    dl->AddCircleFilled(center, 32.0f * pulse, IM_COL32(250, 45, 72, 45), 48);
-    dl->AddCircleFilled(center, 24.0f * pulse, IM_COL32(250, 45, 72, 80), 48);
-    dl->AddCircleFilled(center, 18.0f * pulse, IM_COL32(250, 45, 72, 130), 48);
+    // 1. 广域深空外日冕柔和微光辉晕 (由 36px 向外平滑渐隐入深空背景，填补中心区域)
+    dl->AddCircleFilled(center, 36.0f * pulse, IM_COL32(250, 45, 72, 20), 48);
+    dl->AddCircleFilled(center, 28.0f * pulse, IM_COL32(250, 45, 72, 45), 48);
+    dl->AddCircleFilled(center, 21.0f * pulse, IM_COL32(250, 45, 72, 85), 48);
+    dl->AddCircleFilled(center, 15.0f * pulse, IM_COL32(250, 45, 72, 140), 48);
 
     // 2. 高温过渡色球层 (由玫瑰红经由暖粉过渡至白炽)
-    dl->AddCircleFilled(center, 13.5f * pulse, IM_COL32(255, 110, 140, 185), 48);
-    dl->AddCircleFilled(center, 9.5f * pulse, IM_COL32(255, 175, 195, 225), 40);
-    dl->AddCircleFilled(center, 6.5f * pulse, IM_COL32(255, 225, 235, 245), 36);
+    dl->AddCircleFilled(center, 11.0f * pulse, IM_COL32(255, 120, 145, 190), 48);
+    dl->AddCircleFilled(center, 7.5f * pulse, IM_COL32(255, 185, 205, 230), 40);
+    dl->AddCircleFilled(center, 5.0f * pulse, IM_COL32(255, 235, 245, 250), 36);
 
-    // 3. 极热白炽恒星核 (100% 纯白核，晶莹剔透，恒亮不退)
-    dl->AddCircleFilled(center, 4.0f * pulse, IM_COL32(255, 255, 255, 255), 32);
-
-    // 4. 太阳核心 4 芒耀斑高光衍射星芒 (Solar Flare Diffraction Spikes)
-    const float spike_main = 24.0f * pulse;
-    const float spike_sub = 14.0f * pulse;
-    // 水平与垂直高光射线
-    dl->AddLine(ImVec2(center.x - spike_main, center.y), ImVec2(center.x + spike_main, center.y),
-                IM_COL32(255, 255, 255, 180), 1.5f);
-    dl->AddLine(ImVec2(center.x, center.y - spike_main), ImVec2(center.x, center.y + spike_main),
-                IM_COL32(255, 255, 255, 180), 1.5f);
-    // 45 度副芒
-    dl->AddLine(ImVec2(center.x - spike_sub * 0.707f, center.y - spike_sub * 0.707f),
-                ImVec2(center.x + spike_sub * 0.707f, center.y + spike_sub * 0.707f),
-                IM_COL32(255, 210, 225, 120), 1.0f);
-    dl->AddLine(ImVec2(center.x - spike_sub * 0.707f, center.y + spike_sub * 0.707f),
-                ImVec2(center.x + spike_sub * 0.707f, center.y - spike_sub * 0.707f),
-                IM_COL32(255, 210, 225, 120), 1.0f);
-
-    // 极小中心白炽点
-    dl->AddCircleFilled(center, 2.2f, IM_COL32(255, 255, 255, 255), 16);
+    // 3. 极热白炽恒星核 (100% 纯净白炽圆球)
+    dl->AddCircleFilled(center, 3.2f * pulse, IM_COL32(255, 255, 255, 255), 32);
 }
 
 } // anonymous namespace
