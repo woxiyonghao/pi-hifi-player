@@ -1,9 +1,15 @@
 #include "PlayerAdmin.hpp"
 #include "imgui.h"
+#include "public/AppConfig.hpp"
 #include <random> // 提供随机数引擎供 Shuffle 模式使用
 #include <cmath>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
 
 PlayerAdmin::PlayerAdmin() {
+    loadConfig();
+
     // 注册音频底层 EOF 事件：曲目硬件推流完毕后自动切下一首
     audio_engine::AudioEngine::getInstance().setEofCallback([this]() {
         this->next();
@@ -226,6 +232,7 @@ double PlayerAdmin::getDurationSec() const {
 void PlayerAdmin::setVolume(float volume) {
     volume_ = std::clamp(volume, 0.0f, 1.0f);
     audio_engine::AudioEngine::getInstance().setVolume(volume_);
+    saveConfig();
 }
 
 float PlayerAdmin::getVolume() const {
@@ -235,6 +242,7 @@ float PlayerAdmin::getVolume() const {
 void PlayerAdmin::toggleMute() {
     is_muted_ = !is_muted_;
     audio_engine::AudioEngine::getInstance().setMuted(is_muted_);
+    saveConfig();
 }
 
 bool PlayerAdmin::isMuted() const {
@@ -264,12 +272,70 @@ std::array<float, 10> PlayerAdmin::getEqBands() const {
 // ==============================================================================
 // 5. 循环模式切换实现
 // ==============================================================================
+void PlayerAdmin::setPlayMode(PlayMode mode) {
+    play_mode_ = mode;
+    saveConfig();
+}
+
 void PlayerAdmin::cyclePlayMode() {
     switch (play_mode_) {
         case PlayMode::LoopList:   play_mode_ = PlayMode::LoopSingle; break;
         case PlayMode::LoopSingle: play_mode_ = PlayMode::Shuffle;    break;
         case PlayMode::Shuffle:    play_mode_ = PlayMode::Sequence;   break;
         case PlayMode::Sequence:   play_mode_ = PlayMode::LoopList;   break;
+    }
+    saveConfig();
+}
+
+void PlayerAdmin::saveConfig() {
+    std::string config_dir = AppConfig::Path::getConfigDir();
+    std::error_code ec;
+    if (!std::filesystem::exists(config_dir, ec)) {
+        std::filesystem::create_directories(config_dir, ec);
+    }
+    std::string file_path = config_dir + "/player_settings.ini";
+    std::ofstream ofs(file_path);
+    if (!ofs.is_open()) return;
+
+    ofs << "[Player]\n";
+    ofs << "play_mode=" << static_cast<int>(play_mode_) << "\n";
+    ofs << "volume=" << volume_ << "\n";
+    ofs << "muted=" << (is_muted_ ? 1 : 0) << "\n";
+}
+
+void PlayerAdmin::loadConfig() {
+    std::string file_path = AppConfig::Path::getConfigDir() + "/player_settings.ini";
+    std::ifstream ifs(file_path);
+    if (!ifs.is_open()) return;
+
+    std::string line;
+    while (std::getline(ifs, line)) {
+        if (line.empty() || line[0] == '#' || line[0] == '[') continue;
+        auto eq_pos = line.find('=');
+        if (eq_pos == std::string::npos) continue;
+
+        std::string key = line.substr(0, eq_pos);
+        std::string val = line.substr(eq_pos + 1);
+
+        if (key == "play_mode") {
+            try {
+                int mode_val = std::stoi(val);
+                if (mode_val >= 0 && mode_val <= 3) {
+                    play_mode_ = static_cast<PlayMode>(mode_val);
+                }
+            } catch (...) {}
+        } else if (key == "volume") {
+            try {
+                float vol = std::stof(val);
+                volume_ = std::clamp(vol, 0.0f, 1.0f);
+                audio_engine::AudioEngine::getInstance().setVolume(volume_);
+            } catch (...) {}
+        } else if (key == "muted") {
+            try {
+                is_muted_ = (std::stoi(val) != 0);
+                audio_engine::AudioEngine::getInstance().setMuted(is_muted_);
+            } catch (...) {}
+        }
     }
 }
 

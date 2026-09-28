@@ -95,7 +95,7 @@ public:
     // [播放模式切换]
     // -------------------------------------------------------------------------
     PlayMode getPlayMode() const { return play_mode_; }
-    void setPlayMode(PlayMode mode) { play_mode_ = mode; }
+    void setPlayMode(PlayMode mode);
     void cyclePlayMode(); // 循环切换模式: 列表循环 -> 单曲循环 -> 随机 -> 顺序
     // -------------------------------------------------------------------------
     // [状态与当前曲目只读查询 (供 BottomBar / VU表头 / 侧边栏读取)]
@@ -132,4 +132,7 @@ private:
     float volume_   = 0.8f; // 默认 80% 舒适音量
     bool is_muted_  = false;
     PlayerAdmin();
+
+    void saveConfig();
+    void loadConfig();
 };
