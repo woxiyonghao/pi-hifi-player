@@ -2,6 +2,7 @@
 #include "widgets/DrawUtils.hpp"
 #include "public/Font.hpp"
 #include "public/UIConfig.hpp"
+#include "tools/PlayerAdmin.hpp"
 #include <algorithm>
 #include <cmath>
 #include <string>
@@ -75,6 +76,22 @@ bool MusicItem::render(ImDrawList* dl, ImVec2 pos, ImVec2 size, const Track& tra
     bool is_clicked = ImGui::InvisibleButton(btn_id.c_str(), size);
     bool is_hovered = ImGui::IsItemHovered();
 
+    // 判定该曲目是否正处于播放状态中
+    bool is_track_playing = false;
+    auto& player = PlayerAdmin::getInstance();
+    if (player.isPlaying()) {
+        const auto& cur = player.getCurrentTrack();
+        if (cur.has_value()) {
+            if (!track.file_path.empty() && track.file_path == cur->file_path) {
+                is_track_playing = true;
+            } else if (track.id != 0 && track.id == cur->id) {
+                is_track_playing = true;
+            } else if (!track.title.empty() && track.title == cur->title && track.artist == cur->artist) {
+                is_track_playing = true;
+            }
+        }
+    }
+
     // 1. 封面底板 (液态玻璃深色磨砂与 1px 微光边框)
     ImU32 cover_bg = is_hovered ? IM_COL32(36, 44, 58, 255) : IM_COL32(22, 26, 36, 255);
     dl->AddRectFilled(cover_p0, cover_p1, cover_bg, rounding);
@@ -84,16 +101,19 @@ bool MusicItem::render(ImDrawList* dl, ImVec2 pos, ImVec2 size, const Track& tra
     ImVec2 cover_center((cover_p0.x + cover_p1.x) * 0.5f, (cover_p0.y + cover_p1.y) * 0.5f);
     ImVec2 cd_center(cover_center.x, cover_p0.y + 66.0f);
 
-    // 2. 唱片矢量图标：尺寸放大 (hover 时放大至 46px，blur 时 40px)，完全去除淡入淡出，消除视觉滞后
-    // 色彩严格参照 PlayModeWidget：
-    // Blur 态：轻盈通透的灰白磨砂半透质感 IM_COL32(215, 222, 235, 175)
+    // 2. 唱片矢量图标：
+    // 色彩规则：
+    // Blur 态（未悬停）：保持轻盈通透的灰白磨砂半透质感 IM_COL32(215, 222, 235, 175)（播放中非 hover 态不改变颜色！）
     // Hover 态：纯正主题色玫瑰红 UIConfig::Color::Accent (IM_COL32(250, 45, 72, 255))
     const ImU32 col_blur = IM_COL32(215, 222, 235, 175);
     const ImU32 col_hover = UIConfig::Color::Accent;
     const ImU32 cd_col = is_hovered ? col_hover : col_blur;
 
     const float cd_radius = is_hovered ? 46.0f : 40.0f;
-    float rot = is_hovered ? (static_cast<float>(ImGui::GetTime()) * 1.8f) : 0.0f;
+
+    // 动效规则：悬停时播放；播放中的 item 在非 hover 情况下同样平滑旋转，且颜色保持通透灰白 col_blur
+    bool should_rotate = is_hovered || is_track_playing;
+    float rot = should_rotate ? (static_cast<float>(ImGui::GetTime()) * 1.8f) : 0.0f;
     drawVinylCdIcon(dl, cd_center, cd_radius, cd_col, rot);
 
     // 3. 发烧格式指示胶囊徽标 (Format Badge Capsule)
