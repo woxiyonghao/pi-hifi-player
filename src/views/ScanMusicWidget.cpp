@@ -43,6 +43,170 @@ inline SectionMeta getSectionMeta(AudioFormat fmt) {
         return {"UNKNOWED", "", "本地音频"};
     }
 }
+
+// ==============================================================================
+// [TODO: UI验证临时模拟数据 - 验证完毕后可整块删除] START
+// ==============================================================================
+#define ENABLE_UI_MOCK_DATA 0
+
+#if ENABLE_UI_MOCK_DATA
+struct MockItemDef {
+    const char* title;
+    const char* artist;
+    const char* album;
+    uint32_t sample_rate;
+    uint8_t bit_depth;
+};
+
+inline void injectMockTracksIfEmpty(std::map<AudioFormat, std::vector<Track>>& format_buckets) {
+    // 1. DSD_DSF (20 条发烧母带曲目)
+    static const MockItemDef kDsdDsfMocks[20] = {
+        {"Symphony No. 9 in D Minor, Op. 125", "Herbert von Karajan", "Beethoven: The 9 Symphonies", 2822400, 1},
+        {"So What", "Miles Davis", "Kind of Blue (SACD)", 2822400, 1},
+        {"Hotel California (Acoustic Live)", "Eagles", "Hell Freezes Over (DSD)", 5644800, 1},
+        {"The Four Seasons: Winter", "Itzhak Perlman", "Vivaldi: Le Quattro Stagioni", 2822400, 1},
+        {"Cello Suite No. 1 in G Major", "Yo-Yo Ma", "Bach: The 6 Unaccompanied Suites", 2822400, 1},
+        {"Autumn Leaves", "Cannonball Adderley", "Somethin' Else (SACD)", 2822400, 1},
+        {"Take Five", "The Dave Brubeck Quartet", "Time Out (DSD Direct)", 5644800, 1},
+        {"Clair de Lune", "Alexis Weissenberg", "Debussy: Piano Works", 2822400, 1},
+        {"Blue in Green", "Bill Evans Trio", "Portrait in Jazz (DSD)", 2822400, 1},
+        {"Nocturne in E-flat Major, Op. 9 No. 2", "Arthur Rubinstein", "Chopin: The Nocturnes", 2822400, 1},
+        {"Round Midnight", "Thelonious Monk", "The Best of Blue Note SACD", 2822400, 1},
+        {"Sultans of Swing", "Dire Straits", "Dire Straits (SACD Remaster)", 5644800, 1},
+        {"Canon in D Major", "Trevor Pinnock", "Pachelbel: Baroque Favorites", 2822400, 1},
+        {"My Favorite Things", "John Coltrane", "My Favorite Things (DSD)", 2822400, 1},
+        {"Adagio for Strings, Op. 11", "Leonard Bernstein", "Barber: Adagio", 2822400, 1},
+        {"What a Wonderful World", "Louis Armstrong", "Pure Gold (SACD)", 2822400, 1},
+        {"The Girl from Ipanema", "Stan Getz & Astrud Gilberto", "Getz/Gilberto (DSD 128x)", 5644800, 1},
+        {"Goldberg Variations: Aria", "Glenn Gould", "The Goldberg Variations (1981)", 2822400, 1},
+        {"St. Thomas", "Sonny Rollins", "Saxophone Colossus (DSD)", 2822400, 1},
+        {"Swan Lake Suite, Op. 20a", "André Previn", "Tchaikovsky: Ballets", 2822400, 1}
+    };
+
+    // 2. DSD_DFF (20 条发烧直接流曲目)
+    static const MockItemDef kDsdDffMocks[20] = {
+        {"1-Bit Direct Stream Master 01", "Stereo Sound Reference", "Super Audio CD Sampler Vol.1", 2822400, 1},
+        {"Brandenburg Concerto No. 3 in G", "Karl Richter", "Bach: Brandenburg Concertos", 2822400, 1},
+        {"A Love Supreme, Pt. I", "John Coltrane", "A Love Supreme (DFF)", 2822400, 1},
+        {"Boléro, M. 81", "Charles Dutoit", "Ravel: Orchestral Works", 2822400, 1},
+        {"Waltz for Debby (Live)", "Bill Evans Trio", "Waltz for Debby (SACD DFF)", 2822400, 1},
+        {"Piano Concerto No. 21: Andante", "Murray Perahia", "Mozart: Piano Concertos", 2822400, 1},
+        {"Time After Time", "Chet Baker", "Chet (DFF Master)", 2822400, 1},
+        {"Gymnopédie No. 1", "Aldo Ciccolini", "Satie: Piano Works", 2822400, 1},
+        {"Cantate Domino (Pipe Organ)", "Torsten Nilsson", "Proprius Audiophile Benchmark", 2822400, 1},
+        {"Flamenco A Go-Go", "Steve Stevens", "Acoustic Guitar Showcase", 2822400, 1},
+        {"Peer Gynt: Morning Mood", "Herbert von Karajan", "Grieg: Peer Gynt", 2822400, 1},
+        {"Night Train", "The Oscar Peterson Trio", "Night Train (1-bit DFF)", 2822400, 1},
+        {"Moonlight Sonata: Adagio", "Wilhelm Kempff", "Beethoven: Piano Sonatas", 2822400, 1},
+        {"Cheek to Cheek", "Ella Fitzgerald & Louis Armstrong", "Ella and Louis (DFF)", 2822400, 1},
+        {"Symphony No. 5: Allegro", "Carlos Kleiber", "Beethoven: Symphonies Nos. 5 & 7", 2822400, 1},
+        {"Moanin'", "Art Blakey & The Jazz Messengers", "Moanin' (SACD DFF)", 2822400, 1},
+        {"The Planets: Jupiter", "Sir Colin Davis", "Holst: The Planets", 2822400, 1},
+        {"Besame Mucho", "Andrea Bocelli", "Amore (Audiophile DSD)", 2822400, 1},
+        {"The Carnival of the Animals: The Swan", "Jacqueline du Pré", "Saint-Saëns Masterpieces", 2822400, 1},
+        {"Fanfare for the Common Man", "Eiji Oue", "Copland: 100", 2822400, 1}
+    };
+
+    // 3. ALAC (20 条 Apple Lossless 曲目)
+    static const MockItemDef kAlacMocks[20] = {
+        {"Don't Know Why", "Norah Jones", "Come Away With Me (Apple Lossless)", 96000, 24},
+        {"Come Together", "The Beatles", "Abbey Road (Apple Digital Master)", 96000, 24},
+        {"Rolling in the Deep", "Adele", "21 (ALAC Lossless)", 44100, 16},
+        {"Get Lucky", "Daft Punk ft. Pharrell", "Random Access Memories (ALAC 96/24)", 96000, 24},
+        {"Dreams", "Fleetwood Mac", "Rumours (Apple Lossless)", 96000, 24},
+        {"Billie Jean", "Michael Jackson", "Thriller (Apple Digital Master)", 96000, 24},
+        {"Fast Car", "Tracy Chapman", "Tracy Chapman (ALAC)", 44100, 16},
+        {"The Sound of Silence", "Simon & Garfunkel", "Wednesday Morning, 3 A.M.", 96000, 24},
+        {"Shape of You", "Ed Sheeran", "÷ (Divide) [Apple Lossless]", 44100, 24},
+        {"Blinding Lights", "The Weeknd", "After Hours (Spatial Audio Ready)", 48000, 24},
+        {"Like a Rolling Stone", "Bob Dylan", "Highway 61 Revisited (ALAC)", 96000, 24},
+        {"Hallelujah", "Jeff Buckley", "Grace (Apple Lossless Remaster)", 44100, 16},
+        {"Smooth Operator", "Sade", "Diamond Life (ALAC Lossless)", 44100, 16},
+        {"Stay With Me", "Sam Smith", "In the Lonely Hour (ALAC 96k)", 96000, 24},
+        {"Thinking Out Loud", "Ed Sheeran", "x (Multiply) [Apple Master]", 44100, 24},
+        {"Shallow", "Lady Gaga & Bradley Cooper", "A Star Is Born Soundtrack", 48000, 24},
+        {"Bad Guy", "Billie Eilish", "WHEN WE ALL FALL ASLEEP", 44100, 24},
+        {"Something", "The Beatles", "Abbey Road (Apple Digital Master)", 96000, 24},
+        {"Gravity", "John Mayer", "Continuum (Apple Lossless)", 44100, 16},
+        {"Watermelon Sugar", "Harry Styles", "Fine Line (ALAC 48/24)", 48000, 24}
+    };
+
+    // 4. FLAC (20 条发烧母带无损曲目)
+    static const MockItemDef kFlacMocks[20] = {
+        {"Hotel California (Hi-Res 192k)", "Eagles", "Hotel California (2013 Remaster)", 192000, 24},
+        {"Midnight Sugar (Trio Acoustic)", "Tsuyoshi Yamamoto Trio", "Midnight Sugar (Three Blind Mice)", 192000, 24},
+        {"The Look of Love", "Diana Krall", "The Look of Love (Verve 24/96)", 96000, 24},
+        {"Spanish Harlem", "Rebecca Pidgeon", "The Raven (Chesky Audiophile)", 192000, 24},
+        {"Tin Pan Alley", "Stevie Ray Vaughan", "Couldn't Stand the Weather", 96000, 24},
+        {"Keith Don't Go (Acoustic Live)", "Nils Lofgren", "Acoustic Live (FLAC 192/24)", 192000, 24},
+        {"Bird on a Wire", "Jennifer Warnes", "Famous Blue Raincoat (24/96)", 96000, 24},
+        {"Autumn in Seattle", "Tsuyoshi Yamamoto Trio", "Autumn in Seattle (TBM FLAC)", 192000, 24},
+        {"Brothers in Arms", "Dire Straits", "Brothers in Arms (Hi-Res FLAC)", 96000, 24},
+        {"A Taste of Honey", "Patricia Barber", "Café Blue (Unmastered 24/192)", 192000, 24},
+        {"Little Wing", "Stevie Ray Vaughan", "The Sky Is Crying (FLAC)", 96000, 24},
+        {"Fever", "Chie Ayado", "Natural (Japanese Audiophile Vocal)", 96000, 24},
+        {"Grandma's Hands", "Livingston Taylor", "Ink (Chesky Records 192k)", 192000, 24},
+        {"An Evening in Paris", "Jacintha", "Here's to Ben (Groove Note)", 96000, 24},
+        {"Ain't No Sunshine", "Bill Withers", "Just as I Am (FLAC 24/96)", 96000, 24},
+        {"Hallelujah (Acoustic Studio)", "K.D. Lang", "Recollection (Hi-Res 192k)", 192000, 24},
+        {"Tears in Heaven", "Eric Clapton", "Unplugged (FLAC 96/24)", 96000, 24},
+        {"A Case of You", "Joni Mitchell", "Blue (Hi-Res 192kHz/24bit)", 192000, 24},
+        {"Way Down Deep", "Jennifer Warnes", "The Hunter (Audiophile FLAC)", 96000, 24},
+        {"Walk on the Wild Side", "Lou Reed", "Transformer (FLAC 96/24)", 96000, 24}
+    };
+
+    // 5. WAV (20 条未压缩 PCM 母带曲目)
+    static const MockItemDef kWavMocks[20] = {
+        {"Uncompressed Reference Track 01", "Telarc Classical Collection", "Telarc Digital Soundstage WAV", 96000, 24},
+        {"Dark Side of the Moon: Money", "Pink Floyd", "Dark Side of the Moon (Original PCM)", 44100, 16},
+        {"The Great Gate of Kiev", "Lorin Maazel & Cleveland Orch", "Mussorgsky: Pictures at an Exhibition", 96000, 24},
+        {"1812 Overture: Finale (Live Cannons)", "Erich Kunzel & Cincinnati Pops", "Tchaikovsky: 1812 (Audiophile PCM)", 96000, 24},
+        {"Time", "Pink Floyd", "Dark Side of the Moon (WAV Master)", 44100, 16},
+        {"Ride of the Valkyries", "Sir Georg Solti", "Wagner: Der Ring des Nibelungen", 44100, 16},
+        {"Smoke on the Water (Studio Monitor)", "Deep Purple", "Machine Head (Direct WAV)", 96000, 24},
+        {"Stairway to Heaven", "Led Zeppelin", "Led Zeppelin IV (Master PCM)", 44100, 16},
+        {"Also sprach Zarathustra: Intro", "Herbert von Karajan", "Strauss: Tone Poems (WAV)", 96000, 24},
+        {"Rhapsody in Blue", "Leonard Bernstein & NY Phil", "Gershwin: Rhapsody in Blue", 44100, 16},
+        {"Comfortably Numb", "Pink Floyd", "The Wall (Uncompressed WAV)", 44100, 16},
+        {"Symphonie Fantastique: Scaffold", "Charles Munch", "Berlioz: Symphonie Fantastique", 44100, 16},
+        {"Black Dog", "Led Zeppelin", "Led Zeppelin IV (Master WAV)", 44100, 16},
+        {"Carmina Burana: O Fortuna", "Eugen Jochum", "Orff: Carmina Burana (Reference WAV)", 96000, 24},
+        {"Wish You Were Here", "Pink Floyd", "Wish You Were Here (WAV)", 44100, 16},
+        {"Danse Macabre, Op. 40", "David Zinman", "Saint-Saëns: Orchestral Works", 96000, 24},
+        {"Kashmir", "Led Zeppelin", "Physical Graffiti (PCM Master)", 44100, 16},
+        {"Scheherazade: Sinbad's Ship", "Fritz Reiner & Chicago Symphony", "Rimsky-Korsakov: Scheherazade", 96000, 24},
+        {"The Chain", "Fleetwood Mac", "Rumours (Uncompressed WAV)", 44100, 16},
+        {"Brahms: Hungarian Dance No. 5", "Claudio Abbado", "Brahms: 21 Hungarian Dances", 96000, 24}
+    };
+
+    auto fill_mock = [&](AudioFormat fmt, const MockItemDef defs[20], uint64_t id_base) {
+        auto& list = format_buckets[fmt];
+        if (!list.empty()) return; // 若本地已真实扫描出该格式则保留真实数据
+        list.reserve(20);
+        for (int i = 0; i < 20; ++i) {
+            Track t;
+            t.id = id_base + i + 1;
+            t.format = fmt;
+            t.title = defs[i].title;
+            t.artist = defs[i].artist;
+            t.album = defs[i].album;
+            t.sample_rate = defs[i].sample_rate;
+            t.bit_depth = defs[i].bit_depth;
+            t.duration_sec = 210 + i * 15;
+            list.push_back(std::move(t));
+        }
+    };
+
+    fill_mock(AudioFormat::DSD_DSF, kDsdDsfMocks, 10000);
+    fill_mock(AudioFormat::DSD_DFF, kDsdDffMocks, 11000);
+    fill_mock(AudioFormat::ALAC,    kAlacMocks,    12000);
+    fill_mock(AudioFormat::FLAC,    kFlacMocks,    13000);
+    fill_mock(AudioFormat::WAV,     kWavMocks,     14000);
+}
+#endif
+// ==============================================================================
+// [TODO: UI验证临时模拟数据 - 验证完毕后可整块删除] END
+// ==============================================================================
 } // namespace
 
 void ScanMusicWidget::drawSearchIcon(ImDrawList* dl, ImVec2 center, float radius, float offset_x, float offset_y,
@@ -403,6 +567,11 @@ void ScanMusicWidget::renderCompletedState([[maybe_unused]] ImDrawList* dl, ImVe
         format_buckets[track.format].push_back(track);
     }
 
+#if ENABLE_UI_MOCK_DATA
+    // [TODO: UI验证临时模拟数据] 注入除 MP3 外每种发烧音频格式 20 条模拟数据，供多行纵向与横向滚动排版验证
+    injectMockTracksIfEmpty(format_buckets);
+#endif
+
     const float pad_x = 24.0f;
     const float pad_y = 18.0f;
     const float content_w = (p_max.x - p_min.x) - pad_x * 2.0f;
@@ -442,8 +611,10 @@ void ScanMusicWidget::renderCompletedState([[maybe_unused]] ImDrawList* dl, ImVe
         ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 0.0f);
 
         // 3. 启用 ImGuiWindowFlags_HorizontalScrollbar 允许横向排版与计算滚动范围
+        //    添加 ImGuiWindowFlags_NoScrollWithMouse 禁止滚轮控制横向滚动，使鼠标滚轮自然冒泡向上控制纵向主页面滚动
         ImGui::BeginChild(row_id.c_str(), ImVec2(content_w, card_h + 12.0f), false,
-                          ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_NoBackground);
+                          ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_NoBackground |
+                              ImGuiWindowFlags_NoScrollWithMouse);
 
         // 4. 支持鼠标拖拽、触控屏手指滑动 (Touch & Mouse Drag Scrolling)
         static bool is_dragging_row = false;
@@ -464,18 +635,6 @@ void ScanMusicWidget::renderCompletedState([[maybe_unused]] ImDrawList* dl, ImVe
             } else {
                 is_dragging_row = false;
                 active_drag_row_id = "";
-            }
-        }
-
-        // 5. 支持滚轮与触控板双指滑动
-        if (is_row_hovered) {
-            float wheel_y = ImGui::GetIO().MouseWheel;
-            float wheel_x = ImGui::GetIO().MouseWheelH;
-            if (wheel_y != 0.0f) {
-                ImGui::SetScrollX(ImGui::GetScrollX() - wheel_y * 50.0f);
-            }
-            if (wheel_x != 0.0f) {
-                ImGui::SetScrollX(ImGui::GetScrollX() + wheel_x * 50.0f);
             }
         }
 

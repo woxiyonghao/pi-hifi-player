@@ -172,12 +172,9 @@ void MusicScanManager::scanWorker(std::stop_token stop_token, std::filesystem::p
                     scanned_tracks_.push_back(track);
                 }
 
-                std::cout << "[MusicScanManager] 发现曲目 #" << track.id 
-                          << " | 歌名: " << track.title 
-                          << " | 歌手: " << track.artist 
-                          << " | 专辑: " << track.album 
-                          << " | 规格: " << track.getFormatBadge() 
-                          << " | 路径: " << track.file_path << std::endl;
+                std::cout << "[MusicScanManager] 发现曲目 #" << track.id << " | 歌名: " << track.title
+                          << " | 歌手: " << track.artist << " | 专辑: " << track.album
+                          << " | 规格: " << track.getFormatBadge() << " | 路径: " << track.file_path << std::endl;
 
                 // 触发实时进度回调
                 if (progress_callback_) {
