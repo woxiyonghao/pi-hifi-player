@@ -1,6 +1,7 @@
 
 #pragma once
 #include "types/MusicModel.hpp"
+#include "audio_engine/AudioEngine.hpp"
 #include <vector>
 #include <string>
 #include <optional>
@@ -69,22 +70,22 @@ public:
     void seek(double target_sec);
     // 帧驱动心跳更新 (在 60fps 主循环中推进模拟播放进度)
     void update(double delta_time);
-    double getCurrentTimeSec() const { return current_time_sec_; }
-    double getDurationSec() const { return duration_sec_; }
+    double getCurrentTimeSec() const;
+    double getDurationSec() const;
     // 获取当前播放百分比 [0.0f, 1.0f]，直接供 UI 进度条绘制
     float getProgress() const {
-        return (duration_sec_ > 0.0) ? static_cast<float>(current_time_sec_ / duration_sec_) : 0.0f;
+        double d = getDurationSec();
+        return (d > 0.0) ? static_cast<float>(getCurrentTimeSec() / d) : 0.0f;
     }
     // -------------------------------------------------------------------------
     // [音量与发烧硬件控制 (0.0f ~ 1.0f)]
     // -------------------------------------------------------------------------
-    void setVolume(float volume) {
-        volume_ = std::clamp(volume, 0.0f, 1.0f);
-    }
-    float getVolume() const { return is_muted_ ? 0.0f : volume_; }
+    void setVolume(float volume);
+    float getVolume() const;
     float getRawVolume() const { return volume_; } // 获取静音前的原始音量
-    void toggleMute() { is_muted_ = !is_muted_; }
-    bool isMuted() const { return is_muted_; }
+    void toggleMute();
+    bool isMuted() const;
+    bool isBitPerfectDirect() const; // 源码直通状态 (100% 音量且未静音)
     // -------------------------------------------------------------------------
     // [播放模式切换]
     // -------------------------------------------------------------------------

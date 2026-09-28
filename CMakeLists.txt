@@ -34,6 +34,9 @@ elseif(UNIX AND NOT APPLE)
 endif()
 
 # 5. 源码收集
+# 引入专有独立的发烧音频核心 SDK
+add_subdirectory(audio_engine)
+
 # Dear ImGui 核心与 SDL2 + OpenGL3 后端实现
 set(
     IMGUI_SOURCES
@@ -69,13 +72,16 @@ target_include_directories(
 # 8. 链接依赖库
 if(APPLE)
     target_link_libraries(${PROJECT_NAME} PRIVATE
+        audio_engine
         ${SDL2_LIBRARIES}
         OpenGL::GL
     )
 else()
     target_link_libraries(${PROJECT_NAME} PRIVATE
+        audio_engine
         pthread
         ${SDL2_LIBRARIES}
         ${GLESV2_LIBRARIES}
     )
 endif()
+

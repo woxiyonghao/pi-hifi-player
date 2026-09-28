@@ -2,22 +2,26 @@
 #include <random> // 提供随机数引擎供 Shuffle 模式使用
 
 PlayerAdmin::PlayerAdmin() {
-    // 构造时保持默认空闲态
+    // 注册音频底层 EOF 事件：曲目硬件推流完毕后自动切下一首
+    audio_engine::AudioEngine::getInstance().setEofCallback([this]() {
+        this->next();
+    });
 }
 
 // ==============================================================================
 // 1. 基础播放控制实现
 // ==============================================================================
 void PlayerAdmin::play() {
-    // 必须有在播曲目才能启动播放
     if (current_track_.has_value()) {
         state_ = PlaybackState::Playing;
+        audio_engine::AudioEngine::getInstance().play();
     }
 }
 
 void PlayerAdmin::pause() {
     if (state_ == PlaybackState::Playing) {
         state_ = PlaybackState::Paused;
+        audio_engine::AudioEngine::getInstance().pause();
     }
 }
 
@@ -32,6 +36,7 @@ void PlayerAdmin::togglePlayPause() {
 void PlayerAdmin::stop() {
     state_ = PlaybackState::Idle;
     current_time_sec_ = 0.0;
+    audio_engine::AudioEngine::getInstance().stop();
 }
 
 // ==============================================================================
@@ -42,6 +47,16 @@ void PlayerAdmin::playTrack(const Track& track) {
     duration_sec_ = static_cast<double>(track.duration_sec);
     current_time_sec_ = 0.0;
     state_ = PlaybackState::Playing;
+
+    if (!track.file_path.empty()) {
+        bool ok = audio_engine::AudioEngine::getInstance().openAndPlay(track.file_path);
+        if (ok) {
+            double engine_dur = audio_engine::AudioEngine::getInstance().getDurationSec();
+            if (engine_dur > 0.0) {
+                duration_sec_ = engine_dur;
+            }
+        }
+    }
 }
 
 void PlayerAdmin::playPlaylist(const Playlist& playlist, size_t start_index) {
@@ -111,7 +126,7 @@ void PlayerAdmin::previous() {
     }
 
     // 专业播放器人机体验：如果当前歌曲已播放超过 3 秒，按上一首优先回到歌曲开头
-    if (current_time_sec_ > 3.0) {
+    if (getCurrentTimeSec() > 3.0) {
         seek(0.0);
         return;
     }
@@ -133,23 +148,66 @@ void PlayerAdmin::previous() {
 // 3. 时间轴与进度步进实现
 // ==============================================================================
 void PlayerAdmin::seek(double target_sec) {
-    current_time_sec_ = std::clamp(target_sec, 0.0, duration_sec_);
+    current_time_sec_ = std::clamp(target_sec, 0.0, getDurationSec());
+    audio_engine::AudioEngine::getInstance().seek(current_time_sec_);
 }
 
 void PlayerAdmin::update(double delta_time) {
-    // 只有处于正在播放状态才向前推进时间
-    if (state_ == PlaybackState::Playing) {
+    auto& engine = audio_engine::AudioEngine::getInstance();
+    if (engine.isPlaying()) {
+        current_time_sec_ = engine.getCurrentTimeSec();
+    } else if (state_ == PlaybackState::Playing) {
+        // 当播放在线/模拟无物理文件的曲目时，继续作为虚拟走表兜底
         current_time_sec_ += delta_time;
-
-        // 播放完毕检测：自动触发切到下一首
         if (duration_sec_ > 0.0 && current_time_sec_ >= duration_sec_) {
             next();
         }
     }
 }
 
+double PlayerAdmin::getCurrentTimeSec() const {
+    auto& engine = audio_engine::AudioEngine::getInstance();
+    if (engine.isPlaying() || engine.isPaused()) {
+        return engine.getCurrentTimeSec();
+    }
+    return current_time_sec_;
+}
+
+double PlayerAdmin::getDurationSec() const {
+    auto& engine = audio_engine::AudioEngine::getInstance();
+    if ((engine.isPlaying() || engine.isPaused()) && engine.getDurationSec() > 0.0) {
+        return engine.getDurationSec();
+    }
+    return duration_sec_;
+}
+
 // ==============================================================================
-// 4. 循环模式切换实现
+// 4. 音量与发烧硬件控制实现
+// ==============================================================================
+void PlayerAdmin::setVolume(float volume) {
+    volume_ = std::clamp(volume, 0.0f, 1.0f);
+    audio_engine::AudioEngine::getInstance().setVolume(volume_);
+}
+
+float PlayerAdmin::getVolume() const {
+    return is_muted_ ? 0.0f : volume_;
+}
+
+void PlayerAdmin::toggleMute() {
+    is_muted_ = !is_muted_;
+    audio_engine::AudioEngine::getInstance().setMuted(is_muted_);
+}
+
+bool PlayerAdmin::isMuted() const {
+    return is_muted_;
+}
+
+bool PlayerAdmin::isBitPerfectDirect() const {
+    return audio_engine::AudioEngine::getInstance().isBitPerfectDirect();
+}
+
+// ==============================================================================
+// 5. 循环模式切换实现
 // ==============================================================================
 void PlayerAdmin::cyclePlayMode() {
     switch (play_mode_) {
