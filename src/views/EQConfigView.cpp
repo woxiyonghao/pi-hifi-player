@@ -344,20 +344,7 @@ void EQConfigView::renderCurveCanvas(ImDrawList* dl, ImVec2 card_min, ImVec2 car
     dl->AddRectFilled(ImVec2(x0, y0), ImVec2(x1, y1), IM_COL32(12, 16, 24, 215), 8.0f);
     dl->AddRect(ImVec2(x0, y0), ImVec2(x1, y1), UIConfig::Color::GlassBorder, 8.0f, 0, 1.0f);
 
-    // 2. 刻度基准参考线 (+12dB, 0dB, -12dB)
-    const ImU32 col_grid = IM_COL32(255, 255, 255, 18);
-    dl->AddLine(ImVec2(x0 + 4.0f, y_mid - max_dev), ImVec2(x1 - 4.0f, y_mid - max_dev), col_grid, 1.0f);
-    dl->AddLine(ImVec2(x0 + 4.0f, y_mid), ImVec2(x1 - 4.0f, y_mid), IM_COL32(255, 255, 255, 38), 1.0f);
-    dl->AddLine(ImVec2(x0 + 4.0f, y_mid + max_dev), ImVec2(x1 - 4.0f, y_mid + max_dev), col_grid, 1.0f);
-
-    // 左侧微型 dB 刻度标字
-    if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-    dl->AddText(ImVec2(x0 + 8.0f, y_mid - max_dev - 6.0f), IM_COL32(160, 175, 195, 150), "+12");
-    dl->AddText(ImVec2(x0 + 8.0f, y_mid - 6.0f), IM_COL32(160, 175, 195, 190), " 0dB");
-    dl->AddText(ImVec2(x0 + 8.0f, y_mid + max_dev - 6.0f), IM_COL32(160, 175, 195, 150), "-12");
-    if (Fonts::Small) ImGui::PopFont();
-
-    // 3. 计算 10 个频段的中心采样点坐标
+    // 2. 计算 10 个频段的中心采样点坐标 (严格垂直对齐下方 10 个推子中心点)
     const float col_w = total_w / static_cast<float>(NUM_BANDS);
     ImVec2 pts[NUM_BANDS];
 
@@ -368,13 +355,24 @@ void EQConfigView::renderCurveCanvas(ImDrawList* dl, ImVec2 card_min, ImVec2 car
         pts[i] = ImVec2(cx, cy);
     }
 
+    // 3. 刻度基准参考线 (+12dB, 0dB, -12dB，严格对齐 10 个频段推子有效宽度)
+    const ImU32 col_grid = IM_COL32(255, 255, 255, 18);
+    dl->AddLine(ImVec2(pts[0].x, y_mid - max_dev), ImVec2(pts[NUM_BANDS - 1].x, y_mid - max_dev), col_grid, 1.0f);
+    dl->AddLine(ImVec2(pts[0].x, y_mid), ImVec2(pts[NUM_BANDS - 1].x, y_mid), IM_COL32(255, 255, 255, 38), 1.0f);
+    dl->AddLine(ImVec2(pts[0].x, y_mid + max_dev), ImVec2(pts[NUM_BANDS - 1].x, y_mid + max_dev), col_grid, 1.0f);
+
+    // 左侧微型 dB 刻度标字
+    if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+    dl->AddText(ImVec2(x0 + 8.0f, y_mid - max_dev - 6.0f), IM_COL32(160, 175, 195, 150), "+12");
+    dl->AddText(ImVec2(x0 + 8.0f, y_mid - 6.0f), IM_COL32(160, 175, 195, 190), " 0dB");
+    dl->AddText(ImVec2(x0 + 8.0f, y_mid + max_dev - 6.0f), IM_COL32(160, 175, 195, 150), "-12");
+    if (Fonts::Small) ImGui::PopFont();
+
     // 4. Catmull-Rom 三次样条插值生成高精细连续平滑频响曲线
+    // 起止点精准收束于 10 个频段推子中心范围 (从 31Hz 到 16kHz，不往视窗两侧多余延伸)
     constexpr int SUBDIV = 8;
     std::vector<ImVec2> curve_pts;
-    curve_pts.reserve((NUM_BANDS - 1) * SUBDIV + 3);
-
-    // 左端延伸到视窗左壁
-    curve_pts.push_back(ImVec2(x0, pts[0].y));
+    curve_pts.reserve((NUM_BANDS - 1) * SUBDIV + 1);
 
     for (size_t i = 0; i < NUM_BANDS - 1; ++i) {
         ImVec2 p0 = (i == 0) ? pts[0] : pts[i - 1];
@@ -399,7 +397,6 @@ void EQConfigView::renderCurveCanvas(ImDrawList* dl, ImVec2 card_min, ImVec2 car
         }
     }
     curve_pts.push_back(pts[NUM_BANDS - 1]);
-    curve_pts.push_back(ImVec2(x1, pts[NUM_BANDS - 1].y)); // 右端延伸
 
     // 5. 曲线下方发光半透渐变填充 (Gradient Fill under curve)
     if (is_enabled_) {
