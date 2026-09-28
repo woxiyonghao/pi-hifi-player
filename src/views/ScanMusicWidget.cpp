@@ -1,4 +1,5 @@
 #include "views/ScanMusicWidget.hpp"
+#include "public/AppConfig.hpp"
 #include "public/Font.hpp"
 #include "public/UIConfig.hpp"
 #include <algorithm>
@@ -8,17 +9,6 @@
 #include <filesystem>
 
 ScanMusicWidget::ScanMusicWidget() {
-    // 动态自适应不同开发机 macOS 用户与树莓派 Linux 路径
-    const char* home = std::getenv("HOME");
-    if (home) {
-        std::snprintf(default_scan_path_, sizeof(default_scan_path_), "%s/Music", home);
-    } else {
-#if defined(HIFI_PLATFORM_RPI)
-        std::snprintf(default_scan_path_, sizeof(default_scan_path_), "/home/pi/Music");
-#else
-        std::snprintf(default_scan_path_, sizeof(default_scan_path_), "/Music");
-#endif
-    }
 }
 
 void ScanMusicWidget::drawSearchIcon(ImDrawList* dl, ImVec2 center, float radius, float offset_x, float offset_y, bool is_scanning) {
@@ -162,10 +152,11 @@ void ScanMusicWidget::renderIdleState(ImDrawList* dl, ImVec2 center, [[maybe_unu
     // 点击启动异步扫描，状态将自动切入 Scanning！
     if (is_clicked) {
         std::error_code ec;
-        if (!std::filesystem::exists(default_scan_path_, ec)) {
-            std::filesystem::create_directories(default_scan_path_, ec);
+        const std::string& scan_path = AppConfig::Path::getMusicDir();
+        if (!std::filesystem::exists(scan_path, ec)) {
+            std::filesystem::create_directories(scan_path, ec);
         }
-        MusicScanManager::getInstance().startScan(default_scan_path_);
+        MusicScanManager::getInstance().startScan(scan_path);
     }
 }
 

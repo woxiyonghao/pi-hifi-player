@@ -1,4 +1,5 @@
 #include "tools/MusicScanManager.hpp"
+#include "public/AppConfig.hpp"
 #include <iostream>
 #include <algorithm>
 
@@ -11,6 +12,8 @@ bool MusicScanManager::startScan(const std::filesystem::path& root_path) {
         std::cerr << "[MusicScanManager] 扫描任务已在运行中，请勿重复触发。" << std::endl;
         return false;
     }
+
+    std::filesystem::path scan_target = root_path.empty() ? std::filesystem::path(AppConfig::Path::getMusicDir()) : root_path;
 
     // 停止并回收上一次的工作线程
     if (worker_thread_.joinable()) {
@@ -25,8 +28,8 @@ bool MusicScanManager::startScan(const std::filesystem::path& root_path) {
     }
 
     // C++20 std::jthread 使用 lambda 完美接收 stop_token 并调用成员函数
-    worker_thread_ = std::jthread([this, root_path](std::stop_token stop_token) {
-        scanWorker(stop_token, root_path);
+    worker_thread_ = std::jthread([this, scan_target](std::stop_token stop_token) {
+        scanWorker(stop_token, scan_target);
     });
     return true;
 }

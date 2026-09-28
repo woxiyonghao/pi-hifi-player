@@ -41,6 +41,5 @@ private:
     void drawLaserWarpAnimation(ImDrawList* dl, ImVec2 emitter_pos, ImVec2 p_min, ImVec2 p_max);
 
 private:
-    char default_scan_path_[256] = "";
     float anim_timer_ = 0.0f; // 驱动待机呼吸与悬浮的连续时间基准
 };

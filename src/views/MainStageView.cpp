@@ -5,17 +5,6 @@
 #include <cstdio>
 
 MainStageView::MainStageView() {
-    // 动态获取当前用户主目录，自适应不同开发机 (macOS) 与树莓派 (Linux)
-    const char* home = std::getenv("HOME");
-    if (home) {
-        std::snprintf(scan_path_buf_, sizeof(scan_path_buf_), "%s/Music", home);
-    } else {
-#if defined(HIFI_PLATFORM_RPI)
-        std::snprintf(scan_path_buf_, sizeof(scan_path_buf_), "/home/pi/Music");
-#else
-        std::snprintf(scan_path_buf_, sizeof(scan_path_buf_), "/Music");
-#endif
-    }
 }
 
 void MainStageView::renderScanMusicView(float x, float y, float w, float h, std::vector<Playlist>& playlists) {
