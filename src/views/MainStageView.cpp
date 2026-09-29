@@ -1659,7 +1659,7 @@ void MainStageView::renderThemeSettingsView(float x, float y, float w, float h) 
     const char* mode_labels[4] = {
         "48列全景 LED 频谱",
         "麦景图动圈大表头",
-        "金嗓子功放液晶显示",
+        "金嗓子动圈大表头",
         "极简纯黑发烧机架"
     };
 

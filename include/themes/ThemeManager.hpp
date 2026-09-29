@@ -22,7 +22,7 @@ enum class ThemeId : int {
 enum class BackgroundVisualMode : int {
     LEDSpectrum = 0, // 48 列全屏分段 LED 律动矩阵 (全屏贯通)
     VUMeter = 1,     // 发烧双通道机械动圈大表头 (全景对称)
-    Accuphase = 2,   // 金嗓子功放原机液晶双表头显示 (Accuphase E-260 Display)
+    Accuphase = 2,   // 金嗓子动圈大表头 (Accuphase Precision Power Meter)
     PureBlack = 3    // 极简纯净发烧机架 (0 干扰纯音直通)
 };
 

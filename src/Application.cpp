@@ -54,59 +54,6 @@ inline std::string truncateUtf8(const std::string& str, size_t max_chars) {
     return str.substr(0, byte_index);
 }
 
-// 跨平台 BMP 贴图加载器 (支持 macOS、Linux 与树莓派 5)
-GLuint loadTextureFromBMP(const std::string& filename) {
-    std::vector<std::string> search_paths = {
-        filename,
-        "../" + filename,
-        "../../" + filename
-    };
-    char* base_path = SDL_GetBasePath();
-    if (base_path) {
-        search_paths.push_back(std::string(base_path) + filename);
-        search_paths.push_back(std::string(base_path) + "../" + filename);
-        SDL_free(base_path);
-    }
-
-    std::string found_path;
-    for (const auto& p : search_paths) {
-        if (std::filesystem::exists(p)) {
-            found_path = p;
-            break;
-        }
-    }
-
-    if (found_path.empty()) {
-        std::cerr << "[Texture] 无法定位图片文件: " << filename << std::endl;
-        return 0;
-    }
-
-    SDL_Surface* surf = SDL_LoadBMP(found_path.c_str());
-    if (!surf) {
-        std::cerr << "[Texture] SDL_LoadBMP 载入失败: " << SDL_GetError() << std::endl;
-        return 0;
-    }
-
-    SDL_Surface* formatted = SDL_ConvertSurfaceFormat(surf, SDL_PIXELFORMAT_RGBA32, 0);
-    SDL_FreeSurface(surf);
-    if (!formatted) {
-        std::cerr << "[Texture] SDL_ConvertSurfaceFormat 转换失败: " << SDL_GetError() << std::endl;
-        return 0;
-    }
-
-    GLuint tex_id = 0;
-    glGenTextures(1, &tex_id);
-    glBindTexture(GL_TEXTURE_2D, tex_id);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, formatted->w, formatted->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, formatted->pixels);
-
-    SDL_FreeSurface(formatted);
-    std::cout << "[Texture] 成功载入发烧原机贴图: " << found_path << " (ID: " << tex_id << ")" << std::endl;
-    return tex_id;
-}
 
 } // namespace
 
@@ -347,7 +294,7 @@ void Application::renderBackground(float screen_w, float screen_h) {
             l = std::clamp((levels12[0] + levels12[1] + levels12[2] + levels12[3] + levels12[4]) * 0.28f, 0.0f, 1.0f);
             r = std::clamp((levels12[2] + levels12[3] + levels12[4] + levels12[5] + levels12[6]) * 0.28f, 0.0f, 1.0f);
         }
-        renderAccuphaseBackground(screen_w, screen_h, l, r);
+        accuphase_renderer_.render(screen_w, screen_h, l, r);
         return;
     }
 
@@ -665,96 +612,6 @@ void Application::renderCreatePlaylistModal(float screen_w, float screen_h) {
     ImGui::PopStyleColor(2);
 }
 
-void Application::renderAccuphaseBackground(float screen_w, float screen_h, float raw_level_l, float raw_level_r) {
-    if (accuphase_tex_id_ == 0) {
-        accuphase_tex_id_ = loadTextureFromBMP("assets/themes/accuphase_bg.bmp");
-    }
-
-    ImDrawList* bg_dl = ImGui::GetBackgroundDrawList();
-
-    // 1. 绘制金嗓子 E-260 1024x600 原机全景贴图
-    if (accuphase_tex_id_ != 0) {
-        bg_dl->AddImage(
-            static_cast<ImTextureID>(accuphase_tex_id_),
-            ImVec2(0.0f, 0.0f),
-            ImVec2(screen_w, screen_h)
-        );
-    } else {
-        bg_dl->AddRectFilled(ImVec2(0.0f, 0.0f), ImVec2(screen_w, screen_h), IM_COL32(14, 16, 20, 255));
-    }
-
-    // 2. 金嗓子原机左右双表头动圈物理模拟 (Attack ~12ms, Decay ~280ms)
-    // 刻度弧度范围: -40dB 对应约 -125度 (-2.18 rad), +3dB 对应约 -55度 (-0.96 rad), 摆幅 1.22 rad
-    constexpr float kAccMinAngle = -2.18f;
-    constexpr float kAccSweep = 1.22f;
-
-    float norm_l = std::pow(std::clamp(raw_level_l, 0.0f, 1.0f), 0.85f);
-    float norm_r = std::pow(std::clamp(raw_level_r, 0.0f, 1.0f), 0.85f);
-
-    float target_l = kAccMinAngle + norm_l * kAccSweep;
-    float target_r = kAccMinAngle + norm_r * kAccSweep;
-
-    if (target_l > acc_needle_l_) {
-        acc_needle_l_ += (target_l - acc_needle_l_) * 0.35f;
-    } else {
-        acc_needle_l_ += (target_l - acc_needle_l_) * 0.07f;
-    }
-
-    if (target_r > acc_needle_r_) {
-        acc_needle_r_ += (target_r - acc_needle_r_) * 0.35f;
-    } else {
-        acc_needle_r_ += (target_r - acc_needle_r_) * 0.07f;
-    }
-
-    // 3. 动态表头背光微光晕与跳动金属细针
-    const float needle_len = 90.0f;
-    ImVec2 pivot_l(196.5f, 345.5f);
-    ImVec2 pivot_r(753.5f, 345.5f);
-
-    // 左声道表盘
-    bg_dl->PushClipRect(ImVec2(84.0f, 230.0f), ImVec2(365.0f, 360.0f), true);
-    if (raw_level_l > 0.02f) {
-        int glow_a = static_cast<int>(40.0f * (0.6f + 0.4f * norm_l));
-        bg_dl->AddCircleFilled(ImVec2(196.5f, 295.0f), 55.0f, IM_COL32(255, 230, 160, glow_a));
-    }
-    ImVec2 tip_l(pivot_l.x + std::cos(acc_needle_l_) * needle_len, pivot_l.y + std::sin(acc_needle_l_) * needle_len);
-    bg_dl->AddLine(pivot_l, tip_l, IM_COL32(255, 240, 200, 40), 3.5f);
-    bg_dl->AddLine(pivot_l, tip_l, IM_COL32(20, 18, 16, 245), 2.0f);
-    bg_dl->AddCircleFilled(pivot_l, 5.0f, IM_COL32(28, 25, 22, 255));
-    bg_dl->PopClipRect();
-
-    // 右声道表盘
-    bg_dl->PushClipRect(ImVec2(645.0f, 230.0f), ImVec2(926.0f, 360.0f), true);
-    if (raw_level_r > 0.02f) {
-        int glow_a = static_cast<int>(40.0f * (0.6f + 0.4f * norm_r));
-        bg_dl->AddCircleFilled(ImVec2(753.5f, 295.0f), 55.0f, IM_COL32(255, 230, 160, glow_a));
-    }
-    ImVec2 tip_r(pivot_r.x + std::cos(acc_needle_r_) * needle_len, pivot_r.y + std::sin(acc_needle_r_) * needle_len);
-    bg_dl->AddLine(pivot_r, tip_r, IM_COL32(255, 240, 200, 40), 3.5f);
-    bg_dl->AddLine(pivot_r, tip_r, IM_COL32(20, 18, 16, 245), 2.0f);
-    bg_dl->AddCircleFilled(pivot_r, 5.0f, IM_COL32(28, 25, 22, 255));
-    bg_dl->PopClipRect();
-
-    // 4. 标志性翡翠绿 Accuphase 徽标呼吸微光 (机皇灵魂)
-    float logo_pulse = (std::sin(static_cast<float>(ImGui::GetTime()) * 1.5f) + 1.0f) * 0.5f;
-    int logo_a = static_cast<int>(14.0f + 20.0f * logo_pulse);
-    bg_dl->AddRectFilled(ImVec2(440.0f, 245.0f), ImVec2(584.0f, 292.0f), IM_COL32(0, 235, 150, logo_a), 10.0f);
-
-    // 5. 经典红光 7 段数码管音量读数 (-24 dB / -- dB)
-    auto& player = PlayerAdmin::getInstance();
-    float vol = player.getVolume();
-    int db_atten = (vol > 0.01f) ? static_cast<int>(std::round((1.0f - vol) * -50.0f)) : -99;
-    char db_buf[16];
-    if (db_atten <= -99) {
-        std::snprintf(db_buf, sizeof(db_buf), " -- ");
-    } else {
-        std::snprintf(db_buf, sizeof(db_buf), "-%02d", std::abs(db_atten));
-    }
-
-    if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-    bg_dl->AddText(ImVec2(495.0f, 340.0f), IM_COL32(255, 45, 45, 240), db_buf);
-    if (Fonts::Small) ImGui::PopFont();
-}
 
 int Application::run() {
     Uint64 last_time = SDL_GetPerformanceCounter();
@@ -778,11 +635,6 @@ int Application::run() {
 }
 
 void Application::shutdown() {
-    if (accuphase_tex_id_ != 0) {
-        glDeleteTextures(1, &accuphase_tex_id_);
-        accuphase_tex_id_ = 0;
-    }
-
     if (gl_context_) {
         ImGui_ImplOpenGL3_Shutdown();
         ImGui_ImplSDL2_Shutdown();
