@@ -1463,7 +1463,6 @@ void MainStageView::renderThemeSettingsView(float x, float y, float w, float h) 
     GlassCardRenderer::drawCard(dl, card_min, card_max, UIConfig::Layout::ContainerRounding, "main_stage");
 
     auto& tm = ThemeManager::getInstance();
-    const auto& cur_preset = tm.getCurrentPreset();
     ThemeId cur_theme = tm.getCurrentTheme();
 
     const ImU32 accent = UIConfig::Color::Accent;
@@ -1533,18 +1532,7 @@ void MainStageView::renderThemeSettingsView(float x, float y, float w, float h) 
     dl->AddText(ImVec2(sec_x0 + 16.0f, s1_head_y), UIConfig::Color::TextActive, "预设");
     if (Fonts::Regular) ImGui::PopFont();
 
-    // Header 右侧当前激活主题胶囊
-    std::string act_info = (cur_theme == ThemeId::Custom) ? "● 当前激活：发烧友自定义" : ("● 当前激活：" + cur_preset.name);
-    if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-    float tag_w = ImGui::CalcTextSize(act_info.c_str()).x + 18.0f;
-    float tag_h = 22.0f;
-    float tag_x = sec_x1 - 14.0f - tag_w;
-    float tag_y = s1_head_y - 2.0f;
 
-    dl->AddRectFilled(ImVec2(tag_x, tag_y), ImVec2(tag_x + tag_w, tag_y + tag_h), IM_COL32(r, g, b, 45), 11.0f);
-    dl->AddRect(ImVec2(tag_x, tag_y), ImVec2(tag_x + tag_w, tag_y + tag_h), IM_COL32(r, g, b, 140), 11.0f, 0, 1.0f);
-    dl->AddText(ImVec2(tag_x + 9.0f, tag_y + 3.5f), UIConfig::Color::TextActive, act_info.c_str());
-    if (Fonts::Small) ImGui::PopFont();
 
     // [Options] 4 张名机卡片 (2 行 × 2 列)
     const auto& presets = tm.getAllPresets();

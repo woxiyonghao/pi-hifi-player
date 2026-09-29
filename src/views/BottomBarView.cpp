@@ -17,65 +17,98 @@ void BottomBarView::drawCapsuleBackground(ImDrawList* dl, ImVec2 p_min, ImVec2 p
 }
 
 // ==============================================================================
-// 1.5 渲染整个胶囊背景的播放进度 (颜色与 SidebarView 选中的高亮胶囊严格对齐)
+// 1.5 渲染中间发烧级音频进度条与时间轴 (支持触控与拖拽 Seek)
 // ==============================================================================
-void BottomBarView::renderProgressBackground(ImDrawList* dl, ImVec2 p_min, ImVec2 p_max, float rounding) {
+void BottomBarView::renderProgressBar(ImDrawList* dl, float left_bound, float right_bound, float center_y) {
     auto& player = PlayerAdmin::getInstance();
+    double cur_time = player.getCurrentTimeSec();
+    double dur_time = player.getDurationSec();
     float progress = std::clamp(player.getProgress(), 0.0f, 1.0f);
 
-    if (progress <= 0.001f) {
+    int cur_sec = static_cast<int>(std::max(0.0, cur_time));
+    int dur_sec = static_cast<int>(std::max(0.0, dur_time));
+
+    char cur_buf[16];
+    char dur_buf[16];
+    std::snprintf(cur_buf, sizeof(cur_buf), "%02d:%02d", cur_sec / 60, cur_sec % 60);
+    if (dur_sec > 0) {
+        std::snprintf(dur_buf, sizeof(dur_buf), "%02d:%02d", dur_sec / 60, dur_sec % 60);
+    } else {
+        std::snprintf(dur_buf, sizeof(dur_buf), "--:--");
+    }
+
+    if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+    ImVec2 cur_sz = ImGui::CalcTextSize(cur_buf);
+    ImVec2 dur_sz = ImGui::CalcTextSize(dur_buf);
+
+    float time_pad = 8.0f;
+    float track_x0 = left_bound + cur_sz.x + time_pad;
+    float track_x1 = right_bound - dur_sz.x - time_pad;
+    float track_w = track_x1 - track_x0;
+
+    if (track_w < 50.0f) {
+        if (Fonts::Small) ImGui::PopFont();
         return;
     }
 
-    float total_w = p_max.x - p_min.x;
-    float fill_x = p_min.x + total_w * progress;
+    // 交互响应热区
+    ImGui::SetCursorScreenPos(ImVec2(track_x0 - 4.0f, center_y - 14.0f));
+    ImGui::InvisibleButton("##BottomBarTrackSeekBtn", ImVec2(track_w + 8.0f, 28.0f));
+    bool is_hovered = ImGui::IsItemHovered();
+    bool is_active = ImGui::IsItemActive();
 
-    // 严密圆角裁切：保证进度从左往右推进时，两端半圆与胶囊物理轮廓完美吻合，绝无溢出
-    dl->PushClipRect(ImVec2(p_min.x, p_min.y - 4.0f), ImVec2(fill_x, p_max.y + 4.0f), true);
+    if (is_active && dur_time > 0.0) {
+        float mouse_x = ImGui::GetIO().MousePos.x;
+        float new_progress = std::clamp((mouse_x - track_x0) / track_w, 0.0f, 1.0f);
+        player.seek(static_cast<double>(new_progress) * dur_time);
+        progress = new_progress;
+    }
 
+    // 1. 轨道底槽
+    const float track_h = 4.0f;
+    const float track_y = center_y - track_h * 0.5f;
+    dl->AddRectFilled(ImVec2(track_x0, track_y), ImVec2(track_x1, track_y + track_h), 
+                      IM_COL32(255, 255, 255, 30), 2.0f);
+
+    // 2. 激活进度填充
     const ImU32 accent = UIConfig::Color::Accent;
     const ImU32 r = (accent >> IM_COL32_R_SHIFT) & 0xFF;
     const ImU32 g = (accent >> IM_COL32_G_SHIFT) & 0xFF;
     const ImU32 b = (accent >> IM_COL32_B_SHIFT) & 0xFF;
 
-    // 1. 外层发光环境层 (Ambient Glow, 扩散 3px，与 SidebarView 选中项发光层完全对齐)
-    if (UIConfig::Animation::EnableGlow) {
-        float intensity = UIConfig::Animation::GlowIntensity;
-        int a_glow = std::clamp(static_cast<int>(28.0f * intensity), 0, 255);
-        dl->AddRectFilled(ImVec2(p_min.x - 3.0f, p_min.y - 3.0f), 
-                          ImVec2(p_max.x + 3.0f, p_max.y + 3.0f), 
-                          IM_COL32(r, g, b, a_glow), rounding + 2.0f);
+    float fill_x = track_x0 + track_w * progress;
+    if (fill_x > track_x0 + 1.0f) {
+        // 微光晕
+        if (UIConfig::Animation::EnableGlow && (is_hovered || is_active || player.isPlaying())) {
+            float glow_int = UIConfig::Animation::GlowIntensity;
+            int a_glow = std::clamp(static_cast<int>(35.0f * glow_int), 0, 255);
+            dl->AddRectFilled(ImVec2(track_x0 - 1.0f, track_y - 1.5f), 
+                              ImVec2(fill_x + 1.0f, track_y + track_h + 1.5f), 
+                              IM_COL32(r, g, b, a_glow), 3.0f);
+        }
+        dl->AddRectFilled(ImVec2(track_x0, track_y), ImVec2(fill_x, track_y + track_h), 
+                          accent, 2.0f);
     }
 
-    // 2. 主体主题色流体润色底板 (与 SidebarView 选中胶囊的 IM_COL32(r, g, b, 60~70) 完全一致)
-    dl->AddRectFilled(p_min, p_max, IM_COL32(r, g, b, 70), rounding);
-
-    // 3. 通透磨砂高光层 (UIConfig::Color::GlassActive: IM_COL32(255, 255, 255, 30))
-    dl->AddRectFilled(p_min, p_max, UIConfig::Color::GlassActive, rounding);
-
-    // 4. 表面微光渐变 (Surface Specular Sheen)
-    dl->AddRectFilledMultiColor(
-        p_min, p_max,
-        IM_COL32(255, 255, 255, 28), // Top-Left
-        IM_COL32(255, 255, 255, 12), // Top-Right
-        IM_COL32(255, 255, 255, 0),  // Bottom-Right
-        IM_COL32(255, 255, 255, 16)  // Bottom-Left
-    );
-
-    // 5. 进度前锋垂直微光棱 (Leading Edge Light Line)
-    if (fill_x > p_min.x + 2.0f && fill_x < p_max.x - 2.0f) {
-        // 主题色微晕
-        dl->AddLine(ImVec2(fill_x, p_min.y + 2.0f), ImVec2(fill_x, p_max.y - 2.0f), 
-                    IM_COL32(r, g, b, 220), 2.5f);
-        // 白色高光纤细光柱
-        dl->AddLine(ImVec2(fill_x, p_min.y + 3.0f), ImVec2(fill_x, p_max.y - 3.0f), 
-                    IM_COL32(255, 255, 255, 240), 1.0f);
+    // 3. 拖拽游标 / 播放指针
+    float thumb_r = (is_hovered || is_active) ? 6.5f : 5.0f;
+    ImVec2 thumb_pos(fill_x, center_y);
+    // 阴影
+    dl->AddCircleFilled(ImVec2(thumb_pos.x, thumb_pos.y + 1.0f), thumb_r + 1.5f, IM_COL32(0, 0, 0, 80));
+    // 聚焦光环
+    if (is_hovered || is_active) {
+        dl->AddCircle(thumb_pos, thumb_r + 2.5f, accent, 24, 1.4f);
     }
+    // 白色抛光实体
+    dl->AddCircleFilled(thumb_pos, thumb_r, IM_COL32(255, 255, 255, 255));
+    dl->AddCircle(thumb_pos, thumb_r, IM_COL32(200, 215, 235, 180), 24, 1.0f);
 
-    // 6. 1px 微光折射边框 (UIConfig::Color::GlassBorder)
-    dl->AddRect(p_min, p_max, UIConfig::Color::GlassBorder, rounding, 0, 1.0f);
+    // 4. 两侧时间标签
+    ImU32 time_col = (is_hovered || is_active) ? UIConfig::Color::TextNormal : UIConfig::Color::TextMuted;
+    dl->AddText(ImVec2(left_bound, center_y - cur_sz.y * 0.5f), time_col, cur_buf);
+    dl->AddText(ImVec2(right_bound - dur_sz.x, center_y - dur_sz.y * 0.5f), time_col, dur_buf);
 
-    dl->PopClipRect();
+    if (Fonts::Small) ImGui::PopFont();
 }
 
 // ==============================================================================
@@ -130,34 +163,19 @@ void BottomBarView::render(float screen_w, float screen_h) {
     // 1. 渲染毛玻璃胶囊基底
     drawCapsuleBackground(dl, p_min, p_max, rounding);
 
-    // 2. 渲染全背景播放进度 (颜色对齐 SidebarView 激活选中胶囊)
-    renderProgressBackground(dl, p_min, p_max, rounding);
-
-    // 3. 左区：播放操作控制块 (最高交互优先级：模式、上一曲、播放/暂停、下一曲)
+    // 2. 左区：播放操作控制块 (最高交互优先级：模式、上一曲、播放/暂停、下一曲)
     renderLeftControls(dl, left_x + rounding + 4.0f, center_y);
+
+    // 3. 中区：发烧音频进度条与时间轴 (位于左区按键与右区音量条之间的中央区域)
+    float prog_left = left_x + 168.0f;
+    float prog_right = right_x - 200.0f;
+    if (prog_right > prog_left) {
+        renderProgressBar(dl, prog_left, prog_right, center_y);
+    }
 
     // 4. 右区：发烧音量调节组件 (最高交互优先级：小喇叭静音、音量拖拽滑块条)
     float right_limit = right_x - rounding - 4.0f;
     volume_widget_.render(dl, right_limit, center_y);
-
-    // 5. 中间安全区域触控 Seek 响应 (严格限制在左区按键与右区音量条之间的中央区域，绝无任何手势冲突)
-    float seek_x0 = left_x + 162.0f;  // 避开左侧所有按键 (+7px 安全缓冲)
-    float seek_x1 = right_x - 198.0f; // 避开右侧小喇叭与滑块 (+10px 净间距)
-    if (seek_x1 > seek_x0) {
-        ImVec2 seek_min(seek_x0, top_y);
-        ImVec2 seek_size(seek_x1 - seek_x0, height_);
-        ImGui::SetCursorScreenPos(seek_min);
-        ImGui::InvisibleButton("##BottomBarCenterSeekArea", seek_size);
-        if (ImGui::IsItemActive()) {
-            float mouse_x = ImGui::GetIO().MousePos.x;
-            float new_progress = std::clamp((mouse_x - left_x) / (right_x - left_x), 0.0f, 1.0f);
-            auto& player = PlayerAdmin::getInstance();
-            double duration = player.getDurationSec();
-            if (duration > 0.0) {
-                player.seek(static_cast<double>(new_progress) * duration);
-            }
-        }
-    }
 
     ImGui::End();
     ImGui::PopStyleVar();

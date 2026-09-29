@@ -25,8 +25,8 @@ class BottomBarView {
 
     // 渲染底色
     void drawCapsuleBackground(ImDrawList* dl, ImVec2 p_min, ImVec2 p_max, float rounding);
-    // 渲染全背景播放进度 (颜色对齐 SidebarView 激活选中胶囊)
-    void renderProgressBackground(ImDrawList* dl, ImVec2 p_min, ImVec2 p_max, float rounding);
+    // 中区：渲染优雅音频进度条与时间轴 (支持触控与鼠标拖拽 Seek)
+    void renderProgressBar(ImDrawList* dl, float left_bound, float right_bound, float center_y);
     // 左区：播放模式 -> 上一曲 -> 播放/暂停 -> 下一曲
     void renderLeftControls(ImDrawList* dl, float start_x, float center_y);
 
