@@ -75,16 +75,6 @@ void MainStageView::renderEqualizerView(float x, float y, float w, float h) {
     eq_view_.render(dl, card_min, card_max);
 }
 
-void MainStageView::renderDACSettingsView(float x, float y, float w, float h) {
-    float margin_x = UIConfig::Layout::ContainerMarginX;
-    float margin_y = UIConfig::Layout::ContainerMarginY;
-    ImVec2 card_min(x + margin_x, y + margin_y);
-    ImVec2 card_max(x + w - margin_x, y + h - 86.0f);
-
-    ImDrawList* dl = ImGui::GetWindowDrawList();
-    drawLiquidCard(dl, card_min, card_max, "AK4191EQ + AK4499EX 旗舰平衡解码前级设置", "AKM Velvet Sound 数字滤波滚降特性与飞秒双时钟同步管理");
-}
-
 void MainStageView::render(SidebarTab current_tab, 
                            uint64_t selected_playlist_id, 
                            std::vector<Playlist>& playlists,
@@ -115,7 +105,7 @@ void MainStageView::render(SidebarTab current_tab,
                 renderEqualizerView(stage_x, stage_y, stage_w, stage_h);
                 break;
             case SidebarTab::DACSettings:
-                renderDACSettingsView(stage_x, stage_y, stage_w, stage_h);
+                dac_view_.render(stage_x, stage_y, stage_w, stage_h);
                 break;
             case SidebarTab::ThemeSettings:
                 theme_setting_view_.render(stage_x, stage_y, stage_w, stage_h);

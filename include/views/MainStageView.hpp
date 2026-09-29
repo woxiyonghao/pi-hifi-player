@@ -6,6 +6,7 @@
 #include "ThemeSettingView.hpp"
 #include "AllMusicPlaylistView.hpp"
 #include "CustomPlaylistView.hpp"
+#include "views/DACConfigView.hpp"
 #include "imgui.h"
 #include "public/UIConfig.hpp"
 #include "types/MusicModel.hpp"
@@ -41,7 +42,6 @@ class MainStageView {
     // 各选项卡子面板
     void renderScanMusicView(float x, float y, float w, float h, std::vector<Playlist>& playlists);
     void renderEqualizerView(float x, float y, float w, float h);
-    void renderDACSettingsView(float x, float y, float w, float h);
 
     // 辅助背景绘制
     void drawLiquidCard(ImDrawList* dl, ImVec2 p_min, ImVec2 p_max, const char* title, const char* subtitle = nullptr);
@@ -49,6 +49,7 @@ class MainStageView {
   private:
     ScanMusicWidget scan_widget_;
     EQConfigView eq_view_;
+    DACConfigView dac_view_;
     SystemSettingsView settings_view_;
     ThemeSettingView theme_setting_view_;
     AllMusicPlaylistView all_music_view_;
