@@ -105,6 +105,25 @@ AccuphasePalette getAccuphasePalette(int theme_id, ImVec4 custom_col) {
         };
     }
 
+    if (theme_id == 2) { // 经典金嗓子原机 (Accuphase Champagne Gold)
+        return {
+            IM_COL32(14, 11, 8, 255),
+            IM_COL32(7, 8, 10, 255),
+            IM_COL32(65, 54, 40, 255),
+            IM_COL32(24, 21, 17, 255),
+            IM_COL32(212, 232, 252, 255), // 原机经典冰青暖玉色带
+            IM_COL32(212, 232, 252, 25),
+            IM_COL32(235, 38, 24, 255),
+            IM_COL32(228, 240, 252, 255),
+            IM_COL32(228, 240, 252, 255),
+            IM_COL32(255, 255, 255, 255),
+            IM_COL32(212, 232, 252, 60),
+            IM_COL32(0, 235, 150, 255),   // 标志性祖母绿宝石徽标
+            IM_COL32(0, 235, 150, 35),
+            IM_COL32(210, 180, 120, 220)  // 香槟金铭牌
+        };
+    }
+
     if (theme_id == 3) { // 复古琥珀卡座
         return {
             IM_COL32(18, 11, 8, 255),
@@ -124,23 +143,117 @@ AccuphasePalette getAccuphasePalette(int theme_id, ImVec4 custom_col) {
         };
     }
 
-    // 默认金嗓子原机 (ThemeId::Accuphase = 2)
-    return {
-        IM_COL32(14, 11, 8, 255),
-        IM_COL32(7, 8, 10, 255),
-        IM_COL32(65, 54, 40, 255),
-        IM_COL32(24, 21, 17, 255),
-        IM_COL32(212, 232, 252, 255), // 原机经典冰青暖玉色带
-        IM_COL32(212, 232, 252, 25),
-        IM_COL32(235, 38, 24, 255),
-        IM_COL32(228, 240, 252, 255),
-        IM_COL32(228, 240, 252, 255),
-        IM_COL32(255, 255, 255, 255),
-        IM_COL32(212, 232, 252, 60),
-        IM_COL32(0, 235, 150, 255),   // 标志性祖母绿宝石徽标
-        IM_COL32(0, 235, 150, 35),
-        IM_COL32(210, 180, 120, 220)  // 香槟金铭牌
-    };
+    if (theme_id == 5) { // 经典马兰士祖母绿 (Marantz Emerald)
+        return {
+            IM_COL32(8, 16, 12, 255),
+            IM_COL32(6, 12, 10, 255),
+            IM_COL32(20, 65, 45, 255),
+            IM_COL32(14, 28, 22, 255),
+            IM_COL32(110, 231, 183, 255),
+            IM_COL32(16, 185, 129, 45),
+            IM_COL32(239, 68, 68, 255),
+            IM_COL32(209, 250, 229, 255),
+            IM_COL32(209, 250, 229, 255),
+            IM_COL32(255, 255, 255, 255),
+            IM_COL32(16, 185, 129, 80),
+            IM_COL32(16, 185, 129, 255),
+            IM_COL32(16, 185, 129, 45),
+            IM_COL32(16, 185, 129, 210)
+        };
+    }
+
+    if (theme_id == 6) { // 柏林之声冷银 (Burmester Pure Silver)
+        return {
+            IM_COL32(10, 14, 20, 255),
+            IM_COL32(8, 10, 14, 255),
+            IM_COL32(60, 75, 95, 255),
+            IM_COL32(20, 28, 38, 255),
+            IM_COL32(241, 245, 249, 255),
+            IM_COL32(203, 213, 225, 45),
+            IM_COL32(239, 68, 68, 255),
+            IM_COL32(226, 232, 240, 255),
+            IM_COL32(226, 232, 240, 255),
+            IM_COL32(255, 255, 255, 255),
+            IM_COL32(203, 213, 225, 80),
+            IM_COL32(226, 232, 240, 255),
+            IM_COL32(203, 213, 225, 45),
+            IM_COL32(203, 213, 225, 210)
+        };
+    }
+
+    if (theme_id == 7) { // 英国名暗夜翠 (Naim Classic Green)
+        return {
+            IM_COL32(8, 14, 10, 255),
+            IM_COL32(6, 10, 8, 255),
+            IM_COL32(22, 60, 32, 255),
+            IM_COL32(14, 26, 18, 255),
+            IM_COL32(134, 239, 172, 255),
+            IM_COL32(34, 197, 94, 45),
+            IM_COL32(239, 68, 68, 255),
+            IM_COL32(220, 252, 231, 255),
+            IM_COL32(220, 252, 231, 255),
+            IM_COL32(255, 255, 255, 255),
+            IM_COL32(34, 197, 94, 80),
+            IM_COL32(34, 197, 94, 255),
+            IM_COL32(34, 197, 94, 45),
+            IM_COL32(34, 197, 94, 210)
+        };
+    }
+
+    if (theme_id == 8) { // 马克莱文森赤晶 (Mark Levinson Ruby Red)
+        return {
+            IM_COL32(16, 8, 10, 255),
+            IM_COL32(12, 6, 8, 255),
+            IM_COL32(75, 20, 26, 255),
+            IM_COL32(28, 14, 18, 255),
+            IM_COL32(252, 165, 165, 255),
+            IM_COL32(239, 68, 68, 45),
+            IM_COL32(255, 215, 0, 255),
+            IM_COL32(254, 226, 226, 255),
+            IM_COL32(254, 226, 226, 255),
+            IM_COL32(255, 255, 255, 255),
+            IM_COL32(239, 68, 68, 80),
+            IM_COL32(239, 68, 68, 255),
+            IM_COL32(239, 68, 68, 45),
+            IM_COL32(239, 68, 68, 210)
+        };
+    }
+
+    // 针对 Custom (4) 或任何自定义自由调色：动态从 custom_col 计算出高保真色板
+    float r_f = std::clamp(custom_col.x, 0.0f, 1.0f);
+    float g_f = std::clamp(custom_col.y, 0.0f, 1.0f);
+    float b_f = std::clamp(custom_col.z, 0.0f, 1.0f);
+
+    uint32_t cr = static_cast<uint32_t>(r_f * 255.0f);
+    uint32_t cg = static_cast<uint32_t>(g_f * 255.0f);
+    uint32_t cb = static_cast<uint32_t>(b_f * 255.0f);
+
+    uint32_t rib_r = static_cast<uint32_t>(std::clamp(r_f * 205.0f + 50.0f, 0.0f, 255.0f));
+    uint32_t rib_g = static_cast<uint32_t>(std::clamp(g_f * 205.0f + 50.0f, 0.0f, 255.0f));
+    uint32_t rib_b = static_cast<uint32_t>(std::clamp(b_f * 205.0f + 50.0f, 0.0f, 255.0f));
+
+    uint32_t txt_r = static_cast<uint32_t>(std::clamp(r_f * 45.0f + 210.0f, 0.0f, 255.0f));
+    uint32_t txt_g = static_cast<uint32_t>(std::clamp(g_f * 45.0f + 210.0f, 0.0f, 255.0f));
+    uint32_t txt_b = static_cast<uint32_t>(std::clamp(b_f * 45.0f + 210.0f, 0.0f, 255.0f));
+
+    AccuphasePalette pal;
+    pal.chassis_bg = IM_COL32(14, 11, 8, 255);
+    pal.meter_bg = IM_COL32(7, 8, 10, 255);
+    pal.bezel_outer = IM_COL32(static_cast<uint32_t>(r_f * 50.0f + 30.0f),
+                               static_cast<uint32_t>(g_f * 50.0f + 30.0f),
+                               static_cast<uint32_t>(b_f * 50.0f + 30.0f), 255);
+    pal.bezel_inner = IM_COL32(24, 21, 17, 255);
+    pal.ribbon_safe = IM_COL32(rib_r, rib_g, rib_b, 255);
+    pal.ribbon_glow = IM_COL32(cr, cg, cb, 40);
+    pal.overload_red = IM_COL32(235, 38, 24, 255);
+    pal.tick_safe = IM_COL32(txt_r, txt_g, txt_b, 255);
+    pal.text_safe = IM_COL32(txt_r, txt_g, txt_b, 255);
+    pal.needle_color = IM_COL32(255, 255, 255, 255);
+    pal.needle_glow = IM_COL32(cr, cg, cb, 80);
+    pal.emblem_color = IM_COL32(cr, cg, cb, 255);
+    pal.emblem_glow = IM_COL32(cr, cg, cb, 45);
+    pal.footer_color = IM_COL32(cr, cg, cb, 210);
+    return pal;
 }
 
 } // namespace
