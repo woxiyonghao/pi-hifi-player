@@ -108,7 +108,7 @@ bool Application::initOpenGL() {
 bool Application::initWindow() {
     // 物理拟合微雪 7 寸 QLED 纯平触控屏 (1024×600)
     window_ = SDL_CreateWindow(
-        "PiHifiPlayer - McIntosh Dual VU Meter (1024x600)",
+        "PiHifiPlayer - High Fidelity Music Player (1024x600)",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         1024, 600,
         SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN
@@ -276,25 +276,31 @@ void Application::renderBackground(float screen_w, float screen_h) {
     // 右侧主舞台深空基底 (230 ~ screen_w)
     bg_dl->AddRectFilled(ImVec2(UIConfig::Layout::SidebarWidth, 0.0f), ImVec2(screen_w, screen_h), UIConfig::Color::MainStageBg);
 
-    // 2. 如果未播放，保持现在的颜色 (0 个方块，0 动效，完全纯净)
-    auto& player = PlayerAdmin::getInstance();
-    if (!player.isPlaying()) {
-        return;
-    }
-
     auto bg_mode = ThemeManager::getInstance().getBackgroundVisualMode();
     if (bg_mode == BackgroundVisualMode::PureBlack) {
         return;
     }
 
+    auto& player = PlayerAdmin::getInstance();
+
     if (bg_mode == BackgroundVisualMode::VUMeter) {
-        float levels12[12] = {0.0f};
-        player.getSpectrumLevels(levels12, 12);
-        // 低频/中高频能量估算左右声道电平
-        float l = std::clamp((levels12[0] + levels12[1] + levels12[2] + levels12[3] + levels12[4]) * 0.28f, 0.0f, 1.0f);
-        float r = std::clamp((levels12[2] + levels12[3] + levels12[4] + levels12[5] + levels12[6]) * 0.28f, 0.0f, 1.0f);
+        float l = 0.0f;
+        float r = 0.0f;
+        if (player.isPlaying()) {
+            float levels12[12] = {0.0f};
+            player.getSpectrumLevels(levels12, 12);
+            // 低频/中高频能量估算左右声道电平
+            l = std::clamp((levels12[0] + levels12[1] + levels12[2] + levels12[3] + levels12[4]) * 0.28f, 0.0f, 1.0f);
+            r = std::clamp((levels12[2] + levels12[3] + levels12[4] + levels12[5] + levels12[6]) * 0.28f, 0.0f, 1.0f);
+        }
         vu_renderer_.setTheme(ThemeManager::getInstance().getMeterTheme());
+        vu_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
         vu_renderer_.render(screen_w, screen_h, l, r);
+        return;
+    }
+
+    // 2. 如果未播放且为 LED 频谱模式，保持现在的颜色 (0 个方块，0 动效，完全纯净)
+    if (!player.isPlaying()) {
         return;
     }
 

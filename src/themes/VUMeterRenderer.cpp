@@ -5,27 +5,7 @@
 
 namespace {
 
-struct MeterPalette {
-    ImU32 chassis_bg;
-    ImU32 meter_bg_base;
-    ImU32 glow_core;
-    ImU32 glow_outer;
-    ImU32 border;
-    ImU32 arc_color;
-    ImU32 tick_safe;
-    ImU32 tick_text_safe;
-    ImU32 overload_red;
-    ImU32 needle_color;
-    ImU32 needle_glow;
-    ImU32 pivot_base;
-    ImU32 pivot_ring;
-    ImU32 footer_badge;
-    const char* sub_label;
-    const char* footer_left;
-    const char* footer_right;
-};
-
-const MeterPalette& getPalette(MeterThemeType theme) {
+MeterPalette getPalette(MeterThemeType theme, ImVec4 custom_col) {
     static const MeterPalette mcintosh = {
         IM_COL32(3, 7, 18, 255),        // 深空底板黑
         IM_COL32(2, 16, 38, 255),       // 表盘深邃暗蓝底色
@@ -106,6 +86,56 @@ const MeterPalette& getPalette(MeterThemeType theme) {
         "APPLE LOSSLESS AUDIO · ULTRA HI-RES"
     };
 
+    if (theme == MeterThemeType::Custom) {
+        float r_f = std::clamp(custom_col.x, 0.0f, 1.0f);
+        float g_f = std::clamp(custom_col.y, 0.0f, 1.0f);
+        float b_f = std::clamp(custom_col.z, 0.0f, 1.0f);
+
+        uint32_t cr = static_cast<uint32_t>(r_f * 255.0f);
+        uint32_t cg = static_cast<uint32_t>(g_f * 255.0f);
+        uint32_t cb = static_cast<uint32_t>(b_f * 255.0f);
+
+        // 深空机架底色 (微量色彩沁染，保留深邃感)
+        uint32_t chassis_r = static_cast<uint32_t>(r_f * 14.0f + 3.0f);
+        uint32_t chassis_g = static_cast<uint32_t>(g_f * 14.0f + 3.0f);
+        uint32_t chassis_b = static_cast<uint32_t>(b_f * 14.0f + 4.0f);
+
+        // 表盘基底暗色 (通透暗色衬底)
+        uint32_t bg_r = static_cast<uint32_t>(r_f * 28.0f + 4.0f);
+        uint32_t bg_g = static_cast<uint32_t>(g_f * 28.0f + 4.0f);
+        uint32_t bg_b = static_cast<uint32_t>(b_f * 28.0f + 6.0f);
+
+        // 轴心核心灯泡强光 (明亮通透核心)
+        uint32_t core_r = static_cast<uint32_t>(std::clamp(r_f * 160.0f + 95.0f, 0.0f, 255.0f));
+        uint32_t core_g = static_cast<uint32_t>(std::clamp(g_f * 160.0f + 95.0f, 0.0f, 255.0f));
+        uint32_t core_b = static_cast<uint32_t>(std::clamp(b_f * 160.0f + 95.0f, 0.0f, 255.0f));
+
+        // 刻度与弧线浅白反光色 (80% 象牙白 + 20% 自定义色)
+        uint32_t arc_r = static_cast<uint32_t>(std::clamp(r_f * 55.0f + 200.0f, 0.0f, 255.0f));
+        uint32_t arc_g = static_cast<uint32_t>(std::clamp(g_f * 55.0f + 200.0f, 0.0f, 255.0f));
+        uint32_t arc_b = static_cast<uint32_t>(std::clamp(b_f * 55.0f + 200.0f, 0.0f, 255.0f));
+
+        MeterPalette custom_pal;
+        custom_pal.chassis_bg = IM_COL32(chassis_r, chassis_g, chassis_b, 255);
+        custom_pal.meter_bg_base = IM_COL32(bg_r, bg_g, bg_b, 255);
+        custom_pal.glow_core = IM_COL32(core_r, core_g, core_b, 135);
+        custom_pal.glow_outer = IM_COL32(cr, cg, cb, 80);
+        custom_pal.border = IM_COL32(cr, cg, cb, 160);
+        custom_pal.arc_color = IM_COL32(arc_r, arc_g, arc_b, 220);
+        custom_pal.tick_safe = IM_COL32(std::min(255u, arc_r + 20u), std::min(255u, arc_g + 20u), std::min(255u, arc_b + 20u), 235);
+        custom_pal.tick_text_safe = IM_COL32(arc_r, arc_g, arc_b, 220);
+        custom_pal.overload_red = IM_COL32(239, 68, 68, 255);
+        custom_pal.needle_color = IM_COL32(255, 59, 48, 255);
+        custom_pal.needle_glow = IM_COL32(cr, cg, cb, 70);
+        custom_pal.pivot_base = IM_COL32(28, 34, 44, 255);
+        custom_pal.pivot_ring = IM_COL32(160, 175, 195, 255);
+        custom_pal.footer_badge = IM_COL32(cr, cg, cb, 190);
+        custom_pal.sub_label = "DECIBELS / WATTS";
+        custom_pal.footer_left = "Audiophile Custom Dual VU Meter · Bit-Perfect Direct Drive";
+        custom_pal.footer_right = "VELVET SOUND ULTRA · FEMTOSECOND CLOCK";
+        return custom_pal;
+    }
+
     switch (theme) {
         case MeterThemeType::Accuphase:     return accuphase;
         case MeterThemeType::RetroTape:     return retro_tape;
@@ -173,7 +203,7 @@ void VUMeterRenderer::updateBallistics(float target_l, float target_r) {
 void VUMeterRenderer::render(float screen_w, float screen_h, float raw_level_l, float raw_level_r) {
     updateBallistics(raw_level_l, raw_level_r);
 
-    const auto& pal = getPalette(current_theme_);
+    const MeterPalette pal = getPalette(current_theme_, custom_color_);
     ImDrawList* dl = ImGui::GetBackgroundDrawList();
 
     // 1. 夜空深色机架底板
@@ -192,8 +222,8 @@ void VUMeterRenderer::render(float screen_w, float screen_h, float raw_level_l, 
     ImVec2 right_max(padding_x * 2.0f + meter_w * 2.0f, padding_y + meter_h);
 
     // 3. 渲染左右两只动圈大表头
-    drawSingleMeter(dl, left_min, left_max, needle_angle_l_, "LEFT CHANNEL");
-    drawSingleMeter(dl, right_min, right_max, needle_angle_r_, "RIGHT CHANNEL");
+    drawSingleMeter(dl, left_min, left_max, needle_angle_l_, "LEFT CHANNEL", pal);
+    drawSingleMeter(dl, right_min, right_max, needle_angle_r_, "RIGHT CHANNEL", pal);
 
     // 4. 底部发烧铭牌
     dl->AddText(ImVec2(24.0f, screen_h - 32.0f), pal.footer_badge, pal.footer_left);
@@ -202,8 +232,7 @@ void VUMeterRenderer::render(float screen_w, float screen_h, float raw_level_l, 
     dl->AddText(ImVec2(screen_w - badge_sz.x - 24.0f, screen_h - 32.0f), pal.footer_badge, pal.footer_right);
 }
 
-void VUMeterRenderer::drawSingleMeter(ImDrawList* dl, ImVec2 p_min, ImVec2 p_max, float angle, const char* channel_label) {
-    const auto& pal = getPalette(current_theme_);
+void VUMeterRenderer::drawSingleMeter(ImDrawList* dl, ImVec2 p_min, ImVec2 p_max, float angle, const char* channel_label, const MeterPalette& pal) {
     float meter_w = p_max.x - p_min.x;
     float meter_h = p_max.y - p_min.y;
     ImVec2 center(p_min.x + meter_w * 0.5f, p_min.y + meter_h - 35.0f);
@@ -232,10 +261,10 @@ void VUMeterRenderer::drawSingleMeter(ImDrawList* dl, ImVec2 p_min, ImVec2 p_max
     dl->AddRect(p_min, p_max, pal.border, 16.0f, 0, 2.0f);
 
     // 5. 绘制主刻度弧线与精确对数分度
-    drawScaleAndTicks(dl, center, radius, kMinAngle, kSweepAngle);
+    drawScaleAndTicks(dl, center, radius, kMinAngle, kSweepAngle, pal);
 
     // 6. 绘制动圈红针与金属轴盖
-    drawNeedle(dl, center, radius, angle);
+    drawNeedle(dl, center, radius, angle, pal);
 
     // 7. 居中绘制声道与发烧单位标牌
     ImVec2 title_sz = ImGui::CalcTextSize(channel_label);
@@ -245,9 +274,7 @@ void VUMeterRenderer::drawSingleMeter(ImDrawList* dl, ImVec2 p_min, ImVec2 p_max
     dl->AddText(ImVec2(center.x - sub_sz.x * 0.5f, center.y - 65.0f), pal.arc_color, pal.sub_label);
 }
 
-void VUMeterRenderer::drawScaleAndTicks(ImDrawList* dl, ImVec2 center, float radius, float start_angle, float total_sweep) {
-    const auto& pal = getPalette(current_theme_);
-
+void VUMeterRenderer::drawScaleAndTicks(ImDrawList* dl, ImVec2 center, float radius, float start_angle, float total_sweep, const MeterPalette& pal) {
     // 1. 主刻度弧线
     dl->PathArcTo(center, radius, start_angle, start_angle + total_sweep, 64);
     dl->PathStroke(pal.arc_color, 0, 3.0f);
@@ -285,8 +312,7 @@ void VUMeterRenderer::drawScaleAndTicks(ImDrawList* dl, ImVec2 center, float rad
     }
 }
 
-void VUMeterRenderer::drawNeedle(ImDrawList* dl, ImVec2 center, float radius, float angle) {
-    const auto& pal = getPalette(current_theme_);
+void VUMeterRenderer::drawNeedle(ImDrawList* dl, ImVec2 center, float radius, float angle, const MeterPalette& pal) {
     float cos_a = std::cos(angle);
     float sin_a = std::sin(angle);
     ImVec2 needle_tip(center.x + cos_a * (radius - 8.0f), center.y + sin_a * (radius - 8.0f));

@@ -230,7 +230,7 @@ ImVec4 ThemeManager::getClearColor() const {
 
 MeterThemeType ThemeManager::getMeterTheme() const {
     if (current_theme_ == ThemeId::Custom) {
-        return MeterThemeType::ModernCrimson;
+        return MeterThemeType::Custom;
     }
     return getCurrentPreset().meter_theme;
 }
