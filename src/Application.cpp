@@ -1,6 +1,7 @@
 #include "Application.hpp"
 #include "public/Font.hpp"
 #include "public/UIConfig.hpp"
+#include "widgets/GlassCardRenderer.hpp"
 #include <iostream>
 #include <cmath>
 #include <algorithm>
@@ -155,6 +156,11 @@ void Application::initData() {
         show_create_playlist_modal_ = true;
         create_playlist_focus_needed_ = true;
         new_playlist_name_buf_[0] = '\0';
+    });
+
+    // 绑定主舞台 Tab 快速跳转回调
+    main_stage_.setOnNavigateTab([this](SidebarTab tab) {
+        sidebar_.setCurrentTab(tab);
     });
 }
 
@@ -338,9 +344,22 @@ void Application::render() {
 }
 
 void Application::renderCreatePlaylistModal(float screen_w, float screen_h) {
-    // 1. 全屏柔焦半透明遮罩，阻断下层鼠标与手势穿透
-    ImDrawList* fg_dl = ImGui::GetForegroundDrawList();
-    fg_dl->AddRectFilled(ImVec2(0.0f, 0.0f), ImVec2(screen_w, screen_h), IM_COL32(0, 0, 0, 160));
+    ImGuiIO& io = ImGui::GetIO();
+
+    // 1. 全透明交互遮罩 (拦截底层鼠标点击，绝不添加发黑灰蒙层，底层视觉 100% 通透保留)
+    ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
+    ImGui::SetNextWindowSize(io.DisplaySize);
+    ImGuiWindowFlags backdrop_flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                                      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+                                      ImGuiWindowFlags_NoBackground;
+    if (ImGui::Begin("##CreatePlaylistModalBackdrop", nullptr, backdrop_flags)) {
+        ImGui::InvisibleButton("##CreatePlaylistBackdropClickBlocker", io.DisplaySize);
+        if (ImGui::IsItemClicked()) {
+            show_create_playlist_modal_ = false;
+            new_playlist_name_buf_[0] = '\0';
+        }
+    }
+    ImGui::End();
 
     // 2. 居中模态卡片尺寸与排版
     const float modal_w = 380.0f;
@@ -355,13 +374,23 @@ void Application::renderCreatePlaylistModal(float screen_w, float screen_h) {
                              ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
                              ImGuiWindowFlags_NoCollapse;
 
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, IM_COL32(22, 26, 36, 252));
-    ImGui::PushStyleColor(ImGuiCol_Border, UIConfig::Color::GlassBorder);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 14.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, IM_COL32(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_Border, IM_COL32(0, 0, 0, 0));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 16.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(24.0f, 20.0f));
 
     if (ImGui::Begin("##CreatePlaylistModalDialog", nullptr, flags)) {
+        // 绘制发烧级纯正毛玻璃卡片底板与柔和漫射阴影
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        ImVec2 p_min = ImGui::GetWindowPos();
+        ImVec2 p_max(p_min.x + modal_w, p_min.y + modal_h);
+
+        dl->AddRectFilled(ImVec2(p_min.x - 2.0f, p_min.y + 4.0f),
+                          ImVec2(p_max.x + 2.0f, p_max.y + 14.0f),
+                          IM_COL32(0, 0, 0, 110), 18.0f);
+        GlassCardRenderer::drawFrosted(dl, p_min, p_max, 16.0f);
+
         // 标题
         if (Fonts::Medium) ImGui::PushFont(Fonts::Medium);
         ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 1.0f), "新建播放列表");

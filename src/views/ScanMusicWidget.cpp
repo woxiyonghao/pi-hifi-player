@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <map>
 #include <tools/PlayerAdmin.hpp>
+#include "widgets/GlassCardRenderer.hpp"
 ScanMusicWidget::ScanMusicWidget() = default;
 
 namespace {
@@ -690,10 +691,21 @@ void ScanMusicWidget::renderCompletedState([[maybe_unused]] ImDrawList* dl, ImVe
 }
 
 void ScanMusicWidget::renderRescanConfirmModal(ImVec2 center) {
-    // 1. 全屏柔焦半透明遮罩，阻断下层鼠标与手势穿透
-    ImDrawList* fg_dl = ImGui::GetForegroundDrawList();
     ImGuiIO& io = ImGui::GetIO();
-    fg_dl->AddRectFilled(ImVec2(0.0f, 0.0f), io.DisplaySize, IM_COL32(0, 0, 0, 160));
+
+    // 1. 全透明交互遮罩 (拦截底层鼠标点击，绝不添加发黑灰蒙层，底层视觉 100% 通透保留)
+    ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
+    ImGui::SetNextWindowSize(io.DisplaySize);
+    ImGuiWindowFlags backdrop_flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                                      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+                                      ImGuiWindowFlags_NoBackground;
+    if (ImGui::Begin("##RescanModalBackdrop", nullptr, backdrop_flags)) {
+        ImGui::InvisibleButton("##RescanBackdropClickBlocker", io.DisplaySize);
+        if (ImGui::IsItemClicked()) {
+            show_rescan_confirm_modal_ = false;
+        }
+    }
+    ImGui::End();
 
     // 2. 居中模态对话框尺寸与几何排版
     const float modal_w = 400.0f;
@@ -708,13 +720,23 @@ void ScanMusicWidget::renderRescanConfirmModal(ImVec2 center) {
                              ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
                              ImGuiWindowFlags_NoCollapse;
 
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, IM_COL32(22, 26, 36, 252));
-    ImGui::PushStyleColor(ImGuiCol_Border, UIConfig::Color::GlassBorder);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 14.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, IM_COL32(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_Border, IM_COL32(0, 0, 0, 0));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 16.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(24.0f, 20.0f));
 
     if (ImGui::Begin("##RescanConfirmModalDialog", nullptr, flags)) {
+        // 绘制发烧级纯正毛玻璃卡片底板与柔和漫射阴影
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        ImVec2 p_min = ImGui::GetWindowPos();
+        ImVec2 p_max(p_min.x + modal_w, p_min.y + modal_h);
+
+        dl->AddRectFilled(ImVec2(p_min.x - 2.0f, p_min.y + 4.0f),
+                          ImVec2(p_max.x + 2.0f, p_max.y + 14.0f),
+                          IM_COL32(0, 0, 0, 110), 18.0f);
+        GlassCardRenderer::drawFrosted(dl, p_min, p_max, 16.0f);
+
         // 标题
         if (Fonts::Medium) ImGui::PushFont(Fonts::Medium);
         ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 1.0f), "重新扫描本地歌曲");
