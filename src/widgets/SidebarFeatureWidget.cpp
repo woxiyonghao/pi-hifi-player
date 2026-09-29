@@ -15,7 +15,7 @@ SidebarFeatureWidget::SidebarFeatureWidget() {
         { SidebarTab::ScanMusic,      "扫描音乐" },
         { SidebarTab::Equalizer,      "均衡器" },
         { SidebarTab::DACSettings,    "DACSettings" },
-        { SidebarTab::ThemeSettings,  "ThemeSettings" },
+        { SidebarTab::ThemeSettings,  "主题" },
         { SidebarTab::SystemSettings, "SystemSettings" }
     };
 }

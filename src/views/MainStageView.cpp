@@ -1458,7 +1458,9 @@ void MainStageView::renderThemeSettingsView(float x, float y, float w, float h) 
     ImVec2 card_max(x + w - margin_x, y + h - 86.0f);
 
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    drawLiquidCard(dl, card_min, card_max, "视觉主题与表头风格 (Themes)", "四大经典HiFi名机调色板 · 全屏LED矩阵频谱与双通道动圈表头联动");
+
+    // 绘制主舞台大底板卡片
+    GlassCardRenderer::drawCard(dl, card_min, card_max, UIConfig::Layout::ContainerRounding, "main_stage");
 
     auto& tm = ThemeManager::getInstance();
     const auto& cur_preset = tm.getCurrentPreset();
@@ -1469,59 +1471,109 @@ void MainStageView::renderThemeSettingsView(float x, float y, float w, float h) 
     const ImU32 g = (accent >> IM_COL32_G_SHIFT) & 0xFF;
     const ImU32 b = (accent >> IM_COL32_B_SHIFT) & 0xFF;
 
-    // 1. 顶部：当前激活主题实时效果总览横幅
-    ImVec2 banner_min(card_min.x + 20.0f, card_min.y + 64.0f);
-    ImVec2 banner_max(card_max.x - 20.0f, card_min.y + 116.0f);
+    // ==============================================================================
+    // 1. 顶部 Header 栏：左侧标题「主题」+ 副标题，右侧「恢复名机预设」按钮
+    // ==============================================================================
+    // 左侧主标题「主题」
+    ImVec2 title_pos(card_min.x + 20.0f, card_min.y + 16.0f);
+    if (Fonts::Medium) ImGui::PushFont(Fonts::Medium);
+    dl->AddText(title_pos, UIConfig::Color::TextActive, "主题");
+    if (Fonts::Medium) ImGui::PopFont();
 
-    dl->AddRectFilled(banner_min, banner_max, IM_COL32(255, 255, 255, 12), 10.0f);
-    dl->AddRect(banner_min, banner_max, IM_COL32(r, g, b, 120), 10.0f, 0, 1.2f);
+    // 主标题下方副标题
+    ImVec2 sub_pos(card_min.x + 20.0f, card_min.y + 44.0f);
+    if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+    dl->AddText(sub_pos, UIConfig::Color::TextMuted, "四大经典HiFi名厂原声音学调色板 · 全景三位一体联动");
+    if (Fonts::Small) ImGui::PopFont();
 
-    // 胶囊色彩预览块
-    float pill_x = banner_min.x + 14.0f;
-    float pill_y = banner_min.y + 12.0f;
-    float pill_sz = 28.0f;
-    dl->AddRectFilled(ImVec2(pill_x, pill_y), ImVec2(pill_x + pill_sz, pill_y + pill_sz), accent, 7.0f);
-    dl->AddRect(ImVec2(pill_x, pill_y), ImVec2(pill_x + pill_sz, pill_y + pill_sz), IM_COL32(255, 255, 255, 180), 7.0f, 0, 1.0f);
+    // 右上角：「恢复名机预设」按钮 (由底部移至右上角)
+    float rst_w = 110.0f;
+    float rst_h = 30.0f;
+    float rst_x = card_max.x - 20.0f - rst_w;
+    float rst_y = card_min.y + 18.0f;
 
-    // 主题名与描述
-    float text_x = pill_x + pill_sz + 14.0f;
+    ImGui::SetCursorScreenPos(ImVec2(rst_x, rst_y));
+    ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(40, 48, 64, 180));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(55, 66, 88, 220));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(70, 84, 110, 250));
+    ImGui::PushStyleColor(ImGuiCol_Text, UIConfig::Color::TextNormal);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 7.0f);
+    if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+
+    if (ImGui::Button("恢复名机预设", ImVec2(rst_w, rst_h))) {
+        tm.setTheme(ThemeId::ModernCrimson);
+        tm.setBackgroundVisualMode(BackgroundVisualMode::LEDSpectrum);
+    }
+
+    if (Fonts::Small) ImGui::PopFont();
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor(4);
+
+    // ==============================================================================
+    // 辅助毛玻璃板块卡片绘制闭包 (绘制带有半透明深空磨砂、漫射高光与微光折射边框的卡片)
+    // ==============================================================================
+    auto drawSectionFrostedCard = [&](ImVec2 p0, ImVec2 p1, float rounding = 10.0f) {
+        // 1. 深空磨砂底板
+        dl->AddRectFilled(p0, p1, IM_COL32(20, 26, 36, 175), rounding);
+        // 2. 漫射高光层
+        dl->AddRectFilled(p0, p1, IM_COL32(255, 255, 255, 8), rounding);
+        // 3. 顶部微光棱线
+        dl->AddLine(ImVec2(p0.x + rounding, p0.y + 0.5f), ImVec2(p1.x - rounding, p0.y + 0.5f),
+                    IM_COL32(255, 255, 255, 45), 1.0f);
+        // 4. 1px 微光边框
+        dl->AddRect(p0, p1, IM_COL32(255, 255, 255, 28), rounding, 0, 1.0f);
+    };
+
+    float sec_x0 = card_min.x + 20.0f;
+    float sec_x1 = card_max.x - 20.0f;
+    float sec_w = sec_x1 - sec_x0;
+
+    // ==============================================================================
+    // 2. 板块一：经典名机预设 (独立毛玻璃容器 + Header + 4 张名机卡片 Options)
+    // ==============================================================================
+    float sec1_y0 = card_min.y + 70.0f;
+    float sec1_h = 182.0f;
+    float sec1_y1 = sec1_y0 + sec1_h;
+    drawSectionFrostedCard(ImVec2(sec_x0, sec1_y0), ImVec2(sec_x1, sec1_y1));
+
+    // [Header]
+    float s1_head_y = sec1_y0 + 12.0f;
     if (Fonts::Regular) ImGui::PushFont(Fonts::Regular);
-    std::string title_text = (cur_theme == ThemeId::Custom) ? "发烧友自由调色 (Custom Accent)" : cur_preset.name;
-    dl->AddText(ImVec2(text_x, banner_min.y + 10.0f), UIConfig::Color::TextActive, title_text.c_str());
+    dl->AddText(ImVec2(sec_x0 + 16.0f, s1_head_y), UIConfig::Color::TextActive, "名机调色预设");
+    float s1_title_w = ImGui::CalcTextSize("名机调色预设").x;
     if (Fonts::Regular) ImGui::PopFont();
 
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-    std::string desc_text = (cur_theme == ThemeId::Custom) ? "个性化 RGB 强调色与流体玻璃全景联动" : cur_preset.brand_desc;
-    dl->AddText(ImVec2(text_x, banner_min.y + 30.0f), UIConfig::Color::TextMuted, desc_text.c_str());
+    dl->AddText(ImVec2(sec_x0 + 16.0f + s1_title_w + 12.0f, s1_head_y + 2.5f),
+                UIConfig::Color::TextMuted, "四大名厂原声音学调色板 · 全景三位一体联动");
 
-    // 右侧联动标签
-    const char* sync_tag = "全景三位一体联动生效";
-    float sync_w = ImGui::CalcTextSize(sync_tag).x + 22.0f;
-    float sync_h = 24.0f;
-    float sync_x = banner_max.x - 14.0f - sync_w;
-    float sync_y = banner_min.y + (52.0f - sync_h) * 0.5f;
+    // Header 右侧当前激活主题胶囊
+    std::string act_info = (cur_theme == ThemeId::Custom) ? "● 当前激活：发烧友自定义" : ("● 当前激活：" + cur_preset.name);
+    float tag_w = ImGui::CalcTextSize(act_info.c_str()).x + 18.0f;
+    float tag_h = 22.0f;
+    float tag_x = sec_x1 - 14.0f - tag_w;
+    float tag_y = s1_head_y;
 
-    dl->AddRectFilled(ImVec2(sync_x, sync_y), ImVec2(sync_x + sync_w, sync_y + sync_h), IM_COL32(r, g, b, 45), 12.0f);
-    dl->AddRect(ImVec2(sync_x, sync_y), ImVec2(sync_x + sync_w, sync_y + sync_h), IM_COL32(r, g, b, 140), 12.0f, 0, 1.0f);
-    dl->AddCircleFilled(ImVec2(sync_x + 10.0f, sync_y + sync_h * 0.5f), 3.0f, accent);
-    dl->AddText(ImVec2(sync_x + 18.0f, sync_y + 4.5f), UIConfig::Color::TextActive, sync_tag);
+    dl->AddRectFilled(ImVec2(tag_x, tag_y), ImVec2(tag_x + tag_w, tag_y + tag_h), IM_COL32(r, g, b, 45), 11.0f);
+    dl->AddRect(ImVec2(tag_x, tag_y), ImVec2(tag_x + tag_w, tag_y + tag_h), IM_COL32(r, g, b, 140), 11.0f, 0, 1.0f);
+    dl->AddText(ImVec2(tag_x + 9.0f, tag_y + 3.5f), UIConfig::Color::TextActive, act_info.c_str());
     if (Fonts::Small) ImGui::PopFont();
 
-    // 2. 中间：4 大经典名机主题卡片 (2 行 × 2 列)
+    // [Options] 4 张名机卡片 (2 行 × 2 列)
     const auto& presets = tm.getAllPresets();
-    float total_card_w = card_max.x - card_min.x - 40.0f;
-    float col_gap = 14.0f;
-    float c_w = (total_card_w - col_gap) * 0.5f;
-    float c_h = 76.0f;
-    float row_gap = 10.0f;
+    float c_inner_w = sec_w - 32.0f;
+    float col_gap = 12.0f;
+    float c_w = (c_inner_w - col_gap) * 0.5f;
+    float c_h = 58.0f;
+    float row_gap = 8.0f;
 
     for (size_t i = 0; i < presets.size() && i < 4; ++i) {
         const auto& p = presets[i];
         int row = static_cast<int>(i / 2);
         int col = static_cast<int>(i % 2);
 
-        float cx0 = card_min.x + 20.0f + col * (c_w + col_gap);
-        float cy0 = card_min.y + 126.0f + row * (c_h + row_gap);
+        float cx0 = sec_x0 + 16.0f + col * (c_w + col_gap);
+        float cy0 = sec1_y0 + 40.0f + row * (c_h + row_gap);
         float cx1 = cx0 + c_w;
         float cy1 = cy0 + c_h;
 
@@ -1530,7 +1582,6 @@ void MainStageView::renderThemeSettingsView(float x, float y, float w, float h) 
 
         bool is_current = (cur_theme == p.id);
 
-        // 按钮交互
         std::string btn_id = "##ThemeCard_" + std::to_string(static_cast<int>(p.id));
         ImGui::SetCursorScreenPos(c_min);
         ImGui::InvisibleButton(btn_id.c_str(), ImVec2(c_w, c_h));
@@ -1544,86 +1595,97 @@ void MainStageView::renderThemeSettingsView(float x, float y, float w, float h) 
         const ImU32 pg = (p.accent_color >> IM_COL32_G_SHIFT) & 0xFF;
         const ImU32 pb = (p.accent_color >> IM_COL32_B_SHIFT) & 0xFF;
 
-        // 底色
         ImU32 bg_col = is_current ? IM_COL32(pr, pg, pb, 35) :
-                       (is_hovered ? IM_COL32(255, 255, 255, 20) : IM_COL32(255, 255, 255, 10));
-        dl->AddRectFilled(c_min, c_max, bg_col, 10.0f);
+                       (is_hovered ? IM_COL32(255, 255, 255, 18) : IM_COL32(255, 255, 255, 8));
+        dl->AddRectFilled(c_min, c_max, bg_col, 8.0f);
 
-        // 边框
         ImU32 border_col = is_current ? p.accent_color :
-                           (is_hovered ? IM_COL32(pr, pg, pb, 160) : IM_COL32(255, 255, 255, 26));
-        dl->AddRect(c_min, c_max, border_col, 10.0f, 0, is_current ? 1.8f : 1.0f);
+                           (is_hovered ? IM_COL32(pr, pg, pb, 160) : IM_COL32(255, 255, 255, 24));
+        dl->AddRect(c_min, c_max, border_col, 8.0f, 0, is_current ? 1.6f : 1.0f);
 
-        // 主题色点
-        float dot_cx = cx0 + 20.0f;
+        // 主题色标点
+        float dot_cx = cx0 + 18.0f;
         float dot_cy = cy0 + c_h * 0.5f;
-        dl->AddCircleFilled(ImVec2(dot_cx, dot_cy), 8.0f, p.accent_color);
+        dl->AddCircleFilled(ImVec2(dot_cx, dot_cy), 7.0f, p.accent_color);
         if (is_current) {
-            dl->AddCircle(ImVec2(dot_cx, dot_cy), 12.0f, p.accent_color, 24, 1.5f);
+            dl->AddCircle(ImVec2(dot_cx, dot_cy), 11.0f, p.accent_color, 24, 1.4f);
         }
 
-        // 主题名称与声学风格
-        float label_x = dot_cx + 20.0f;
+        // 主题名称与风格
+        float label_x = dot_cx + 18.0f;
         if (Fonts::Regular) ImGui::PushFont(Fonts::Regular);
-        dl->AddText(ImVec2(label_x, cy0 + 16.0f), is_current ? UIConfig::Color::TextActive : IM_COL32(220, 230, 245, 230), p.name.c_str());
+        dl->AddText(ImVec2(label_x, cy0 + 10.0f), is_current ? UIConfig::Color::TextActive : IM_COL32(220, 230, 245, 230), p.name.c_str());
         if (Fonts::Regular) ImGui::PopFont();
 
         if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-        dl->AddText(ImVec2(label_x, cy0 + 42.0f), UIConfig::Color::TextMuted, p.sound_style.c_str());
+        dl->AddText(ImVec2(label_x, cy0 + 32.0f), UIConfig::Color::TextMuted, p.sound_style.c_str());
 
-        // 右侧：色块预览胶囊与状态标签
-        float chip_y = cy0 + 26.0f;
-        float chip_w = 16.0f;
-        float chip_h = 24.0f;
-        float chip_r = 3.5f;
+        // 右侧色块与状态标签
+        float chip_w = 14.0f;
+        float chip_h = 20.0f;
+        float chip_r = 3.0f;
+        float chip_y = cy0 + (c_h - chip_h) * 0.5f;
+        float right_pos = cx1 - 12.0f;
 
-        float right_pos = cx1 - 16.0f;
-
-        // 如果激活则显示已激活标识
         if (is_current) {
             const char* act_tag = "已激活";
-            float act_w = ImGui::CalcTextSize(act_tag).x + 12.0f;
+            float act_w = ImGui::CalcTextSize(act_tag).x + 10.0f;
             float act_x = right_pos - act_w;
-            float act_y = cy0 + (c_h - 22.0f) * 0.5f;
+            float act_y = cy0 + (c_h - 20.0f) * 0.5f;
 
-            dl->AddRectFilled(ImVec2(act_x, act_y), ImVec2(act_x + act_w, act_y + 22.0f), IM_COL32(pr, pg, pb, 60), 4.0f);
-            dl->AddRect(ImVec2(act_x, act_y), ImVec2(act_x + act_w, act_y + 22.0f), p.accent_color, 4.0f, 0, 1.0f);
-            dl->AddText(ImVec2(act_x + 6.0f, act_y + 2.5f), UIConfig::Color::TextActive, act_tag);
-            right_pos = act_x - 12.0f;
+            dl->AddRectFilled(ImVec2(act_x, act_y), ImVec2(act_x + act_w, act_y + 20.0f), IM_COL32(pr, pg, pb, 60), 4.0f);
+            dl->AddRect(ImVec2(act_x, act_y), ImVec2(act_x + act_w, act_y + 20.0f), p.accent_color, 4.0f, 0, 1.0f);
+            dl->AddText(ImVec2(act_x + 5.0f, act_y + 2.0f), UIConfig::Color::TextActive, act_tag);
+            right_pos = act_x - 10.0f;
         } else if (is_hovered) {
-            const char* hov_tag = "点击启用";
-            float hov_w = ImGui::CalcTextSize(hov_tag).x + 12.0f;
+            const char* hov_tag = "启用";
+            float hov_w = ImGui::CalcTextSize(hov_tag).x + 10.0f;
             float hov_x = right_pos - hov_w;
-            float hov_y = cy0 + (c_h - 22.0f) * 0.5f;
+            float hov_y = cy0 + (c_h - 20.0f) * 0.5f;
 
-            dl->AddRectFilled(ImVec2(hov_x, hov_y), ImVec2(hov_x + hov_w, hov_y + 22.0f), IM_COL32(255, 255, 255, 25), 4.0f);
-            dl->AddRect(ImVec2(hov_x, hov_y), ImVec2(hov_x + hov_w, hov_y + 22.0f), IM_COL32(255, 255, 255, 70), 4.0f, 0, 1.0f);
-            dl->AddText(ImVec2(hov_x + 6.0f, hov_y + 2.5f), UIConfig::Color::TextActive, hov_tag);
-            right_pos = hov_x - 12.0f;
+            dl->AddRectFilled(ImVec2(hov_x, hov_y), ImVec2(hov_x + hov_w, hov_y + 20.0f), IM_COL32(255, 255, 255, 22), 4.0f);
+            dl->AddRect(ImVec2(hov_x, hov_y), ImVec2(hov_x + hov_w, hov_y + 20.0f), IM_COL32(255, 255, 255, 60), 4.0f, 0, 1.0f);
+            dl->AddText(ImVec2(hov_x + 5.0f, hov_y + 2.0f), UIConfig::Color::TextActive, hov_tag);
+            right_pos = hov_x - 10.0f;
         }
 
-        // 3 颗代表色条：Accent、Lit、Peak
+        // 3 颗调色代表色条：Peak, Lit, Accent
         float chip3_x = right_pos - chip_w;
         dl->AddRectFilled(ImVec2(chip3_x, chip_y), ImVec2(chip3_x + chip_w, chip_y + chip_h), p.peak_color, chip_r);
-        dl->AddRect(ImVec2(chip3_x, chip_y), ImVec2(chip3_x + chip_w, chip_y + chip_h), IM_COL32(255, 255, 255, 50), chip_r, 0, 1.0f);
+        dl->AddRect(ImVec2(chip3_x, chip_y), ImVec2(chip3_x + chip_w, chip_y + chip_h), IM_COL32(255, 255, 255, 40), chip_r, 0, 1.0f);
 
         float chip2_x = chip3_x - chip_w - 4.0f;
         dl->AddRectFilled(ImVec2(chip2_x, chip_y), ImVec2(chip2_x + chip_w, chip_y + chip_h), p.lit_color, chip_r);
-        dl->AddRect(ImVec2(chip2_x, chip_y), ImVec2(chip2_x + chip_w, chip_y + chip_h), IM_COL32(255, 255, 255, 50), chip_r, 0, 1.0f);
+        dl->AddRect(ImVec2(chip2_x, chip_y), ImVec2(chip2_x + chip_w, chip_y + chip_h), IM_COL32(255, 255, 255, 40), chip_r, 0, 1.0f);
 
         float chip1_x = chip2_x - chip_w - 4.0f;
         dl->AddRectFilled(ImVec2(chip1_x, chip_y), ImVec2(chip1_x + chip_w, chip_y + chip_h), p.accent_color, chip_r);
-        dl->AddRect(ImVec2(chip1_x, chip_y), ImVec2(chip1_x + chip_w, chip_y + chip_h), IM_COL32(255, 255, 255, 50), chip_r, 0, 1.0f);
+        dl->AddRect(ImVec2(chip1_x, chip_y), ImVec2(chip1_x + chip_w, chip_y + chip_h), IM_COL32(255, 255, 255, 40), chip_r, 0, 1.0f);
 
         if (Fonts::Small) ImGui::PopFont();
     }
 
-    // 3. 背景律动视觉模式选择器
-    float bg_sec_y = card_min.y + 296.0f;
+    // ==============================================================================
+    // 3. 板块二：全景音乐律动 (独立毛玻璃容器 + Header + 3 个动效模式 Options)
+    // ==============================================================================
+    float sec2_y0 = sec1_y1 + 10.0f;
+    float sec2_h = 82.0f;
+    float sec2_y1 = sec2_y0 + sec2_h;
+    drawSectionFrostedCard(ImVec2(sec_x0, sec2_y0), ImVec2(sec_x1, sec2_y1));
+
+    // [Header]
+    float s2_head_y = sec2_y0 + 12.0f;
+    if (Fonts::Regular) ImGui::PushFont(Fonts::Regular);
+    dl->AddText(ImVec2(sec_x0 + 16.0f, s2_head_y), UIConfig::Color::TextActive, "全景背景律动");
+    float s2_title_w = ImGui::CalcTextSize("全景背景律动").x;
+    if (Fonts::Regular) ImGui::PopFont();
+
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-    dl->AddText(ImVec2(card_min.x + 20.0f, bg_sec_y + 6.0f), UIConfig::Color::TextMuted, "全景音乐律动背景风格：");
+    dl->AddText(ImVec2(sec_x0 + 16.0f + s2_title_w + 12.0f, s2_head_y + 2.5f),
+                UIConfig::Color::TextMuted, "音乐播放时屏幕底层全景动态视觉效果");
     if (Fonts::Small) ImGui::PopFont();
 
+    // [Options] 3 个动效风格按钮
     auto cur_bg_mode = tm.getBackgroundVisualMode();
     const char* mode_labels[3] = {
         "48列全景 LED 频谱矩阵",
@@ -1631,16 +1693,15 @@ void MainStageView::renderThemeSettingsView(float x, float y, float w, float h) 
         "极简纯黑发烧机架直通"
     };
 
-    float mode_btn_x = card_min.x + 180.0f;
-    float mode_btn_w = 175.0f;
-    float mode_btn_h = 28.0f;
-    float mode_btn_gap = 10.0f;
+    float mode_btn_gap = 12.0f;
+    float mode_btn_w = (c_inner_w - mode_btn_gap * 2.0f) / 3.0f;
+    float mode_btn_h = 30.0f;
+    float mode_btn_y = sec2_y0 + 40.0f;
 
     for (int m = 0; m < 3; ++m) {
-        float mx0 = mode_btn_x + m * (mode_btn_w + mode_btn_gap);
-        float my0 = bg_sec_y;
-        ImVec2 m_min(mx0, my0);
-        ImVec2 m_max(mx0 + mode_btn_w, my0 + mode_btn_h);
+        float mx0 = sec_x0 + 16.0f + m * (mode_btn_w + mode_btn_gap);
+        ImVec2 m_min(mx0, mode_btn_y);
+        ImVec2 m_max(mx0 + mode_btn_w, mode_btn_y + mode_btn_h);
 
         bool is_mode_act = (static_cast<int>(cur_bg_mode) == m);
         std::string m_id = "##BgModeBtn_" + std::to_string(m);
@@ -1653,39 +1714,66 @@ void MainStageView::renderThemeSettingsView(float x, float y, float w, float h) 
         }
 
         ImU32 m_bg = is_mode_act ? IM_COL32(r, g, b, 70) :
-                     (m_hov ? IM_COL32(255, 255, 255, 25) : IM_COL32(255, 255, 255, 12));
+                     (m_hov ? IM_COL32(255, 255, 255, 22) : IM_COL32(255, 255, 255, 10));
         dl->AddRectFilled(m_min, m_max, m_bg, 7.0f);
 
         ImU32 m_border = is_mode_act ? accent :
-                         (m_hov ? IM_COL32(255, 255, 255, 70) : IM_COL32(255, 255, 255, 25));
+                         (m_hov ? IM_COL32(255, 255, 255, 70) : IM_COL32(255, 255, 255, 24));
         dl->AddRect(m_min, m_max, m_border, 7.0f, 0, 1.0f);
 
         if (Fonts::Small) ImGui::PushFont(Fonts::Small);
         ImVec2 txt_sz = ImGui::CalcTextSize(mode_labels[m]);
         float txt_x = mx0 + (mode_btn_w - txt_sz.x) * 0.5f;
-        float txt_y = my0 + (mode_btn_h - txt_sz.y) * 0.5f;
+        float txt_y = mode_btn_y + (mode_btn_h - txt_sz.y) * 0.5f;
         dl->AddText(ImVec2(txt_x, txt_y), is_mode_act ? UIConfig::Color::TextActive : UIConfig::Color::TextNormal, mode_labels[m]);
         if (Fonts::Small) ImGui::PopFont();
     }
 
-    // 4. 发烧友自由调色扩展区
-    float custom_sec_y = card_min.y + 348.0f;
+    // ==============================================================================
+    // 4. 板块三：发烧自由调色 (独立毛玻璃容器 + Header + 调色盘与快捷色球 Options)
+    // ==============================================================================
+    float sec3_y0 = sec2_y1 + 10.0f;
+    float sec3_h = 82.0f;
+    float sec3_y1 = sec3_y0 + sec3_h;
+    drawSectionFrostedCard(ImVec2(sec_x0, sec3_y0), ImVec2(sec_x1, sec3_y1));
+
+    // [Header]
+    float s3_head_y = sec3_y0 + 12.0f;
+    if (Fonts::Regular) ImGui::PushFont(Fonts::Regular);
+    dl->AddText(ImVec2(sec_x0 + 16.0f, s3_head_y), UIConfig::Color::TextActive, "发烧自由调色");
+    float s3_title_w = ImGui::CalcTextSize("发烧自由调色").x;
+    if (Fonts::Regular) ImGui::PopFont();
+
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-    dl->AddText(ImVec2(card_min.x + 20.0f, custom_sec_y + 8.0f), UIConfig::Color::TextMuted, "发烧自由调色板：");
+    dl->AddText(ImVec2(sec_x0 + 16.0f + s3_title_w + 12.0f, s3_head_y + 2.5f),
+                UIConfig::Color::TextMuted, "自定义强调色与 5 大经典发烧名机配色推荐");
+    if (Fonts::Small) ImGui::PopFont();
+
+    // [Options] 调色盘与色标点
+    float opt3_y = sec3_y0 + 40.0f;
+
+    if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+    dl->AddText(ImVec2(sec_x0 + 16.0f, opt3_y + 6.0f), UIConfig::Color::TextNormal, "自定义 RGB：");
     if (Fonts::Small) ImGui::PopFont();
 
     // 调色盘控件
     ImVec4 custom_v4 = tm.getCustomColor();
     float custom_rgb[3] = { custom_v4.x, custom_v4.y, custom_v4.z };
 
-    float picker_x = card_min.x + 140.0f;
-    float picker_y = custom_sec_y + 4.0f;
+    float picker_x = sec_x0 + 110.0f;
+    float picker_y = opt3_y + 3.0f;
     ImGui::SetCursorScreenPos(ImVec2(picker_x, picker_y));
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.0f);
     if (ImGui::ColorEdit3("##CustomThemePicker", custom_rgb, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel)) {
         tm.setCustomColor(ImVec4(custom_rgb[0], custom_rgb[1], custom_rgb[2], 1.0f));
     }
     ImGui::PopStyleVar();
+
+    // 经典调色标题
+    float quick_label_x = picker_x + 44.0f;
+    if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+    dl->AddText(ImVec2(quick_label_x, opt3_y + 6.0f), UIConfig::Color::TextNormal, "经典名机快选：");
+    if (Fonts::Small) ImGui::PopFont();
 
     // 经典 HiFi 快速调色圆点
     static const struct {
@@ -1699,10 +1787,10 @@ void MainStageView::renderThemeSettingsView(float x, float y, float w, float h) 
         {"经典朱砂", ImVec4(0.86f, 0.15f, 0.15f, 1.0f)}
     };
 
-    float dot_start_x = picker_x + 48.0f;
+    float dot_start_x = quick_label_x + 95.0f;
     for (size_t q = 0; q < 5; ++q) {
-        float dx = dot_start_x + q * 30.0f;
-        float dy = picker_y + 14.0f;
+        float dx = dot_start_x + q * 32.0f;
+        float dy = opt3_y + 13.0f;
         ImVec2 d_center(dx, dy);
 
         std::string q_id = "##QuickDot_" + std::to_string(q);
@@ -1719,33 +1807,25 @@ void MainStageView::renderThemeSettingsView(float x, float y, float w, float h) 
         uint32_t qb = static_cast<uint32_t>(quick_dots[q].col.z * 255.0f);
         ImU32 d_col = IM_COL32(qr, qg, qb, 255);
 
-        dl->AddCircleFilled(d_center, 9.0f, d_col);
+        dl->AddCircleFilled(d_center, 8.5f, d_col);
         if (q_hov) {
             dl->AddCircle(d_center, 12.0f, IM_COL32(255, 255, 255, 180), 24, 1.5f);
         }
     }
 
-    // 右侧恢复名机预设按钮
-    float rst_w = 120.0f;
-    float rst_h = 28.0f;
-    float rst_x = card_max.x - 20.0f - rst_w;
-    float rst_y = picker_y;
+    // 右侧当前颜色代码与色块胶囊展示
+    char hex_buf[32];
+    std::snprintf(hex_buf, sizeof(hex_buf), "当前色: #%02X%02X%02X", r, g, b);
+    float hex_w = 120.0f;
+    float hex_h = 24.0f;
+    float hex_x = sec_x1 - 16.0f - hex_w;
+    float hex_y = opt3_y + 3.0f;
 
-    ImGui::SetCursorScreenPos(ImVec2(rst_x, rst_y));
-    ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(40, 48, 64, 180));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(55, 66, 88, 220));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(70, 84, 110, 250));
-    ImGui::PushStyleColor(ImGuiCol_Text, UIConfig::Color::TextNormal);
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 7.0f);
+    dl->AddRectFilled(ImVec2(hex_x, hex_y), ImVec2(hex_x + hex_w, hex_y + hex_h), IM_COL32(r, g, b, 40), 5.0f);
+    dl->AddRect(ImVec2(hex_x, hex_y), ImVec2(hex_x + hex_w, hex_y + hex_h), IM_COL32(r, g, b, 120), 5.0f, 0, 1.0f);
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-
-    if (ImGui::Button("恢复名机预设", ImVec2(rst_w, rst_h))) {
-        tm.setTheme(ThemeId::ModernCrimson);
-    }
-
+    dl->AddText(ImVec2(hex_x + 8.0f, hex_y + 4.0f), UIConfig::Color::TextActive, hex_buf);
     if (Fonts::Small) ImGui::PopFont();
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor(4);
 }
 
 void MainStageView::renderSystemSettingsView(float x, float y, float w, float h) {
