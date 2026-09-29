@@ -65,6 +65,12 @@ public:
      * @brief 获取声卡硬件实际协商生效的物理规格
      */
     virtual AudioFormatSpec getActualSpec() const = 0;
+
+    /**
+     * @brief 配置硬件缓冲区深度 (帧数，如 64, 256, 512, 1024)
+     */
+    virtual void setBufferSize(uint32_t samples) { (void)samples; }
+    virtual uint32_t getBufferSize() const { return 1024; }
 };
 
 } // namespace audio_engine

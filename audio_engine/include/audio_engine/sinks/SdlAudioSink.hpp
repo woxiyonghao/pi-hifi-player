@@ -24,6 +24,8 @@ public:
     double getHardwareLatencySec() const override;
     bool isOpen() const override;
     AudioFormatSpec getActualSpec() const override;
+    void setBufferSize(uint32_t samples) override { buffer_size_samples_ = samples; }
+    uint32_t getBufferSize() const override { return buffer_size_samples_; }
 
 private:
     SDL_AudioDeviceID device_id_ = 0;
@@ -31,6 +33,7 @@ private:
     AudioFormatSpec actual_spec_;
     std::atomic<bool> is_running_{false};
     double buffer_latency_sec_ = 0.0;
+    uint32_t buffer_size_samples_ = 1024;
 
     static void sdlCallbackThunk(void* userdata, Uint8* stream, int len);
 };

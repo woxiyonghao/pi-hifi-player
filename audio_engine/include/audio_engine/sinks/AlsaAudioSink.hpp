@@ -29,9 +29,12 @@ public:
     double getHardwareLatencySec() const override;
     bool isOpen() const override;
     AudioFormatSpec getActualSpec() const override;
+    void setBufferSize(uint32_t samples) override { buffer_size_samples_ = samples; }
+    uint32_t getBufferSize() const override { return buffer_size_samples_; }
 
 private:
     std::string device_name_ = "hw:0,0";
+    uint32_t buffer_size_samples_ = 1024;
     AudioCallback callback_;
     AudioFormatSpec actual_spec_;
     std::atomic<bool> is_running_{false};

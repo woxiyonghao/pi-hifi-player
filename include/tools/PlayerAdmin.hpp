@@ -116,6 +116,14 @@ public:
 
     // 获取实时音频 12 频段振幅包络 (0.0f ~ 1.0f)
     void getSpectrumLevels(float* out_levels, size_t count = 12) const;
+
+    // -------------------------------------------------------------------------
+    // [切歌平滑过渡控制 (淡入淡出)]
+    // -------------------------------------------------------------------------
+    void setFadeDuration(float sec);
+    float getFadeDuration() const { return fade_duration_sec_; }
+    bool isTransitioning() const { return is_transitioning_; }
+
 private:
     // 核心状态
     PlaybackState state_ = PlaybackState::Idle;
@@ -131,6 +139,16 @@ private:
     // 音量状态
     float volume_   = 0.8f; // 默认 80% 舒适音量
     bool is_muted_  = false;
+
+    // 切歌平滑淡入淡出过渡状态
+    float fade_duration_sec_ = 0.5f; // 默认 0.5 秒发烧平滑过渡
+    bool is_transitioning_ = false;
+    double transition_elapsed_ = 0.0;
+    std::optional<Track> pending_track_ = std::nullopt;
+
+    void switchTrack(const Track& track);
+    void executeTrackSwitch(const Track& track);
+
     PlayerAdmin();
 
     void saveConfig();

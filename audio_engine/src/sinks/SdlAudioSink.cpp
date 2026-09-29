@@ -27,7 +27,7 @@ bool SdlAudioSink::open(const AudioFormatSpec& requested_spec, AudioCallback cal
     desired.freq = static_cast<int>(requested_spec.sample_rate);
     desired.format = AUDIO_F32SYS; // 原生 32-bit Float
     desired.channels = static_cast<Uint8>(requested_spec.channels);
-    desired.samples = 1024; // 1024 帧低延迟缓冲区 (~23ms @ 44.1k, ~10ms @ 96k, ~5ms @ 192k)
+    desired.samples = (buffer_size_samples_ > 0) ? static_cast<Uint16>(buffer_size_samples_) : 1024;
     desired.callback = sdlCallbackThunk;
     desired.userdata = this;
 

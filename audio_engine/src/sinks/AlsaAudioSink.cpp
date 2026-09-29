@@ -44,8 +44,8 @@ bool AlsaAudioSink::open(const AudioFormatSpec& requested_spec, AudioCallback ca
     unsigned int rate = requested_spec.sample_rate;
     snd_pcm_hw_params_set_rate_near(pcm_handle_, hw_params, &rate, 0);
 
-    // 缓冲区大小设定 (低抖动 1024 帧)
-    snd_pcm_uframes_t period_size = 1024;
+    // 缓冲区大小设定 (根据发烧硬件配置深度)
+    snd_pcm_uframes_t period_size = (buffer_size_samples_ > 0) ? buffer_size_samples_ : 1024;
     snd_pcm_hw_params_set_period_size_near(pcm_handle_, hw_params, &period_size, 0);
 
     err = snd_pcm_hw_params(pcm_handle_, hw_params);

@@ -46,11 +46,17 @@ private:
     void renderHardwareSection(ImDrawList* dl, float x0, float y0, float w);
     void renderPowerSection(ImDrawList* dl, float x0, float y0, float w);
 
+    static void applyHardwareBufferSize(int mode);
+    static void applyFadeDuration(int mode);
+    static void applyCpuGovernor(int mode);
+    static void applyScreenBrightness(float brightness);
+
 private:
     // 音频核心配置
     int sample_rate_mode_ = 0; // 0: Bit-Perfect 源码直出, 1: 升频 192kHz, 2: 极频 384kHz
     int dsd_mode_ = 0;         // 0: DoP (DSD over PCM), 1: Native 原生直通, 2: DSD 转 PCM
     int buffer_size_mode_ = 1; // 0: 64帧 (极低延迟), 1: 256帧 (标准平稳), 2: 512帧 (抗抖动)
+    int fade_duration_mode_ = 2; // 0: 关闭, 1: 0.3秒, 2: 0.5秒 (默认发烧标准), 3: 1.0秒
 
     // 硬件与系统配置
     int cpu_governor_ = 0;     // 0: Performance (纯音锁频), 1: Schedutil (动态平衡)

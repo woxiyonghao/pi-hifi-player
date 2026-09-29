@@ -73,6 +73,22 @@ public:
     // 实时 12 频段音频频谱振幅分析 (0.0f ~ 1.0f)
     void getSpectrumLevels(float* out_levels, size_t count);
 
+    // 播放淡入淡出核心控制 (平滑 Hann 升余弦滤波)
+    enum class FadeState {
+        None,
+        FadeIn,
+        FadeOut
+    };
+    void startFadeIn(float duration_sec = 0.5f);
+    void startFadeOut(float duration_sec = 0.5f);
+    bool isFadeOutCompleted() const;
+    void resetFade();
+    bool isEof() const { return is_eof_.load(std::memory_order_acquire); }
+
+    // 硬件缓冲区深度配置 (64, 256, 512, 1024 帧)
+    void setHardwareBufferSize(uint32_t frames);
+    uint32_t getHardwareBufferSize() const;
+
 private:
     AudioEngine();
     ~AudioEngine();
@@ -110,6 +126,13 @@ private:
     std::atomic<bool> is_eq_enabled_{false};
     std::array<float, 10> eq_gains_{};
     mutable std::mutex eq_mutex_;
+
+    // 淡入淡出实时状态
+    std::atomic<FadeState> fade_state_{FadeState::None};
+    std::atomic<float> fade_duration_sec_{0.5f};
+    std::atomic<uint64_t> fade_total_frames_{0};
+    std::atomic<uint64_t> fade_current_frame_{0};
+    std::atomic<bool> fade_out_completed_{false};
 
     void decodeWorker(std::stop_token stop_token);
     void onSinkDataNeeded(float* output, size_t frame_count);

@@ -148,6 +148,7 @@ void AudioEngine::stop() {
         seek_base_time_.store(0.0, std::memory_order_relaxed);
         duration_sec_ = 0.0;
         is_eof_.store(false, std::memory_order_relaxed);
+        resetFade();
     }
 }
 
@@ -214,6 +215,48 @@ bool AudioEngine::isPaused() const {
 
 bool AudioEngine::isIdle() const {
     return !is_playing_.load(std::memory_order_acquire) && !is_paused_.load(std::memory_order_acquire);
+}
+
+void AudioEngine::startFadeIn(float duration_sec) {
+    fade_duration_sec_.store(duration_sec, std::memory_order_release);
+    uint32_t rate = (current_spec_.sample_rate > 0) ? current_spec_.sample_rate : 44100;
+    uint64_t total_frames = static_cast<uint64_t>(rate * duration_sec);
+    if (total_frames == 0) total_frames = 1;
+    fade_total_frames_.store(total_frames, std::memory_order_release);
+    fade_current_frame_.store(0, std::memory_order_release);
+    fade_out_completed_.store(false, std::memory_order_release);
+    fade_state_.store(FadeState::FadeIn, std::memory_order_release);
+}
+
+void AudioEngine::startFadeOut(float duration_sec) {
+    fade_duration_sec_.store(duration_sec, std::memory_order_release);
+    uint32_t rate = (current_spec_.sample_rate > 0) ? current_spec_.sample_rate : 44100;
+    uint64_t total_frames = static_cast<uint64_t>(rate * duration_sec);
+    if (total_frames == 0) total_frames = 1;
+    fade_total_frames_.store(total_frames, std::memory_order_release);
+    fade_current_frame_.store(0, std::memory_order_release);
+    fade_out_completed_.store(false, std::memory_order_release);
+    fade_state_.store(FadeState::FadeOut, std::memory_order_release);
+}
+
+bool AudioEngine::isFadeOutCompleted() const {
+    return fade_out_completed_.load(std::memory_order_acquire);
+}
+
+void AudioEngine::resetFade() {
+    fade_state_.store(FadeState::None, std::memory_order_release);
+    fade_current_frame_.store(0, std::memory_order_release);
+    fade_out_completed_.store(false, std::memory_order_release);
+}
+
+void AudioEngine::setHardwareBufferSize(uint32_t frames) {
+    if (sink_) {
+        sink_->setBufferSize(frames);
+    }
+}
+
+uint32_t AudioEngine::getHardwareBufferSize() const {
+    return sink_ ? sink_->getBufferSize() : 1024;
 }
 
 double AudioEngine::getCurrentTimeSec() const {
@@ -301,23 +344,62 @@ void AudioEngine::onSinkDataNeeded(float* output, size_t frame_count) {
         applyEqualizer(output, frame_count);
     }
 
-    if (muted) {
+    FadeState f_state = fade_state_.load(std::memory_order_acquire);
+    bool fade_out_done = fade_out_completed_.load(std::memory_order_acquire);
+
+    if (muted || fade_out_done) {
         std::memset(output, 0, samples_needed * sizeof(float));
-    } else if (vol >= 0.9999f && !is_eq_enabled_.load(std::memory_order_relaxed)) {
+    } else if (f_state == FadeState::None && vol >= 0.9999f && !is_eq_enabled_.load(std::memory_order_relaxed)) {
         // 【Bit-Perfect 0dB 源码直出】：不进行任何浮点乘法计算，保持原始数据绝对纯净！
-    } else if (vol < 0.9999f) {
-        // 【发烧级 64-bit 浮点音量衰减 + TPDF (三角概率分布) Dither 抖动】
-        // 消除量化截断产生的谐波失真，维持高解析动态
+    } else {
+        // 【发烧级 64-bit 浮点音量衰减 + 平滑 Hann 升余弦淡入淡出 + TPDF (三角概率分布) Dither 抖动】
         static thread_local std::mt19937 dither_gen(1337);
         static thread_local std::uniform_real_distribution<double> dither_dist(-1.0, 1.0);
         constexpr double DITHER_SCALE = 1.0 / 8388608.0; // 对应 24-bit LSB 尺度
 
         double double_vol = static_cast<double>(vol);
-        for (size_t i = 0; i < samples_needed; ++i) {
-            double sample = static_cast<double>(output[i]) * double_vol;
-            double tpdf_dither = (dither_dist(dither_gen) + dither_dist(dither_gen)) * 0.5 * DITHER_SCALE;
-            output[i] = static_cast<float>(sample + tpdf_dither);
+        uint32_t channels = (current_spec_.channels > 0) ? current_spec_.channels : 2;
+        uint64_t f_total = fade_total_frames_.load(std::memory_order_relaxed);
+        uint64_t f_curr = fade_current_frame_.load(std::memory_order_relaxed);
+
+        for (size_t f = 0; f < frame_count; ++f) {
+            float f_gain = 1.0f;
+            if (f_state == FadeState::FadeIn) {
+                f_curr++;
+                float progress = (f_total > 0) ? (static_cast<float>(f_curr) / static_cast<float>(f_total)) : 1.0f;
+                if (progress >= 1.0f) {
+                    progress = 1.0f;
+                    f_gain = 1.0f;
+                    fade_state_.store(FadeState::None, std::memory_order_release);
+                    f_state = FadeState::None;
+                } else {
+                    f_gain = 0.5f * (1.0f - std::cos(progress * 3.141592653589793f));
+                }
+            } else if (f_state == FadeState::FadeOut) {
+                f_curr++;
+                float progress = (f_total > 0) ? (static_cast<float>(f_curr) / static_cast<float>(f_total)) : 1.0f;
+                if (progress >= 1.0f) {
+                    progress = 1.0f;
+                    f_gain = 0.0f;
+                    fade_state_.store(FadeState::None, std::memory_order_release);
+                    fade_out_completed_.store(true, std::memory_order_release);
+                    f_state = FadeState::None;
+                } else {
+                    f_gain = 0.5f * (1.0f + std::cos(progress * 3.141592653589793f));
+                }
+            }
+
+            double frame_vol = double_vol * static_cast<double>(f_gain);
+            for (size_t c = 0; c < channels; ++c) {
+                size_t idx = f * channels + c;
+                if (idx < samples_needed) {
+                    double sample = static_cast<double>(output[idx]) * frame_vol;
+                    double tpdf_dither = (dither_dist(dither_gen) + dither_dist(dither_gen)) * 0.5 * DITHER_SCALE;
+                    output[idx] = static_cast<float>(sample + tpdf_dither);
+                }
+            }
         }
+        fade_current_frame_.store(f_curr, std::memory_order_relaxed);
     }
 
     // 实时频谱分析更新

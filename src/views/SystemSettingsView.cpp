@@ -4,13 +4,69 @@
 #include "widgets/GlassCardRenderer.hpp"
 #include "tools/MusicDatabase.hpp"
 #include "themes/ThemeManager.hpp"
+#include "audio_engine/AudioEngine.hpp"
+#include "tools/PlayerAdmin.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <string>
 
 SystemSettingsView::SystemSettingsView() {
     loadSettings();
+}
+
+void SystemSettingsView::applyHardwareBufferSize(int mode) {
+    uint32_t frames = 256;
+    if (mode == 0) frames = 64;
+    else if (mode == 1) frames = 256;
+    else if (mode == 2) frames = 512;
+    audio_engine::AudioEngine::getInstance().setHardwareBufferSize(frames);
+}
+
+void SystemSettingsView::applyFadeDuration(int mode) {
+    float sec = 0.5f;
+    switch (mode) {
+        case 0: sec = 0.0f; break; // 关闭
+        case 1: sec = 0.3f; break; // 极速
+        case 2: sec = 0.5f; break; // 发烧标准 (默认)
+        case 3: sec = 1.0f; break; // 悠扬慢淡
+        default: sec = 0.5f; break;
+    }
+    PlayerAdmin::getInstance().setFadeDuration(sec);
+}
+
+void SystemSettingsView::applyCpuGovernor(int mode) {
+#if defined(__linux__) && !defined(HIFI_PLATFORM_MAC)
+    const char* gov = (mode == 0) ? "performance" : "schedutil";
+    for (int cpu = 0; cpu < 8; ++cpu) {
+        char path[128];
+        std::snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_governor", cpu);
+        FILE* fp = std::fopen(path, "w");
+        if (fp) {
+            std::fputs(gov, fp);
+            std::fclose(fp);
+        }
+    }
+#else
+    (void)mode;
+#endif
+}
+
+void SystemSettingsView::applyScreenBrightness(float brightness) {
+#if defined(__linux__) && !defined(HIFI_PLATFORM_MAC)
+    int val = std::clamp(static_cast<int>(brightness * 255.0f), 10, 255);
+    FILE* fp = std::fopen("/sys/class/backlight/rpi_backlight/brightness", "w");
+    if (!fp) {
+        fp = std::fopen("/sys/class/backlight/10-0045/brightness", "w");
+    }
+    if (fp) {
+        std::fprintf(fp, "%d\n", val);
+        std::fclose(fp);
+    }
+#else
+    (void)brightness;
+#endif
 }
 
 void SystemSettingsView::loadSettings() {
@@ -19,6 +75,7 @@ void SystemSettingsView::loadSettings() {
     std::string s_sr = db.getSetting("setting_sample_rate", "0");
     std::string s_dsd = db.getSetting("setting_dsd_mode", "0");
     std::string s_buf = db.getSetting("setting_buffer_size", "1");
+    std::string s_fade = db.getSetting("setting_fade_duration_mode", "2");
     std::string s_cpu = db.getSetting("setting_cpu_governor", "0");
     std::string s_br = db.getSetting("setting_brightness", "0.85");
     std::string s_to = db.getSetting("setting_screen_timeout", "0");
@@ -28,6 +85,7 @@ void SystemSettingsView::loadSettings() {
         sample_rate_mode_ = std::clamp(std::stoi(s_sr), 0, 2);
         dsd_mode_ = std::clamp(std::stoi(s_dsd), 0, 2);
         buffer_size_mode_ = std::clamp(std::stoi(s_buf), 0, 2);
+        fade_duration_mode_ = std::clamp(std::stoi(s_fade), 0, 3);
         cpu_governor_ = std::clamp(std::stoi(s_cpu), 0, 1);
         screen_brightness_ = std::clamp(std::stof(s_br), 0.1f, 1.0f);
         screen_timeout_mode_ = std::clamp(std::stoi(s_to), 0, 3);
@@ -36,11 +94,17 @@ void SystemSettingsView::loadSettings() {
         sample_rate_mode_ = 0;
         dsd_mode_ = 0;
         buffer_size_mode_ = 1;
+        fade_duration_mode_ = 2;
         cpu_governor_ = 0;
         screen_brightness_ = 0.85f;
         screen_timeout_mode_ = 0;
         idle_fullscreen_mode_ = 0;
     }
+
+    applyHardwareBufferSize(buffer_size_mode_);
+    applyFadeDuration(fade_duration_mode_);
+    applyCpuGovernor(cpu_governor_);
+    applyScreenBrightness(screen_brightness_);
 }
 
 void SystemSettingsView::saveSettings() {
@@ -48,6 +112,7 @@ void SystemSettingsView::saveSettings() {
     db.setSetting("setting_sample_rate", std::to_string(sample_rate_mode_));
     db.setSetting("setting_dsd_mode", std::to_string(dsd_mode_));
     db.setSetting("setting_buffer_size", std::to_string(buffer_size_mode_));
+    db.setSetting("setting_fade_duration_mode", std::to_string(fade_duration_mode_));
     db.setSetting("setting_cpu_governor", std::to_string(cpu_governor_));
     db.setSetting("setting_brightness", std::to_string(screen_brightness_));
     db.setSetting("setting_screen_timeout", std::to_string(screen_timeout_mode_));
@@ -101,10 +166,10 @@ void SystemSettingsView::render(float x, float y, float w, float h) {
         ImDrawList* child_dl = ImGui::GetWindowDrawList();
         float section_w = ImGui::GetContentRegionAvail().x; // 扣除滚动条后的可用内容宽度
 
-        // 板块一：音频重放与时钟引擎 (146px)
+        // 板块一：音频重放与时钟引擎 (182px, 含采样率/DSD/缓冲深度/切歌淡入淡出)
         ImVec2 p_audio = ImGui::GetCursorScreenPos();
         renderAudioSection(child_dl, p_audio.x, p_audio.y, section_w);
-        ImGui::SetCursorScreenPos(ImVec2(p_audio.x, p_audio.y + 146.0f));
+        ImGui::SetCursorScreenPos(ImVec2(p_audio.x, p_audio.y + 182.0f));
         ImGui::Dummy(ImVec2(0.0f, 10.0f));
 
         // 板块二：硬件性能与显示控制 (182px, 含空余时间显示全屏)
@@ -125,7 +190,7 @@ void SystemSettingsView::render(float x, float y, float w, float h) {
 }
 
 void SystemSettingsView::renderAudioSection(ImDrawList* dl, float x0, float y0, float w) {
-    float h = 146.0f;
+    float h = 182.0f;
     ImVec2 p0(x0, y0);
     ImVec2 p1(x0 + w, y0 + h);
 
@@ -169,6 +234,11 @@ void SystemSettingsView::renderAudioSection(ImDrawList* dl, float x0, float y0, 
             if (ImGui::IsItemClicked()) {
                 current_val = i;
                 saveSettings();
+                if (std::strcmp(id_prefix, "BufMode") == 0) {
+                    applyHardwareBufferSize(current_val);
+                } else if (std::strcmp(id_prefix, "FadeMode") == 0) {
+                    applyFadeDuration(current_val);
+                }
             }
 
             ImU32 bg = is_act ? IM_COL32(r, g, b, 70) :
@@ -198,6 +268,10 @@ void SystemSettingsView::renderAudioSection(ImDrawList* dl, float x0, float y0, 
     // 3. 硬件缓冲深度
     const char* buf_opts[] = { "64 帧 (极低延迟)", "256 帧 (标准发烧)", "512 帧 (防爆音深缓冲)" };
     renderButtonGroup(y0 + 108.0f, "硬件缓冲深度", buf_opts, 3, buffer_size_mode_, "BufMode");
+
+    // 4. 切歌平滑过渡 (淡入淡出)
+    const char* fade_opts[] = { "关闭 (直接切歌)", "0.3 秒 (极速)", "0.5 秒 (发烧标准)", "1.0 秒 (悠扬慢淡)" };
+    renderButtonGroup(y0 + 144.0f, "切歌过渡效果", fade_opts, 4, fade_duration_mode_, "FadeMode");
 }
 
 void SystemSettingsView::renderHardwareSection(ImDrawList* dl, float x0, float y0, float w) {
@@ -243,6 +317,7 @@ void SystemSettingsView::renderHardwareSection(ImDrawList* dl, float x0, float y
         if (ImGui::IsItemClicked()) {
             cpu_governor_ = i;
             saveSettings();
+            applyCpuGovernor(cpu_governor_);
         }
 
         ImU32 bg = is_act ? IM_COL32(r, g, b, 70) :
@@ -287,6 +362,7 @@ void SystemSettingsView::renderHardwareSection(ImDrawList* dl, float x0, float y
         float mx = ImGui::GetIO().MousePos.x;
         screen_brightness_ = std::clamp((mx - slider_x0) / slider_w, 0.1f, 1.0f);
         saveSettings();
+        applyScreenBrightness(screen_brightness_);
     }
 
     dl->AddCircleFilled(ImVec2(thumb_x, thumb_y), 7.0f, IM_COL32(255, 255, 255, 255));

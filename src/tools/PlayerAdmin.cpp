@@ -41,6 +41,10 @@ void PlayerAdmin::play() {
 }
 
 void PlayerAdmin::pause() {
+    if (is_transitioning_) {
+        is_transitioning_ = false;
+        pending_track_ = std::nullopt;
+    }
     if (state_ == PlaybackState::Playing) {
         state_ = PlaybackState::Paused;
         audio_engine::AudioEngine::getInstance().pause();
@@ -56,6 +60,8 @@ void PlayerAdmin::togglePlayPause() {
 }
 
 void PlayerAdmin::stop() {
+    is_transitioning_ = false;
+    pending_track_ = std::nullopt;
     state_ = PlaybackState::Idle;
     current_time_sec_ = 0.0;
     audio_engine::AudioEngine::getInstance().stop();
@@ -65,11 +71,6 @@ void PlayerAdmin::stop() {
 // 2. 曲目与播放队列管理实现
 // ==============================================================================
 void PlayerAdmin::playTrack(const Track& track) {
-    current_track_ = track;
-    duration_sec_ = static_cast<double>(track.duration_sec);
-    current_time_sec_ = 0.0;
-    state_ = PlaybackState::Playing;
-
     // 维护当前队列一致性
     if (playback_queue_.empty()) {
         playback_queue_.push_back(track);
@@ -86,12 +87,47 @@ void PlayerAdmin::playTrack(const Track& track) {
         }
     }
 
+    switchTrack(track);
+}
+
+void PlayerAdmin::switchTrack(const Track& track) {
+    auto& engine = audio_engine::AudioEngine::getInstance();
+
+    // 如果开启了平滑淡入淡出 (时长 > 0.05s) 并且当前正在正常播放且未处于末尾 EOF
+    if (fade_duration_sec_ > 0.05f && engine.isPlaying() && !engine.isEof() && current_track_.has_value() && current_track_->id != track.id) {
+        is_transitioning_ = true;
+        transition_elapsed_ = 0.0;
+        pending_track_ = track;
+
+        // UI 立即同步呈现新曲目（歌名、封面、艺术家等），人机体验零延迟滞后
+        current_track_ = track;
+        duration_sec_ = static_cast<double>(track.duration_sec);
+        current_time_sec_ = 0.0;
+
+        // 音频底层平滑淡出 (Hann 曲线衰减)
+        engine.startFadeOut(fade_duration_sec_);
+    } else {
+        // 直接执行切换并在启播时平滑淡入
+        executeTrackSwitch(track);
+    }
+}
+
+void PlayerAdmin::executeTrackSwitch(const Track& track) {
+    current_track_ = track;
+    duration_sec_ = static_cast<double>(track.duration_sec);
+    current_time_sec_ = 0.0;
+    state_ = PlaybackState::Playing;
+
     if (!track.file_path.empty()) {
-        bool ok = audio_engine::AudioEngine::getInstance().openAndPlay(track.file_path);
+        auto& engine = audio_engine::AudioEngine::getInstance();
+        bool ok = engine.openAndPlay(track.file_path);
         if (ok) {
-            double engine_dur = audio_engine::AudioEngine::getInstance().getDurationSec();
+            double engine_dur = engine.getDurationSec();
             if (engine_dur > 0.0) {
                 duration_sec_ = engine_dur;
+            }
+            if (fade_duration_sec_ > 0.05f) {
+                engine.startFadeIn(fade_duration_sec_);
             }
         }
     }
@@ -199,6 +235,20 @@ void PlayerAdmin::seek(double target_sec) {
 
 void PlayerAdmin::update(double delta_time) {
     auto& engine = audio_engine::AudioEngine::getInstance();
+
+    // 处理切歌淡出完毕后的新曲载入与平滑淡入接力
+    if (is_transitioning_) {
+        transition_elapsed_ += delta_time;
+        if (engine.isFadeOutCompleted() || transition_elapsed_ >= (fade_duration_sec_ + 0.08)) {
+            is_transitioning_ = false;
+            if (pending_track_.has_value()) {
+                Track next_t = pending_track_.value();
+                pending_track_ = std::nullopt;
+                executeTrackSwitch(next_t);
+            }
+        }
+    }
+
     if (engine.isPlaying()) {
         current_time_sec_ = engine.getCurrentTimeSec();
     } else if (state_ == PlaybackState::Playing) {
@@ -287,6 +337,11 @@ void PlayerAdmin::cyclePlayMode() {
     saveConfig();
 }
 
+void PlayerAdmin::setFadeDuration(float sec) {
+    fade_duration_sec_ = std::clamp(sec, 0.0f, 3.0f);
+    saveConfig();
+}
+
 void PlayerAdmin::saveConfig() {
     std::string config_dir = AppConfig::Path::getConfigDir();
     std::error_code ec;
@@ -301,6 +356,7 @@ void PlayerAdmin::saveConfig() {
     ofs << "play_mode=" << static_cast<int>(play_mode_) << "\n";
     ofs << "volume=" << volume_ << "\n";
     ofs << "muted=" << (is_muted_ ? 1 : 0) << "\n";
+    ofs << "fade_duration=" << fade_duration_sec_ << "\n";
 }
 
 void PlayerAdmin::loadConfig() {
@@ -334,6 +390,10 @@ void PlayerAdmin::loadConfig() {
             try {
                 is_muted_ = (std::stoi(val) != 0);
                 audio_engine::AudioEngine::getInstance().setMuted(is_muted_);
+            } catch (...) {}
+        } else if (key == "fade_duration") {
+            try {
+                fade_duration_sec_ = std::clamp(std::stof(val), 0.0f, 3.0f);
             } catch (...) {}
         }
     }
