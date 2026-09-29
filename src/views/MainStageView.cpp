@@ -656,31 +656,7 @@ void MainStageView::renderPlaylistView(uint64_t pid, std::vector<Playlist>& play
     if (ImGui::BeginChild("##TrackListContentChild", ImVec2(content_w, content_h), false, child_flags)) {
         const auto& tracks = target_playlist->getTracks();
         if (tracks.empty()) {
-            // 空状态：去除原先被划掉的文字，在卡片正中央渲染精致发烧液态玻璃「添加」按钮 (对齐 screenshot media_1790649458109)
-            float btn_w = 140.0f;
-            float btn_h = 44.0f;
-            float btn_x = content_x + (content_w - btn_w) * 0.5f;
-            float btn_y = content_y + (content_h - btn_h) * 0.5f - 20.0f;
-
-            ImGui::SetCursorScreenPos(ImVec2(btn_x, btn_y));
-            ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(r, g, b, 70));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(r, g, b, 120));
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(r, g, b, 160));
-            ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 255, 255, 255));
-            ImGui::PushStyleColor(ImGuiCol_Border, UIConfig::Color::GlassBorder);
-            ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
-            ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-
-            if (Fonts::Medium) ImGui::PushFont(Fonts::Medium);
-            if (ImGui::Button("添加", ImVec2(btn_w, btn_h))) {
-                show_add_music_modal_ = true;
-                selected_track_ids_to_add_.clear();
-                add_music_search_buf_[0] = '\0';
-            }
-            if (Fonts::Medium) ImGui::PopFont();
-
-            ImGui::PopStyleVar(2);
-            ImGui::PopStyleColor(5);
+            // 空状态：右上角已常驻「+ 添加歌曲」，中央保持纯净发烧通透
         } else {
             // 渲染歌单内曲目行，包含高亮、律动频谱、播放与移除按钮
             for (size_t i = 0; i < tracks.size(); ++i) {
@@ -864,9 +840,9 @@ void MainStageView::renderAddMusicToPlaylistModal(Playlist* target_playlist, std
     }
     ImGui::End();
 
-    // 2. 居中模态卡片尺寸与排版 (580px × 470px)
-    const float modal_w = 580.0f;
-    const float modal_h = 470.0f;
+    // 2. 居中模态卡片尺寸与排版 (660px × 480px，留足右侧音频格式与时长空间)
+    const float modal_w = 660.0f;
+    const float modal_h = 480.0f;
     const float modal_x = (screen_w - modal_w) * 0.5f;
     const float modal_y = (screen_h - modal_h) * 0.5f;
 
@@ -899,7 +875,7 @@ void MainStageView::renderAddMusicToPlaylistModal(Playlist* target_playlist, std
         const uint32_t g = (accent >> IM_COL32_G_SHIFT) & 0xFF;
         const uint32_t b = (accent >> IM_COL32_B_SHIFT) & 0xFF;
 
-        // 顶层 Header: 标题与目标歌单、右上角关闭按钮
+        // 顶层 Header: 标题与目标歌单
         if (Fonts::Medium) ImGui::PushFont(Fonts::Medium);
         ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 1.0f), "添加歌曲到歌单");
         if (Fonts::Medium) ImGui::PopFont();
@@ -911,20 +887,31 @@ void MainStageView::renderAddMusicToPlaylistModal(Playlist* target_playlist, std
         ImGui::TextColored(ImVec4(static_cast<float>(r) / 255.0f, static_cast<float>(g) / 255.0f, static_cast<float>(b) / 255.0f, 0.95f), "%s", tag_str.c_str());
         if (Fonts::Small) ImGui::PopFont();
 
-        // 右上角 "✕" 关闭按钮
-        float close_btn_size = 24.0f;
-        ImGui::SameLine(modal_w - 24.0f - close_btn_size);
-        ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(0, 0, 0, 0));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(255, 255, 255, 30));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(255, 255, 255, 50));
-        ImGui::PushStyleColor(ImGuiCol_Text, UIConfig::Color::TextMuted);
-        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 12.0f);
-        if (ImGui::Button("✕", ImVec2(close_btn_size, close_btn_size))) {
+        // 右上角纯矢量 "✕" 关闭按钮 (彻底消除字库缺失导致的 "?" 乱码)
+        float close_btn_size = 26.0f;
+        float close_x = modal_w - 24.0f - close_btn_size;
+        float close_y = 18.0f;
+        ImGui::SetCursorPos(ImVec2(close_x, close_y));
+
+        ImVec2 close_screen_pos = ImGui::GetCursorScreenPos();
+        bool close_clicked = ImGui::InvisibleButton("##CloseModalBtn", ImVec2(close_btn_size, close_btn_size));
+        bool close_hovered = ImGui::IsItemHovered();
+        bool close_active = ImGui::IsItemActive();
+
+        ImU32 close_bg = close_active ? IM_COL32(255, 255, 255, 40) : (close_hovered ? IM_COL32(255, 255, 255, 22) : IM_COL32(0, 0, 0, 0));
+        dl->AddCircleFilled(ImVec2(close_screen_pos.x + close_btn_size * 0.5f, close_screen_pos.y + close_btn_size * 0.5f),
+                            close_btn_size * 0.5f, close_bg);
+
+        ImVec2 cross_center(close_screen_pos.x + close_btn_size * 0.5f, close_screen_pos.y + close_btn_size * 0.5f);
+        float cr = 4.8f;
+        ImU32 cross_col = close_hovered ? IM_COL32(255, 255, 255, 255) : IM_COL32(180, 195, 215, 200);
+        dl->AddLine(ImVec2(cross_center.x - cr, cross_center.y - cr), ImVec2(cross_center.x + cr, cross_center.y + cr), cross_col, 1.8f);
+        dl->AddLine(ImVec2(cross_center.x + cr, cross_center.y - cr), ImVec2(cross_center.x - cr, cross_center.y + cr), cross_col, 1.8f);
+
+        if (close_clicked) {
             show_add_music_modal_ = false;
             selected_track_ids_to_add_.clear();
         }
-        ImGui::PopStyleVar();
-        ImGui::PopStyleColor(4);
 
         ImGui::Dummy(ImVec2(0.0f, 8.0f));
 
@@ -979,11 +966,12 @@ void MainStageView::renderAddMusicToPlaylistModal(Playlist* target_playlist, std
             }
         }
 
-        // 中间曲目列表区域 (无粗滚动条，支持自然滚动)
+        // 中间曲目列表区域 (无粗滚动条，采用内嵌 Padding 避免边缘裁剪)
         float list_w = modal_w - 48.0f;
         float list_h = modal_h - 180.0f;
 
         ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 4.0f));
         if (ImGui::BeginChild("##AddMusicTrackListScroll", ImVec2(list_w, list_h), true,
                               ImGuiWindowFlags_NoScrollbar)) {
 
@@ -1027,12 +1015,13 @@ void MainStageView::renderAddMusicToPlaylistModal(Playlist* target_playlist, std
 
                     ImGui::PushID(static_cast<int>(trk.id * 1000 + i));
 
+                    float avail_w = ImGui::GetContentRegionAvail().x;
                     float row_h = 32.0f;
                     ImVec2 row_pos = ImGui::GetCursorScreenPos();
-                    ImVec2 row_min(row_pos.x, row_pos.y);
-                    ImVec2 row_max(row_pos.x + list_w - 4.0f, row_pos.y + row_h);
+                    ImVec2 row_min = row_pos;
+                    ImVec2 row_max(row_pos.x + avail_w, row_pos.y + row_h);
 
-                    bool row_clicked = ImGui::InvisibleButton("##RowBtn", ImVec2(list_w - 4.0f, row_h));
+                    bool row_clicked = ImGui::InvisibleButton("##RowBtn", ImVec2(avail_w, row_h));
                     bool row_hovered = ImGui::IsItemHovered();
 
                     if (row_clicked && !already_in) {
@@ -1055,27 +1044,83 @@ void MainStageView::renderAddMusicToPlaylistModal(Playlist* target_playlist, std
                         cur_dl->AddRectFilled(row_min, row_max, UIConfig::Color::GlassHover, 5.0f);
                     }
 
-                    // 左侧复选框绘制
-                    float box_size = 16.0f;
+                    // 左侧复选框绘制 (纯矢量防锯齿绘制，彻底杜绝缺失字形导致的 "?" 乱码)
+                    float box_size = 17.0f;
                     float box_x = row_min.x + 8.0f;
                     float box_y = row_pos.y + (row_h - box_size) * 0.5f;
 
                     if (already_in) {
-                        // 已添加图标 (灰色背景对勾)
-                        cur_dl->AddRectFilled(ImVec2(box_x, box_y), ImVec2(box_x + box_size, box_y + box_size), IM_COL32(50, 60, 75, 180), 3.0f);
-                        cur_dl->AddText(ImVec2(box_x + 2.5f, box_y - 1.0f), IM_COL32(140, 155, 175, 200), "✓");
+                        // 已添加图标 (灰色背景 + 矢量勾选)
+                        cur_dl->AddRectFilled(ImVec2(box_x, box_y), ImVec2(box_x + box_size, box_y + box_size), IM_COL32(50, 60, 75, 180), 3.5f);
+                        const ImVec2 pts[3] = {
+                            ImVec2(box_x + 4.0f, box_y + 8.5f),
+                            ImVec2(box_x + 7.0f, box_y + 12.2f),
+                            ImVec2(box_x + 13.0f, box_y + 5.0f)
+                        };
+                        cur_dl->AddPolyline(pts, 3, IM_COL32(160, 175, 195, 220), ImDrawFlags_None, 1.8f);
                     } else if (is_selected) {
-                        // 选中图标 (主题色高亮对勾)
-                        cur_dl->AddRectFilled(ImVec2(box_x, box_y), ImVec2(box_x + box_size, box_y + box_size), accent, 3.0f);
-                        cur_dl->AddText(ImVec2(box_x + 2.5f, box_y - 1.0f), IM_COL32(255, 255, 255, 255), "✓");
+                        // 选中图标 (主题色高亮底板 + 纯白矢量对勾)
+                        cur_dl->AddRectFilled(ImVec2(box_x, box_y), ImVec2(box_x + box_size, box_y + box_size), accent, 3.5f);
+                        const ImVec2 pts[3] = {
+                            ImVec2(box_x + 4.0f, box_y + 8.5f),
+                            ImVec2(box_x + 7.0f, box_y + 12.2f),
+                            ImVec2(box_x + 13.0f, box_y + 5.0f)
+                        };
+                        cur_dl->AddPolyline(pts, 3, IM_COL32(255, 255, 255, 255), ImDrawFlags_None, 2.0f);
                     } else {
                         // 未选中框
-                        cur_dl->AddRect(ImVec2(box_x, box_y), ImVec2(box_x + box_size, box_y + box_size), IM_COL32(100, 115, 135, 180), 3.0f, 0, 1.0f);
+                        cur_dl->AddRect(ImVec2(box_x, box_y), ImVec2(box_x + box_size, box_y + box_size), IM_COL32(100, 115, 135, 180), 3.5f, 0, 1.2f);
                     }
 
-                    // 曲名
+                    // 右侧：已在歌单标记 或 规格 + 时长 (优先从右侧倒排布局，确保右侧间距充足绝不截断)
+                    float right_x = row_max.x - 10.0f;
+                    if (already_in) {
+                        if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+                        const char* exist_tag = "已在歌单";
+                        float exist_w = ImGui::CalcTextSize(exist_tag).x + 12.0f;
+                        float exist_h = 20.0f;
+                        float exist_x = right_x - exist_w;
+                        float exist_y = row_pos.y + (row_h - exist_h) * 0.5f;
+
+                        cur_dl->AddRectFilled(ImVec2(exist_x, exist_y), ImVec2(exist_x + exist_w, exist_y + exist_h), IM_COL32(35, 42, 56, 190), 3.5f);
+                        cur_dl->AddRect(ImVec2(exist_x, exist_y), ImVec2(exist_x + exist_w, exist_y + exist_h), IM_COL32(70, 85, 110, 160), 3.5f, 0, 1.0f);
+                        cur_dl->AddText(ImVec2(exist_x + 6.0f, exist_y + 2.0f), IM_COL32(140, 155, 175, 220), exist_tag);
+                        if (Fonts::Small) ImGui::PopFont();
+                        right_x = exist_x - 10.0f;
+                    } else {
+                        // 1. 时长
+                        if (trk.duration_sec > 0) {
+                            char dur_buf[32];
+                            std::snprintf(dur_buf, sizeof(dur_buf), "%02u:%02u", trk.duration_sec / 60, trk.duration_sec % 60);
+                            if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+                            float dur_w = ImGui::CalcTextSize(dur_buf).x;
+                            right_x -= dur_w;
+                            cur_dl->AddText(ImVec2(right_x, row_pos.y + 7.0f), IM_COL32(150, 165, 185, 200), dur_buf);
+                            if (Fonts::Small) ImGui::PopFont();
+                            right_x -= 12.0f;
+                        }
+
+                        // 2. 规格徽标 (赋予充足宽度与内边距，文字与边框完整保留)
+                        std::string badge = trk.getFormatBadge();
+                        if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+                        float badge_txt_w = ImGui::CalcTextSize(badge.c_str()).x;
+                        float badge_w = badge_txt_w + 12.0f;
+                        float badge_h = 18.0f;
+                        float badge_x = right_x - badge_w;
+                        float badge_y = row_pos.y + (row_h - badge_h) * 0.5f;
+
+                        cur_dl->AddRectFilled(ImVec2(badge_x, badge_y), ImVec2(badge_x + badge_w, badge_y + badge_h), IM_COL32(18, 24, 34, 210), 3.5f);
+                        cur_dl->AddRect(ImVec2(badge_x, badge_y), ImVec2(badge_x + badge_w, badge_y + badge_h), IM_COL32(50, 70, 95, 160), 3.5f, 0, 1.0f);
+                        cur_dl->AddText(ImVec2(badge_x + 6.0f, badge_y + 1.5f), IM_COL32(65, 190, 255, 230), badge.c_str());
+                        if (Fonts::Small) ImGui::PopFont();
+                        right_x = badge_x - 10.0f;
+                    }
+
+                    // 3. 曲名与艺术家 (安全裁剪矩形，防止超长曲名覆盖右侧徽标)
                     float text_x = box_x + box_size + 12.0f;
                     float text_y = row_pos.y + 7.0f;
+
+                    cur_dl->PushClipRect(ImVec2(text_x, row_min.y), ImVec2(right_x - 6.0f, row_max.y), true);
 
                     ImU32 title_col = already_in ? IM_COL32(130, 145, 165, 180) :
                                       (is_selected ? UIConfig::Color::TextActive : IM_COL32(215, 225, 238, 230));
@@ -1084,7 +1129,6 @@ void MainStageView::renderAddMusicToPlaylistModal(Playlist* target_playlist, std
                     float title_w = ImGui::CalcTextSize(trk.title.c_str()).x;
                     text_x += title_w + 10.0f;
 
-                    // 艺术家
                     if (!trk.artist.empty()) {
                         std::string art = "- " + trk.artist;
                         if (Fonts::Small) ImGui::PushFont(Fonts::Small);
@@ -1092,42 +1136,7 @@ void MainStageView::renderAddMusicToPlaylistModal(Playlist* target_playlist, std
                         if (Fonts::Small) ImGui::PopFont();
                     }
 
-                    // 右侧：已在歌单标记 或 规格 + 时长
-                    float right_x = row_max.x - 8.0f;
-                    if (already_in) {
-                        if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-                        const char* exist_tag = "已在歌单";
-                        float exist_w = ImGui::CalcTextSize(exist_tag).x;
-                        right_x -= exist_w;
-                        cur_dl->AddText(ImVec2(right_x, text_y + 1.0f), IM_COL32(110, 125, 145, 200), exist_tag);
-                        if (Fonts::Small) ImGui::PopFont();
-                    } else {
-                        // 时长
-                        if (trk.duration_sec > 0) {
-                            char dur_buf[32];
-                            std::snprintf(dur_buf, sizeof(dur_buf), "%02u:%02u", trk.duration_sec / 60, trk.duration_sec % 60);
-                            if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-                            float dur_w = ImGui::CalcTextSize(dur_buf).x;
-                            right_x -= dur_w;
-                            cur_dl->AddText(ImVec2(right_x, text_y + 1.0f), IM_COL32(150, 165, 185, 200), dur_buf);
-                            if (Fonts::Small) ImGui::PopFont();
-                            right_x -= 12.0f;
-                        }
-
-                        // 规格徽标
-                        std::string badge = trk.getFormatBadge();
-                        if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-                        float badge_txt_w = ImGui::CalcTextSize(badge.c_str()).x;
-                        float badge_w = badge_txt_w + 8.0f;
-                        float badge_h = 16.0f;
-                        float badge_x = right_x - badge_w;
-                        float badge_y = row_pos.y + 7.5f;
-
-                        cur_dl->AddRectFilled(ImVec2(badge_x, badge_y), ImVec2(badge_x + badge_w, badge_y + badge_h), IM_COL32(18, 24, 34, 210), 3.0f);
-                        cur_dl->AddRect(ImVec2(badge_x, badge_y), ImVec2(badge_x + badge_w, badge_y + badge_h), IM_COL32(50, 70, 95, 160), 3.0f, 0, 1.0f);
-                        cur_dl->AddText(ImVec2(badge_x + 4.0f, badge_y + 1.0f), IM_COL32(65, 190, 255, 230), badge.c_str());
-                        if (Fonts::Small) ImGui::PopFont();
-                    }
+                    cur_dl->PopClipRect();
 
                     ImGui::PopID();
                     ImGui::Dummy(ImVec2(0.0f, 2.0f));
@@ -1135,7 +1144,7 @@ void MainStageView::renderAddMusicToPlaylistModal(Playlist* target_playlist, std
             }
         }
         ImGui::EndChild();
-        ImGui::PopStyleVar(); // Pop ScrollbarSize
+        ImGui::PopStyleVar(2); // Pop ScrollbarSize and WindowPadding
 
         ImGui::Dummy(ImVec2(0.0f, 14.0f));
 
