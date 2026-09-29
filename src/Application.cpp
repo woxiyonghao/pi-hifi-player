@@ -707,38 +707,38 @@ void Application::renderAccuphaseBackground(float screen_w, float screen_h, floa
     }
 
     // 3. 动态表头背光微光晕与跳动金属细针
-    const float needle_len = 46.0f;
-    ImVec2 pivot_l(370.0f, 292.0f);
-    ImVec2 pivot_r(664.0f, 292.0f);
+    const float needle_len = 90.0f;
+    ImVec2 pivot_l(196.5f, 345.5f);
+    ImVec2 pivot_r(753.5f, 345.5f);
 
     // 左声道表盘
-    bg_dl->PushClipRect(ImVec2(295.0f, 215.0f), ImVec2(445.0f, 298.0f), true);
+    bg_dl->PushClipRect(ImVec2(84.0f, 230.0f), ImVec2(365.0f, 360.0f), true);
     if (raw_level_l > 0.02f) {
-        int glow_a = static_cast<int>(35.0f * (0.6f + 0.4f * norm_l));
-        bg_dl->AddCircleFilled(ImVec2(370.0f, 260.0f), 45.0f, IM_COL32(255, 230, 160, glow_a));
+        int glow_a = static_cast<int>(40.0f * (0.6f + 0.4f * norm_l));
+        bg_dl->AddCircleFilled(ImVec2(196.5f, 295.0f), 55.0f, IM_COL32(255, 230, 160, glow_a));
     }
     ImVec2 tip_l(pivot_l.x + std::cos(acc_needle_l_) * needle_len, pivot_l.y + std::sin(acc_needle_l_) * needle_len);
-    bg_dl->AddLine(pivot_l, tip_l, IM_COL32(255, 240, 200, 50), 3.0f);
-    bg_dl->AddLine(pivot_l, tip_l, IM_COL32(18, 16, 14, 240), 1.8f);
-    bg_dl->AddCircleFilled(pivot_l, 4.0f, IM_COL32(28, 25, 22, 255));
+    bg_dl->AddLine(pivot_l, tip_l, IM_COL32(255, 240, 200, 40), 3.5f);
+    bg_dl->AddLine(pivot_l, tip_l, IM_COL32(20, 18, 16, 245), 2.0f);
+    bg_dl->AddCircleFilled(pivot_l, 5.0f, IM_COL32(28, 25, 22, 255));
     bg_dl->PopClipRect();
 
     // 右声道表盘
-    bg_dl->PushClipRect(ImVec2(590.0f, 215.0f), ImVec2(740.0f, 298.0f), true);
+    bg_dl->PushClipRect(ImVec2(645.0f, 230.0f), ImVec2(926.0f, 360.0f), true);
     if (raw_level_r > 0.02f) {
-        int glow_a = static_cast<int>(35.0f * (0.6f + 0.4f * norm_r));
-        bg_dl->AddCircleFilled(ImVec2(664.0f, 260.0f), 45.0f, IM_COL32(255, 230, 160, glow_a));
+        int glow_a = static_cast<int>(40.0f * (0.6f + 0.4f * norm_r));
+        bg_dl->AddCircleFilled(ImVec2(753.5f, 295.0f), 55.0f, IM_COL32(255, 230, 160, glow_a));
     }
     ImVec2 tip_r(pivot_r.x + std::cos(acc_needle_r_) * needle_len, pivot_r.y + std::sin(acc_needle_r_) * needle_len);
-    bg_dl->AddLine(pivot_r, tip_r, IM_COL32(255, 240, 200, 50), 3.0f);
-    bg_dl->AddLine(pivot_r, tip_r, IM_COL32(18, 16, 14, 240), 1.8f);
-    bg_dl->AddCircleFilled(pivot_r, 4.0f, IM_COL32(28, 25, 22, 255));
+    bg_dl->AddLine(pivot_r, tip_r, IM_COL32(255, 240, 200, 40), 3.5f);
+    bg_dl->AddLine(pivot_r, tip_r, IM_COL32(20, 18, 16, 245), 2.0f);
+    bg_dl->AddCircleFilled(pivot_r, 5.0f, IM_COL32(28, 25, 22, 255));
     bg_dl->PopClipRect();
 
     // 4. 标志性翡翠绿 Accuphase 徽标呼吸微光 (机皇灵魂)
     float logo_pulse = (std::sin(static_cast<float>(ImGui::GetTime()) * 1.5f) + 1.0f) * 0.5f;
-    int logo_a = static_cast<int>(12.0f + 18.0f * logo_pulse);
-    bg_dl->AddRectFilled(ImVec2(470.0f, 226.0f), ImVec2(560.0f, 256.0f), IM_COL32(0, 230, 150, logo_a), 10.0f);
+    int logo_a = static_cast<int>(14.0f + 20.0f * logo_pulse);
+    bg_dl->AddRectFilled(ImVec2(440.0f, 245.0f), ImVec2(584.0f, 292.0f), IM_COL32(0, 235, 150, logo_a), 10.0f);
 
     // 5. 经典红光 7 段数码管音量读数 (-24 dB / -- dB)
     auto& player = PlayerAdmin::getInstance();
@@ -752,7 +752,7 @@ void Application::renderAccuphaseBackground(float screen_w, float screen_h, floa
     }
 
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-    bg_dl->AddText(ImVec2(495.0f, 287.0f), IM_COL32(255, 45, 45, 230), db_buf);
+    bg_dl->AddText(ImVec2(495.0f, 340.0f), IM_COL32(255, 45, 45, 240), db_buf);
     if (Fonts::Small) ImGui::PopFont();
 }
 

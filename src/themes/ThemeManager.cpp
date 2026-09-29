@@ -51,7 +51,7 @@ ThemeManager::ThemeManager() {
         ThemeId::Accuphase,
         "金嗓子香槟金",
         "Accuphase Champagne",
-        "Yokohama, Japan · 日本发烧机皇精密香槟拉丝面板，E-260 暖光双表头温润生动",
+        "Yokohama, Japan · 日本发烧机皇精密香槟拉丝面板，E-260 液晶双表头温润生动",
         "甜美人声 · 温暖弦乐",
         IM_COL32(226, 199, 146, 255),  // #E2C792 原机香槟暖金
         IM_COL32(226, 199, 146, 60),

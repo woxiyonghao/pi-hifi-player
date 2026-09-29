@@ -1666,12 +1666,12 @@ void MainStageView::renderThemeSettingsView(float x, float y, float w, float h) 
     dl->AddText(ImVec2(sec_x0 + 16.0f, s2_head_y), UIConfig::Color::TextActive, "背景律动");
     if (Fonts::Regular) ImGui::PopFont();
 
-    // [Options] 4 个动效风格按钮 (含金嗓子 E-260 旗舰功放贴图)
+    // [Options] 4 个动效风格按钮 (含金嗓子功放液晶双表头显示)
     auto cur_bg_mode = tm.getBackgroundVisualMode();
     const char* mode_labels[4] = {
         "48列全景 LED 频谱",
         "麦景图动圈大表头",
-        "金嗓子 E-260 功放",
+        "金嗓子功放液晶显示",
         "极简纯黑发烧机架"
     };
 
