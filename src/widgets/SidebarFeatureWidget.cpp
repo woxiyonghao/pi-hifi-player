@@ -16,7 +16,7 @@ SidebarFeatureWidget::SidebarFeatureWidget() {
         { SidebarTab::Equalizer,      "均衡器" },
         { SidebarTab::DACSettings,    "DACSettings" },
         { SidebarTab::ThemeSettings,  "主题" },
-        { SidebarTab::SystemSettings, "SystemSettings" }
+        { SidebarTab::SystemSettings, "设置" }
     };
 }
 
@@ -55,9 +55,17 @@ void SidebarFeatureWidget::drawFeatureIcon(ImDrawList* dl, ImVec2 center, Sideba
             break;
         }
         case SidebarTab::SystemSettings: {
-            // 系统设置：微型同心环与中心节点
-            dl->AddCircle(center, 5.5f, color, 16, 1.4f);
-            dl->AddCircleFilled(center, 2.0f, color);
+            // 系统设置：经典精工齿轮图标 (中心圆环 + 6 颗径向齿)
+            dl->AddCircle(center, 4.0f, color, 16, 1.4f);
+            constexpr float kPi = 3.14159265f;
+            for (int i = 0; i < 6; ++i) {
+                float a = i * (kPi / 3.0f);
+                float ca = std::cos(a);
+                float sa = std::sin(a);
+                ImVec2 p0(center.x + ca * 4.0f, center.y + sa * 4.0f);
+                ImVec2 p1(center.x + ca * 6.8f, center.y + sa * 6.8f);
+                dl->AddLine(p0, p1, color, 1.6f);
+            }
             break;
         }
         default:

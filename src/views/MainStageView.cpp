@@ -13,6 +13,11 @@
 #include <random>
 
 MainStageView::MainStageView() {
+    settings_view_.setOnNavigateTab([this](int tab_id) {
+        if (on_navigate_tab_) {
+            on_navigate_tab_(static_cast<SidebarTab>(tab_id));
+        }
+    });
 }
 
 void MainStageView::renderScanMusicView(float x, float y, float w, float h, std::vector<Playlist>& playlists) {
@@ -2009,11 +2014,5 @@ void MainStageView::renderThemeSettingsView(float x, float y, float w, float h) 
 }
 
 void MainStageView::renderSystemSettingsView(float x, float y, float w, float h) {
-    float margin_x = UIConfig::Layout::ContainerMarginX;
-    float margin_y = UIConfig::Layout::ContainerMarginY;
-    ImVec2 card_min(x + margin_x, y + margin_y);
-    ImVec2 card_max(x + w - margin_x, y + h - 86.0f);
-
-    ImDrawList* dl = ImGui::GetWindowDrawList();
-    drawLiquidCard(dl, card_min, card_max, "系统状态与树莓派硬件中枢", "ARMv8.2-A Cortex-A76 · KMS/DRM 无桌面直启 · 0dB 静音运行");
+    settings_view_.render(x, y, w, h);
 }

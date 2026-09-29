@@ -2,6 +2,7 @@
 
 #include "ScanMusicWidget.hpp"
 #include "EQConfigView.hpp"
+#include "SystemSettingsView.hpp"
 #include "imgui.h"
 #include "public/UIConfig.hpp"
 #include "tools/MusicScanManager.hpp"
@@ -49,6 +50,7 @@ class MainStageView {
   private:
     ScanMusicWidget scan_widget_;
     EQConfigView eq_view_;
+    SystemSettingsView settings_view_;
     NavigateTabCallback on_navigate_tab_;
     SelectPlaylistCallback on_select_playlist_;
 
