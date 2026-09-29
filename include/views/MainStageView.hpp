@@ -6,7 +6,7 @@
 #include "ThemeSettingView.hpp"
 #include "AllMusicPlaylistView.hpp"
 #include "CustomPlaylistView.hpp"
-#include "views/DACConfigView.hpp"
+#include "views/DACSettingView.hpp"
 #include "imgui.h"
 #include "public/UIConfig.hpp"
 #include "types/MusicModel.hpp"
@@ -49,7 +49,7 @@ class MainStageView {
   private:
     ScanMusicWidget scan_widget_;
     EQConfigView eq_view_;
-    DACConfigView dac_view_;
+    DACSettingView dac_view_;
     SystemSettingsView settings_view_;
     ThemeSettingView theme_setting_view_;
     AllMusicPlaylistView all_music_view_;
