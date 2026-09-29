@@ -239,9 +239,9 @@ void ThemeSettingView::render(float x, float y, float w, float h) {
         auto cur_bg_mode = tm.getBackgroundVisualMode();
         const char* mode_labels[4] = {
             "48列全景 LED 频谱",
-            "麦景图动圈大表头",
-            "金嗓子动圈大表头",
-            "极简纯黑发烧机架"
+            "名机动圈大表头",
+            "金嗓子旗舰大表头",
+            "极简纯黑纯音直通"
         };
 
         float mode_btn_gap = 10.0f;
@@ -579,10 +579,9 @@ void ThemeSettingView::render(float x, float y, float w, float h) {
 
         ImGui::SetCursorScreenPos(ImVec2(p_sec3.x, p_sec3.y + sec3_h));
         ImGui::Dummy(ImVec2(0.0f, 16.0f));
-
-        ImGui::EndChild();
     }
 
+    ImGui::EndChild();
     ImGui::PopStyleColor(4);
     ImGui::PopStyleVar(2);
 }
