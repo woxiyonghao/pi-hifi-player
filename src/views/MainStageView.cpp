@@ -630,8 +630,8 @@ void MainStageView::renderPlaylistView(uint64_t pid, std::vector<Playlist>& play
         ImGui::PopStyleVar(2);
         ImGui::PopStyleColor(5);
 
-        // 2. 左侧：+ 添加歌曲按钮 (经典液态玻璃主题色)
-        float add_btn_w = 96.0f;
+        // 2. 左侧：添加歌曲按钮 (经典液态玻璃主题色)
+        float add_btn_w = 88.0f;
         float add_btn_h = 28.0f;
         float add_btn_x = del_btn_x - 10.0f - add_btn_w;
         float add_btn_y = card_min.y + 18.0f;
@@ -646,7 +646,7 @@ void MainStageView::renderPlaylistView(uint64_t pid, std::vector<Playlist>& play
         ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
 
         if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-        if (ImGui::Button("+ 添加歌曲", ImVec2(add_btn_w, add_btn_h))) {
+        if (ImGui::Button("添加歌曲", ImVec2(add_btn_w, add_btn_h))) {
             show_add_music_modal_ = true;
             selected_track_ids_to_add_.clear();
             add_music_search_buf_[0] = '\0';
