@@ -15,7 +15,7 @@ public:
     // @param width 侧边栏总宽度 (用于计算 Xcode 风格左右 16px 边距)
     // @param y 控件起始 Y 坐标
     // @param height 卡片固定高度 (UIConfig::Layout::DacCardHeight)
-    void render(float width, float y, float height);
+    void render(float width, float y, float height, float offset_x = 0.0f, float offset_y = 0.0f);
 
     // 硬件连接状态与设备名称
     void setConnected(bool connected, const std::string& name = "AK4499EX") {

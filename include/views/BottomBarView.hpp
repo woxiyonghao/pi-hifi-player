@@ -14,8 +14,8 @@ class BottomBarView {
     BottomBarView();
     ~BottomBarView() = default;
 
-    // 渲染底部播放控制栏
-    void render(float screen_w = 1024.0f, float screen_h = 600.0f);
+    // 渲染底部播放控制栏 (支持四角屏保动画偏移)
+    void render(float screen_w = 1024.0f, float screen_h = 600.0f, float offset_x = 0.0f, float offset_y = 0.0f);
 
     float getHeight() const { return height_; }
     void setHeight(float h) { height_ = h; }

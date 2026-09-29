@@ -8,7 +8,6 @@
 #include <cmath>
 #include <cstdio>
 #include <string>
-#include <vector>
 
 SystemSettingsView::SystemSettingsView() {
     loadSettings();
@@ -23,6 +22,7 @@ void SystemSettingsView::loadSettings() {
     std::string s_cpu = db.getSetting("setting_cpu_governor", "0");
     std::string s_br = db.getSetting("setting_brightness", "0.85");
     std::string s_to = db.getSetting("setting_screen_timeout", "0");
+    std::string s_idle = db.getSetting("setting_idle_fullscreen", "0");
 
     try {
         sample_rate_mode_ = std::clamp(std::stoi(s_sr), 0, 2);
@@ -31,6 +31,7 @@ void SystemSettingsView::loadSettings() {
         cpu_governor_ = std::clamp(std::stoi(s_cpu), 0, 1);
         screen_brightness_ = std::clamp(std::stof(s_br), 0.1f, 1.0f);
         screen_timeout_mode_ = std::clamp(std::stoi(s_to), 0, 3);
+        idle_fullscreen_mode_ = std::clamp(std::stoi(s_idle), 0, 4);
     } catch (...) {
         sample_rate_mode_ = 0;
         dsd_mode_ = 0;
@@ -38,6 +39,7 @@ void SystemSettingsView::loadSettings() {
         cpu_governor_ = 0;
         screen_brightness_ = 0.85f;
         screen_timeout_mode_ = 0;
+        idle_fullscreen_mode_ = 0;
     }
 }
 
@@ -49,43 +51,7 @@ void SystemSettingsView::saveSettings() {
     db.setSetting("setting_cpu_governor", std::to_string(cpu_governor_));
     db.setSetting("setting_brightness", std::to_string(screen_brightness_));
     db.setSetting("setting_screen_timeout", std::to_string(screen_timeout_mode_));
-}
-
-void SystemSettingsView::showToast(const std::string& msg) {
-    toast_msg_ = msg;
-    toast_timer_ = 2.5f;
-}
-
-void SystemSettingsView::renderToast(ImDrawList* dl, float card_x0, float card_y0, float card_w, float card_h) {
-    (void)card_y0;
-    if (toast_timer_ <= 0.0f || toast_msg_.empty()) return;
-
-    toast_timer_ -= ImGui::GetIO().DeltaTime;
-    float alpha = std::clamp(toast_timer_ * 2.0f, 0.0f, 1.0f);
-    int bg_alpha = static_cast<int>(230 * alpha);
-    int border_alpha = static_cast<int>(255 * alpha);
-    int txt_alpha = static_cast<int>(255 * alpha);
-
-    ImVec2 txt_sz = ImGui::CalcTextSize(toast_msg_.c_str());
-    float pad_x = 20.0f;
-    float pad_y = 9.0f;
-    float toast_w = txt_sz.x + pad_x * 2.0f;
-    float toast_h = txt_sz.y + pad_y * 2.0f;
-
-    float tx = card_x0 + (card_w - toast_w) * 0.5f;
-    float ty = card_y0 + card_h - toast_h - 18.0f;
-
-    ImVec2 t_min(tx, ty);
-    ImVec2 t_max(tx + toast_w, ty + toast_h);
-
-    ImU32 accent = ThemeManager::getInstance().getAccentColor();
-    ImU32 toast_bg = IM_COL32(18, 22, 30, bg_alpha);
-    ImU32 toast_border = (accent & 0x00FFFFFF) | (static_cast<uint32_t>(border_alpha) << IM_COL32_A_SHIFT);
-    ImU32 toast_txt = IM_COL32(255, 255, 255, txt_alpha);
-
-    dl->AddRectFilled(t_min, t_max, toast_bg, 8.0f);
-    dl->AddRect(t_min, t_max, toast_border, 8.0f, 0, 1.2f);
-    dl->AddText(ImVec2(tx + pad_x, ty + pad_y), toast_txt, toast_msg_.c_str());
+    db.setSetting("setting_idle_fullscreen", std::to_string(idle_fullscreen_mode_));
 }
 
 void SystemSettingsView::render(float x, float y, float w, float h) {
@@ -141,10 +107,10 @@ void SystemSettingsView::render(float x, float y, float w, float h) {
         ImGui::SetCursorScreenPos(ImVec2(p_audio.x, p_audio.y + 146.0f));
         ImGui::Dummy(ImVec2(0.0f, 10.0f));
 
-        // 板块二：硬件性能与显示控制 (146px)
+        // 板块二：硬件性能与显示控制 (182px, 含空余时间显示全屏)
         ImVec2 p_hw = ImGui::GetCursorScreenPos();
         renderHardwareSection(child_dl, p_hw.x, p_hw.y, section_w);
-        ImGui::SetCursorScreenPos(ImVec2(p_hw.x, p_hw.y + 146.0f));
+        ImGui::SetCursorScreenPos(ImVec2(p_hw.x, p_hw.y + 182.0f));
         ImGui::Dummy(ImVec2(0.0f, 10.0f));
 
         // 板块三：曲库与存储中枢 (98px)
@@ -162,9 +128,6 @@ void SystemSettingsView::render(float x, float y, float w, float h) {
     ImGui::EndChild();
     ImGui::PopStyleColor(4);
     ImGui::PopStyleVar(2);
-
-    // 4. Toast 反馈微弹窗渲染
-    renderToast(dl, card_min.x, card_min.y, card_max.x - card_min.x, card_max.y - card_min.y);
 }
 
 void SystemSettingsView::renderAudioSection(ImDrawList* dl, float x0, float y0, float w) {
@@ -212,7 +175,6 @@ void SystemSettingsView::renderAudioSection(ImDrawList* dl, float x0, float y0, 
             if (ImGui::IsItemClicked()) {
                 current_val = i;
                 saveSettings();
-                showToast(std::string("已更新") + label + "：" + options[i]);
             }
 
             ImU32 bg = is_act ? IM_COL32(r, g, b, 70) :
@@ -245,7 +207,7 @@ void SystemSettingsView::renderAudioSection(ImDrawList* dl, float x0, float y0, 
 }
 
 void SystemSettingsView::renderHardwareSection(ImDrawList* dl, float x0, float y0, float w) {
-    float h = 146.0f;
+    float h = 182.0f;
     ImVec2 p0(x0, y0);
     ImVec2 p1(x0 + w, y0 + h);
 
@@ -287,7 +249,6 @@ void SystemSettingsView::renderHardwareSection(ImDrawList* dl, float x0, float y
         if (ImGui::IsItemClicked()) {
             cpu_governor_ = i;
             saveSettings();
-            showToast(std::string("已切换 CPU 调频策略为：") + cpu_opts[i]);
         }
 
         ImU32 bg = is_act ? IM_COL32(r, g, b, 70) :
@@ -367,7 +328,6 @@ void SystemSettingsView::renderHardwareSection(ImDrawList* dl, float x0, float y
         if (ImGui::IsItemClicked()) {
             screen_timeout_mode_ = i;
             saveSettings();
-            showToast(std::string("自动息屏时间已设定为：") + to_opts[i]);
         }
 
         ImU32 bg = is_act ? IM_COL32(r, g, b, 70) :
@@ -380,6 +340,48 @@ void SystemSettingsView::renderHardwareSection(ImDrawList* dl, float x0, float y
         ImVec2 txt_sz = ImGui::CalcTextSize(to_opts[i]);
         dl->AddText(ImVec2(bx0 + (to_w - txt_sz.x) * 0.5f, y0 + 108.0f + (btn_h - txt_sz.y) * 0.5f),
                     is_act ? UIConfig::Color::TextActive : UIConfig::Color::TextNormal, to_opts[i]);
+        if (Fonts::Small) ImGui::PopFont();
+    }
+
+    // 4. 空余时间显示全屏 (默认 15 秒)
+    if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+    dl->AddText(ImVec2(x0 + 16.0f, y0 + 148.0f), UIConfig::Color::TextMuted, "空余时间显示全屏");
+    if (Fonts::Small) ImGui::PopFont();
+
+    const char* idle_opts[] = { "15 秒", "30 秒", "1 分钟", "5 分钟", "永不" };
+    float idle_gap = 8.0f;
+    float idle_btn_w = (w - 156.0f - idle_gap * 4.0f) / 5.0f;
+
+    for (int i = 0; i < 5; ++i) {
+        float bx0 = btn_start_x + i * (idle_btn_w + idle_gap);
+        ImVec2 b_min(bx0, y0 + 144.0f);
+        ImVec2 b_max(bx0 + idle_btn_w, y0 + 144.0f + btn_h);
+
+        bool is_act = (idle_fullscreen_mode_ == i);
+        std::string btn_id = "##IdleFullscreen_" + std::to_string(i);
+
+        ImGui::SetCursorScreenPos(b_min);
+        ImGui::InvisibleButton(btn_id.c_str(), ImVec2(idle_btn_w, btn_h));
+
+        bool hov = ImGui::IsItemHovered();
+        if (ImGui::IsItemClicked()) {
+            idle_fullscreen_mode_ = i;
+            saveSettings();
+            if (on_idle_fullscreen_changed_) {
+                on_idle_fullscreen_changed_(getIdleFullscreenSeconds());
+            }
+        }
+
+        ImU32 bg = is_act ? IM_COL32(r, g, b, 70) :
+                   (hov ? IM_COL32(255, 255, 255, 22) : IM_COL32(255, 255, 255, 10));
+        dl->AddRectFilled(b_min, b_max, bg, 6.0f);
+        ImU32 border = is_act ? accent : (hov ? IM_COL32(255, 255, 255, 70) : IM_COL32(255, 255, 255, 24));
+        dl->AddRect(b_min, b_max, border, 6.0f, 0, 1.0f);
+
+        if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+        ImVec2 txt_sz = ImGui::CalcTextSize(idle_opts[i]);
+        dl->AddText(ImVec2(bx0 + (idle_btn_w - txt_sz.x) * 0.5f, y0 + 144.0f + (btn_h - txt_sz.y) * 0.5f),
+                    is_act ? UIConfig::Color::TextActive : UIConfig::Color::TextNormal, idle_opts[i]);
         if (Fonts::Small) ImGui::PopFont();
     }
 }
@@ -433,9 +435,7 @@ void SystemSettingsView::renderLibrarySection(ImDrawList* dl, float x0, float y0
     ImGui::SetCursorScreenPos(b2_min);
     ImGui::InvisibleButton("##ClearCacheBtn", ImVec2(btn_w, btn_h));
     bool hov2 = ImGui::IsItemHovered();
-    if (ImGui::IsItemClicked()) {
-        showToast("已成功优化并整理 SQLite 数据库缓存");
-    }
+    (void)hov2;
     dl->AddRectFilled(b2_min, b2_max, hov2 ? IM_COL32(255, 255, 255, 25) : IM_COL32(255, 255, 255, 12), 6.0f);
     dl->AddRect(b2_min, b2_max, hov2 ? IM_COL32(255, 255, 255, 80) : IM_COL32(255, 255, 255, 30), 6.0f, 0, 1.0f);
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
@@ -473,9 +473,7 @@ void SystemSettingsView::renderPowerSection(ImDrawList* dl, float x0, float y0, 
     ImGui::SetCursorScreenPos(rb_min);
     ImGui::InvisibleButton("##RebootBtn", ImVec2(btn_w, btn_h));
     bool rb_hov = ImGui::IsItemHovered();
-    if (ImGui::IsItemClicked()) {
-        showToast("已下发安全重启指令 (Syncing filesystem...)");
-    }
+    (void)rb_hov;
     dl->AddRectFilled(rb_min, rb_max, rb_hov ? IM_COL32(234, 179, 8, 55) : IM_COL32(234, 179, 8, 25), 6.0f);
     dl->AddRect(rb_min, rb_max, IM_COL32(234, 179, 8, rb_hov ? 200 : 100), 6.0f, 0, 1.0f);
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
@@ -490,9 +488,7 @@ void SystemSettingsView::renderPowerSection(ImDrawList* dl, float x0, float y0, 
     ImGui::SetCursorScreenPos(sd_min);
     ImGui::InvisibleButton("##ShutdownBtn", ImVec2(btn_w, btn_h));
     bool sd_hov = ImGui::IsItemHovered();
-    if (ImGui::IsItemClicked()) {
-        showToast("已下发安全关机指令 (Safely dismounting ALSA & SQLite)");
-    }
+    (void)sd_hov;
     dl->AddRectFilled(sd_min, sd_max, sd_hov ? IM_COL32(239, 68, 68, 60) : IM_COL32(239, 68, 68, 25), 6.0f);
     dl->AddRect(sd_min, sd_max, IM_COL32(239, 68, 68, sd_hov ? 220 : 110), 6.0f, 0, 1.0f);
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);

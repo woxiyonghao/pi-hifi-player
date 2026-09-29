@@ -11,6 +11,7 @@
 class SystemSettingsView {
 public:
     using NavigateTabCallback = std::function<void(int tab_id)>;
+    using IdleFullscreenCallback = std::function<void(float)>;
 
     SystemSettingsView();
     ~SystemSettingsView() = default;
@@ -20,6 +21,21 @@ public:
 
     // 导航回调 (支持从设置快捷跳转到扫描音乐等功能)
     void setOnNavigateTab(NavigateTabCallback cb) { on_navigate_tab_ = cb; }
+
+    // 空余时间全屏沉浸超时变动回调
+    void setOnIdleFullscreenChanged(IdleFullscreenCallback cb) { on_idle_fullscreen_changed_ = std::move(cb); }
+
+    // 获取空余时间全屏秒数 (0 代表从不)
+    float getIdleFullscreenSeconds() const {
+        switch (idle_fullscreen_mode_) {
+            case 0: return 15.0f;  // 15 秒 (默认)
+            case 1: return 30.0f;  // 30 秒
+            case 2: return 60.0f;  // 1 分钟
+            case 3: return 300.0f; // 5 分钟
+            case 4: default: return 0.0f; // 永不
+        }
+    }
+    int getIdleFullscreenMode() const { return idle_fullscreen_mode_; }
 
 private:
     void loadSettings();
@@ -31,10 +47,6 @@ private:
     void renderLibrarySection(ImDrawList* dl, float x0, float y0, float w);
     void renderPowerSection(ImDrawList* dl, float x0, float y0, float w);
 
-    // 提示弹窗/Toast
-    void showToast(const std::string& msg);
-    void renderToast(ImDrawList* dl, float card_x0, float card_y0, float card_w, float card_h);
-
 private:
     // 音频核心配置
     int sample_rate_mode_ = 0; // 0: Bit-Perfect 源码直出, 1: 升频 192kHz, 2: 极频 384kHz
@@ -45,10 +57,8 @@ private:
     int cpu_governor_ = 0;     // 0: Performance (纯音锁频), 1: Schedutil (动态平衡)
     float screen_brightness_ = 0.85f; // 10% ~ 100%
     int screen_timeout_mode_ = 0;     // 0: 从不, 1: 5分钟, 2: 15分钟, 3: 30分钟
-
-    // 状态提示
-    std::string toast_msg_;
-    float toast_timer_ = 0.0f;
+    int idle_fullscreen_mode_ = 0;    // 0: 15秒 (默认), 1: 30秒, 2: 1分钟, 3: 5分钟, 4: 永不
 
     NavigateTabCallback on_navigate_tab_;
+    IdleFullscreenCallback on_idle_fullscreen_changed_;
 };

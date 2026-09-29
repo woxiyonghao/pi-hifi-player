@@ -18,9 +18,11 @@ class SidebarView {
     SidebarView();
     ~SidebarView() = default;
 
-    // 顶层渲染入口 (默认使用 UIConfig 中的标准尺寸)
+    // 顶层渲染入口 (支持四角屏保动画偏移)
     void render(const std::vector<Playlist>& playlists, float width = UIConfig::Layout::SidebarWidth,
-                float height = UIConfig::Layout::ScreenHeight);
+                float height = UIConfig::Layout::ScreenHeight,
+                float top_offset_x = 0.0f, float top_offset_y = 0.0f,
+                float dac_offset_x = 0.0f, float dac_offset_y = 0.0f);
 
     SidebarTab getCurrentTab() const { return current_tab_; }
     void setCurrentTab(SidebarTab tab) {
@@ -57,7 +59,8 @@ class SidebarView {
 
   private:
     // 上部分菜单与歌单独立滚动视图
-    void renderTopNav(const std::vector<Playlist>& playlists, float width, float height);
+    void renderTopNav(const std::vector<Playlist>& playlists, float width, float height,
+                      float offset_x = 0.0f, float offset_y = 0.0f);
 
 
   private:

@@ -2,13 +2,13 @@
 #include "widgets/GlassCardRenderer.hpp"
 #include "UIConfig.hpp"
 
-void SidebarDacWidget::render(float width, float y, float height) {
+void SidebarDacWidget::render(float width, float y, float height, float offset_x, float offset_y) {
     ImDrawList* dl = ImGui::GetWindowDrawList();
 
-    float left_x = UIConfig::Layout::ContainerMarginX;
-    float right_x = width - UIConfig::Layout::ContainerMarginX;
-    float top_y = y;
-    float bot_y = y + height;
+    float left_x = UIConfig::Layout::ContainerMarginX + offset_x;
+    float right_x = width - UIConfig::Layout::ContainerMarginX + offset_x;
+    float top_y = y + offset_y;
+    float bot_y = y + height + offset_y;
     float rounding = UIConfig::Layout::ContainerRounding;
 
     // 交互悬停与点击检测

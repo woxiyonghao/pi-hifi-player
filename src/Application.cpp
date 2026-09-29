@@ -224,6 +224,16 @@ void Application::initData() {
         MusicDatabase::getInstance().setSetting("sidebar_tab", std::to_string(static_cast<int>(sidebar_.getCurrentTab())));
         MusicDatabase::getInstance().setSetting("sidebar_playlist_id", std::to_string(sidebar_.getSelectedPlaylistId()));
     });
+
+    // 绑定空余时间全屏设置变动回调
+    main_stage_.setOnIdleFullscreenChanged([this](float /*secs*/) {
+        resetIdle();
+    });
+}
+
+void Application::resetIdle() {
+    idle_timer_ = 0.0f;
+    is_fullscreen_idle_ = false;
 }
 
 void Application::pollEvents() {
@@ -239,17 +249,25 @@ void Application::pollEvents() {
             io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
             io.AddMousePosEvent(x, y);
             io.AddMouseButtonEvent(0, true);
+            resetIdle();
         } else if (event.type == SDL_FINGERUP) {
             float x = event.tfinger.x * 1024.0f;
             float y = event.tfinger.y * 600.0f;
             io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
             io.AddMousePosEvent(x, y);
             io.AddMouseButtonEvent(0, false);
+            resetIdle();
         } else if (event.type == SDL_FINGERMOTION) {
             float x = event.tfinger.x * 1024.0f;
             float y = event.tfinger.y * 600.0f;
             io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
             io.AddMousePosEvent(x, y);
+            resetIdle();
+        } else if (event.type == SDL_MOUSEMOTION || event.type == SDL_MOUSEBUTTONDOWN ||
+                   event.type == SDL_MOUSEBUTTONUP || event.type == SDL_MOUSEWHEEL) {
+            resetIdle();
+        } else if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) {
+            resetIdle();
         }
 
         if (event.type == SDL_QUIT) {
@@ -267,16 +285,48 @@ void Application::update(float dt) {
 
     // 动圈表头节拍激励步进
     sim_time_ += 0.035f;
+
+    // 空余时间全屏检测与四角动画插值
+    float idle_timeout = main_stage_.getIdleFullscreenSeconds();
+    if (idle_timeout > 0.0f) {
+        // 如果有模态弹窗正在显示，不触发屏保
+        if (!show_create_playlist_modal_) {
+            idle_timer_ += dt;
+            if (idle_timer_ >= idle_timeout) {
+                is_fullscreen_idle_ = true;
+            }
+        } else {
+            idle_timer_ = 0.0f;
+        }
+    } else {
+        is_fullscreen_idle_ = false;
+        idle_timer_ = 0.0f;
+    }
+
+    // 平滑插值动画 anim_progress_ (0.0f 正常展开 <-> 1.0f 四角移出全屏沉浸)
+    float target_progress = is_fullscreen_idle_ ? 1.0f : 0.0f;
+    float anim_speed = 2.5f; // 过渡耗时约 0.4s
+    if (anim_progress_ < target_progress) {
+        anim_progress_ = std::min(anim_progress_ + dt * anim_speed, 1.0f);
+    } else if (anim_progress_ > target_progress) {
+        anim_progress_ = std::max(anim_progress_ - dt * anim_speed, 0.0f);
+    }
 }
 
 void Application::renderBackground(float screen_w, float screen_h) {
     ImDrawList* bg_dl = ImGui::GetBackgroundDrawList();
 
     // 1. 铺设整个 App 的基准发烧底色 (完全对齐原设计的区域与色值规范)
-    // 左侧侧边栏暗色基底 (0 ~ 230)
-    bg_dl->AddRectFilled(ImVec2(0.0f, 0.0f), ImVec2(UIConfig::Layout::SidebarWidth, screen_h), UIConfig::Color::WindowBg);
-    // 右侧主舞台深空基底 (230 ~ screen_w)
-    bg_dl->AddRectFilled(ImVec2(UIConfig::Layout::SidebarWidth, 0.0f), ImVec2(screen_w, screen_h), UIConfig::Color::MainStageBg);
+    float ease_t = anim_progress_ < 0.5f ? 4.0f * anim_progress_ * anim_progress_ * anim_progress_
+                                         : 1.0f - std::pow(-2.0f * anim_progress_ + 2.0f, 3.0f) * 0.5f;
+    float sidebar_bg_x = UIConfig::Layout::SidebarWidth * (1.0f - ease_t);
+
+    if (sidebar_bg_x > 0.5f) {
+        // 左侧侧边栏暗色基底 (0 ~ sidebar_bg_x)
+        bg_dl->AddRectFilled(ImVec2(0.0f, 0.0f), ImVec2(sidebar_bg_x, screen_h), UIConfig::Color::WindowBg);
+    }
+    // 右侧主舞台深空基底 (sidebar_bg_x ~ screen_w)
+    bg_dl->AddRectFilled(ImVec2(sidebar_bg_x, 0.0f), ImVec2(screen_w, screen_h), UIConfig::Color::MainStageBg);
 
     auto bg_mode = ThemeManager::getInstance().getBackgroundVisualMode();
     if (bg_mode == BackgroundVisualMode::PureBlack) {
@@ -414,16 +464,40 @@ void Application::render() {
     // [全景底层背景与音乐律动动效] (位于所有窗口最底层)
     renderBackground(screen_w, screen_h);
 
-    // 2. 调度发烧 UI 三驾马车布局渲染
-    // [左侧] 导航与歌单侧边栏 (230 × 600)
-    sidebar_.render(playlists_, 230.0f, screen_h);
+    // 计算四角屏保动效缓动因子 (0.0f 正常显现 ~ 1.0f 移出至四角)
+    float ease_t = anim_progress_ < 0.5f ? 4.0f * anim_progress_ * anim_progress_ * anim_progress_
+                                         : 1.0f - std::pow(-2.0f * anim_progress_ + 2.0f, 3.0f) * 0.5f;
 
-    // [右上方] 中央主舞台区域 (794 × 600)
-    main_stage_.render(sidebar_.getCurrentTab(), sidebar_.getSelectedPlaylistId(), playlists_, 
-                       230.0f, 0.0f, screen_w - 230.0f, screen_h);
+    // 只有在未完全移出屏幕时才渲染 4 大板块
+    if (anim_progress_ < 0.999f) {
+        // 四角移出偏移计算：
+        // 1. 左上角：sidebar 功能与歌单区 -> 向左上方 (-250, -150)
+        float top_nav_dx = -250.0f * ease_t;
+        float top_nav_dy = -150.0f * ease_t;
 
-    // [底部] 播放控制胶囊栏 (1024 × 600 屏幕下部)
-    bottom_bar_.render(screen_w, screen_h);
+        // 2. 左下角：dacview DAC 模块 -> 向左下方 (-250, +120)
+        float dac_dx = -250.0f * ease_t;
+        float dac_dy = 120.0f * ease_t;
+
+        // 3. 右上角：mainstateview 主舞台区域 -> 向右上方 (+820, -150)
+        float main_dx = 820.0f * ease_t;
+        float main_dy = -150.0f * ease_t;
+
+        // 4. 右下角：bottombar 底部播放控制胶囊栏 -> 向右下方 (+820, +120)
+        float bottom_dx = 820.0f * ease_t;
+        float bottom_dy = 120.0f * ease_t;
+
+        // 2. 调度发烧 UI 三驾马车布局渲染
+        // [左侧] 导航与歌单侧边栏 (向左上方移出) & DAC 卡片 (向左下方移出)
+        sidebar_.render(playlists_, 230.0f, screen_h, top_nav_dx, top_nav_dy, dac_dx, dac_dy);
+
+        // [右上方] 中央主舞台区域 (向右上方移出)
+        main_stage_.render(sidebar_.getCurrentTab(), sidebar_.getSelectedPlaylistId(), playlists_, 
+                           230.0f + main_dx, 0.0f + main_dy, screen_w - 230.0f, screen_h);
+
+        // [底部] 播放控制胶囊栏 (向右下方移出)
+        bottom_bar_.render(screen_w, screen_h, bottom_dx, bottom_dy);
+    }
 
     // [顶层模态弹窗] 新建播放列表对话框
     if (show_create_playlist_modal_) {

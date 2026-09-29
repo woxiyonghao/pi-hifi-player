@@ -28,6 +28,10 @@ class MainStageView {
 
     void setOnNavigateTab(NavigateTabCallback cb) { on_navigate_tab_ = std::move(cb); }
     void setOnSelectPlaylist(SelectPlaylistCallback cb) { on_select_playlist_ = std::move(cb); }
+    void setOnIdleFullscreenChanged(SystemSettingsView::IdleFullscreenCallback cb) {
+        settings_view_.setOnIdleFullscreenChanged(std::move(cb));
+    }
+    float getIdleFullscreenSeconds() const { return settings_view_.getIdleFullscreenSeconds(); }
 
     // 渲染主舞台视图
     void render(SidebarTab current_tab, uint64_t selected_playlist_id, std::vector<Playlist>& playlists,

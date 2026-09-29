@@ -46,6 +46,7 @@ private:
     void render();
     void renderBackground(float screen_w, float screen_h);
     void renderCreatePlaylistModal(float screen_w, float screen_h);
+    void resetIdle();
 
 private:
     SDL_Window* window_ = nullptr;
@@ -73,4 +74,9 @@ private:
     // 侧边栏持久化状态追踪
     SidebarTab last_saved_tab_ = SidebarTab::AllMusic;
     uint64_t last_saved_playlist_id_ = 0;
+
+    // 空余时间全屏屏保与四角动画状态
+    float idle_timer_ = 0.0f;
+    bool is_fullscreen_idle_ = false;
+    float anim_progress_ = 0.0f; // 0.0f (完全移入展出) ~ 1.0f (完全移出至四角)
 };

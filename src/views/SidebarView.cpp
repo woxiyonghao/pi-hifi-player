@@ -16,12 +16,13 @@ SidebarView::SidebarView() {
 // ==============================================================================
 // 独立模块 1：上部分菜单与歌单滚动视图 (包裹在 Xcode 风格液态玻璃容器中)
 // ==============================================================================
-void SidebarView::renderTopNav(const std::vector<Playlist>& playlists, float width, float height) {
+void SidebarView::renderTopNav(const std::vector<Playlist>& playlists, float width, float height,
+                               float offset_x, float offset_y) {
     ImDrawList* dl_master = ImGui::GetWindowDrawList();
 
-    float left_x = UIConfig::Layout::ContainerMarginX;
-    float right_x = width - UIConfig::Layout::ContainerMarginX;
-    float top_y = UIConfig::Layout::ContainerMarginY;
+    float left_x = UIConfig::Layout::ContainerMarginX + offset_x;
+    float right_x = width - UIConfig::Layout::ContainerMarginX + offset_x;
+    float top_y = UIConfig::Layout::ContainerMarginY + offset_y;
     float bot_y = top_y + height;
     float rounding = UIConfig::Layout::ContainerRounding;
 
@@ -132,9 +133,11 @@ void SidebarView::renderTopNav(const std::vector<Playlist>& playlists, float wid
 // ==============================================================================
 // 顶层主渲染入口：包含上下两个独立 Xcode 风格液态玻璃卡片容器
 // ==============================================================================
-void SidebarView::render(const std::vector<Playlist>& playlists, float width, float height) {
-    ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
-    ImGui::SetNextWindowSize(ImVec2(width, height));
+void SidebarView::render(const std::vector<Playlist>& playlists, float width, float height,
+                         float top_offset_x, float top_offset_y,
+                         float dac_offset_x, float dac_offset_y) {
+    ImGui::SetNextWindowPos(ImVec2(-350.0f, -250.0f));
+    ImGui::SetNextWindowSize(ImVec2(1024.0f + 700.0f, 600.0f + 500.0f));
 
     ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar 
                            | ImGuiWindowFlags_NoResize 
@@ -144,7 +147,7 @@ void SidebarView::render(const std::vector<Playlist>& playlists, float width, fl
                            | ImGuiWindowFlags_NoBackground
                            | ImGuiWindowFlags_NoBringToFrontOnFocus;
 
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, UIConfig::Color::WindowBg);
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, IM_COL32(0, 0, 0, 0));
     ImGui::PushStyleColor(ImGuiCol_Border, IM_COL32(0, 0, 0, 0));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
@@ -158,11 +161,11 @@ void SidebarView::render(const std::vector<Playlist>& playlists, float width, fl
     const float dac_y = height - margin_y - dac_height;
     const float top_height = dac_y - margin_y - gap;
 
-    // 1. 渲染上部分功能与歌单容器 (左右间隔 16px，上下间隔 16px)
-    renderTopNav(playlists, width, top_height);
+    // 1. 渲染上部分功能与歌单容器 (向左上方移出)
+    renderTopNav(playlists, width, top_height, top_offset_x, top_offset_y);
 
-    // 2. 渲染下部分固定 DAC 容器 (左右间隔 16px，上下间隔 16px)
-    dac_widget_.render(width, dac_y, dac_height);
+    // 2. 渲染下部分固定 DAC 容器 (向左下方移出)
+    dac_widget_.render(width, dac_y, dac_height, dac_offset_x, dac_offset_y);
 
     ImGui::End();
     ImGui::PopStyleVar(2);

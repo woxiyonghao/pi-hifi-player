@@ -131,15 +131,15 @@ void BottomBarView::renderLeftControls(ImDrawList* dl, float start_x, float cent
     next_widget_.render(dl, ImVec2(c_next, center_y), ImVec2(btn_w, btn_h));
 }
 
-void BottomBarView::render(float screen_w, float screen_h) {
+void BottomBarView::render(float screen_w, float screen_h, float offset_x, float offset_y) {
     const float margin_x = UIConfig::Layout::ContainerMarginX; // 16.0f
     const float margin_y = UIConfig::Layout::ContainerMarginY; // 16.0f
     const float rounding = height_ * 0.5f;                     // 24.0f (半高半圆)
 
-    // 几何对齐：
-    float left_x = UIConfig::Layout::SidebarWidth + margin_x;
-    float right_x = screen_w - margin_x;
-    float bot_y = screen_h - margin_y;
+    // 几何对齐 (支持向右下角移出)：
+    float left_x = UIConfig::Layout::SidebarWidth + margin_x + offset_x;
+    float right_x = screen_w - margin_x + offset_x;
+    float bot_y = screen_h - margin_y + offset_y;
     float top_y = bot_y - height_;
     float center_y = (top_y + bot_y) * 0.5f;
 
