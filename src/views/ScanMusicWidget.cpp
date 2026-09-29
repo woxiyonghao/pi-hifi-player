@@ -653,10 +653,17 @@ void ScanMusicWidget::renderCompletedState([[maybe_unused]] ImDrawList* dl, ImVe
         ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
     }
 
-    // 点击刷新图标：清空曲库扫描结果并重置为 Idle 待机检索态 (回到「全盘检索」主界面)
+    // 点击刷新图标：停止当前音乐播放，并立即直接重新开始扫描本地歌曲 (进入 Scanning 动画)
     if (clicked_refresh) {
         ImGui::GetIO().MouseClicked[0] = false;
-        MusicScanManager::getInstance().clear();
+        PlayerAdmin::getInstance().stop();
+
+        std::error_code ec;
+        const std::string& scan_path = AppConfig::Path::getMusicDir();
+        if (!std::filesystem::exists(scan_path, ec)) {
+            std::filesystem::create_directories(scan_path, ec);
+        }
+        MusicScanManager::getInstance().startScan(scan_path);
     }
 
     const ImU32 accent = UIConfig::Color::Accent;
