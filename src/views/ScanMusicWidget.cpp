@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <map>
 #include <tools/PlayerAdmin.hpp>
+#include "tools/MusicDatabase.hpp"
 #include "widgets/GlassCardRenderer.hpp"
 ScanMusicWidget::ScanMusicWidget() = default;
 
@@ -622,6 +623,7 @@ void ScanMusicWidget::renderCompletedState([[maybe_unused]] ImDrawList* dl, ImVe
                                   meta.default_tag)) {
                 if (!playlists.empty()) {
                     playlists[0].addTrack(tracks_in_fmt[i]);
+                    MusicDatabase::getInstance().savePlaylists(playlists);
                 }
                 PlayerAdmin::getInstance().playTracks(tracks_in_fmt, i);
             }

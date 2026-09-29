@@ -2,6 +2,8 @@
 #include "public/Font.hpp"
 #include "public/UIConfig.hpp"
 #include "widgets/GlassCardRenderer.hpp"
+#include "tools/MusicDatabase.hpp"
+#include "tools/MusicScanManager.hpp"
 #include <iostream>
 #include <cmath>
 #include <algorithm>
@@ -145,8 +147,14 @@ bool Application::initImGui() {
 }
 
 void Application::initData() {
-    // 移除原有 Mock 测试歌单数据，初始为空歌单
-    playlists_.clear();
+    // 1. 初始化发烧 SQLite 数据库
+    MusicDatabase::getInstance().init();
+
+    // 2. 从数据库恢复已扫描的本地发烧曲库
+    MusicScanManager::getInstance().loadFromDatabase();
+
+    // 3. 从数据库恢复持久化的播放列表与其中曲目
+    playlists_ = MusicDatabase::getInstance().loadPlaylists();
 
     // 默认无选中的自定义歌单
     sidebar_.setSelectedPlaylistId(0);
@@ -485,6 +493,9 @@ void Application::renderCreatePlaylistModal(float screen_w, float screen_h) {
             uint64_t next_id = playlists_.empty() ? 101 : (playlists_.back().getId() + 1);
             playlists_.emplace_back(next_id, trimmed_name);
             sidebar_.setSelectedPlaylistId(next_id);
+
+            // 立即持久化至 SQLite 数据库
+            MusicDatabase::getInstance().savePlaylists(playlists_);
 
             show_create_playlist_modal_ = false;
             new_playlist_name_buf_[0] = '\0';

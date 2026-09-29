@@ -1,4 +1,5 @@
 #include "tools/MusicScanManager.hpp"
+#include "tools/MusicDatabase.hpp"
 #include "public/AppConfig.hpp"
 #include <algorithm>
 #include <iostream>
@@ -46,9 +47,22 @@ void MusicScanManager::cancelScan() {
 
 void MusicScanManager::clear() {
     cancelScan();
-    std::lock_guard lock(mutex_);
-    scanned_tracks_.clear();
-    state_ = ScanState::Idle;
+    {
+        std::lock_guard lock(mutex_);
+        scanned_tracks_.clear();
+        state_ = ScanState::Idle;
+    }
+    MusicDatabase::getInstance().clearScannedTracks();
+}
+
+void MusicScanManager::loadFromDatabase() {
+    auto cached = MusicDatabase::getInstance().loadScannedTracks();
+    if (!cached.empty()) {
+        std::lock_guard lock(mutex_);
+        scanned_tracks_ = std::move(cached);
+        state_ = ScanState::Completed;
+        std::cout << "[MusicScanManager] 从本地数据库恢复已扫描曲目 " << scanned_tracks_.size() << " 首。" << std::endl;
+    }
 }
 
 size_t MusicScanManager::getFoundCount() const {
@@ -207,21 +221,24 @@ void MusicScanManager::scanWorker(std::stop_token stop_token, std::filesystem::p
         }
     }
 
-    // 4. 扫描顺利完成
+    // 4. 扫描顺利完成并持久化写入数据库
     state_ = ScanState::Completed;
     std::cout << "[MusicScanManager] 扫描完成！共发现 " << scanned_tracks_.size() << " 首发烧曲目。" << std::endl;
 
-    if (progress_callback_) {
+    std::vector<Track> copy;
+    {
         std::lock_guard lock(mutex_);
-        progress_callback_({"扫描完成", scanned_tracks_.size(), ScanState::Completed});
+        copy = scanned_tracks_;
+    }
+
+    // 持久化保存至 SQLite
+    MusicDatabase::getInstance().saveScannedTracks(copy);
+
+    if (progress_callback_) {
+        progress_callback_({"扫描完成", copy.size(), ScanState::Completed});
     }
 
     if (complete_callback_) {
-        std::vector<Track> copy;
-        {
-            std::lock_guard lock(mutex_);
-            copy = scanned_tracks_;
-        }
         complete_callback_(copy);
     }
 }

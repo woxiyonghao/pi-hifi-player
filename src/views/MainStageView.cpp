@@ -2,6 +2,7 @@
 #include "public/Font.hpp"
 #include "public/UIConfig.hpp"
 #include "widgets/GlassCardRenderer.hpp"
+#include "widgets/DrawUtils.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -128,35 +129,39 @@ void MainStageView::renderAllMusicView(float x, float y, float w, float h, const
     drawLiquidCard(dl, card_min, card_max, title.c_str(), subtitle.c_str());
 
     float content_x = card_min.x + 20.0f;
-    float content_y = card_min.y + 75.0f;
+    float content_y = card_min.y + 72.0f;
     float content_w = card_max.x - card_min.x - 40.0f;
-    float content_h = card_max.y - card_min.y - 90.0f;
+    float content_h = card_max.y - card_min.y - 84.0f;
 
     if (total_count == 0) {
         ImGui::SetCursorScreenPos(ImVec2(content_x, content_y));
         if (ImGui::BeginChild("##AllMusicEmptyChild", ImVec2(content_w, content_h), false, ImGuiWindowFlags_NoBackground)) {
             ImGui::Dummy(ImVec2(0.0f, 40.0f));
-            if (Fonts::Medium) ImGui::PushFont(Fonts::Medium);
+            if (Fonts::Regular) ImGui::PushFont(Fonts::Regular);
             ImGui::SetCursorPosX((content_w - 380.0f) * 0.5f);
             ImGui::TextColored(ImVec4(0.9f, 0.92f, 0.96f, 1.0f), "本地发烧曲库暂无音乐");
-            if (Fonts::Medium) ImGui::PopFont();
+            if (Fonts::Regular) ImGui::PopFont();
 
             ImGui::Dummy(ImVec2(0.0f, 8.0f));
+            if (Fonts::Small) ImGui::PushFont(Fonts::Small);
             ImGui::SetCursorPosX((content_w - 380.0f) * 0.5f);
             ImGui::TextColored(ImVec4(0.6f, 0.65f, 0.75f, 1.0f), "请前往「扫描音乐」检索本地音乐文件，或将歌曲导入播放列表。");
+            if (Fonts::Small) ImGui::PopFont();
 
-            ImGui::Dummy(ImVec2(0.0f, 20.0f));
-            ImGui::SetCursorPosX((content_w - 140.0f) * 0.5f);
+            ImGui::Dummy(ImVec2(0.0f, 18.0f));
+            ImGui::SetCursorPosX((content_w - 130.0f) * 0.5f);
 
             ImGui::PushStyleColor(ImGuiCol_Button, UIConfig::Color::Accent);
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(255, 65, 95, 255));
             ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(230, 30, 60, 255));
-            ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
-            if (ImGui::Button("前往扫描音乐", ImVec2(140.0f, 36.0f))) {
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 7.0f);
+            if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+            if (ImGui::Button("前往扫描音乐", ImVec2(130.0f, 32.0f))) {
                 if (on_navigate_tab_) {
                     on_navigate_tab_(SidebarTab::ScanMusic);
                 }
             }
+            if (Fonts::Small) ImGui::PopFont();
             ImGui::PopStyleVar();
             ImGui::PopStyleColor(3);
         }
@@ -167,21 +172,42 @@ void MainStageView::renderAllMusicView(float x, float y, float w, float h, const
     auto& player = PlayerAdmin::getInstance();
     const auto& current_track = player.getCurrentTrack();
 
-    // 1. 顶层工具栏：模式切换与快捷操作
+    const ImU32 accent = UIConfig::Color::Accent;
+    const ImU32 r = (accent >> IM_COL32_R_SHIFT) & 0xFF;
+    const ImU32 g = (accent >> IM_COL32_G_SHIFT) & 0xFF;
+    const ImU32 b = (accent >> IM_COL32_B_SHIFT) & 0xFF;
+
+    // 1. 顶层工具栏：模式切换 (去除展开全部、折叠全部、随机播放三个按钮，严格满足截图二要求)
     ImGui::SetCursorScreenPos(ImVec2(content_x, content_y));
-    if (ImGui::BeginChild("##AllMusicToolbar", ImVec2(content_w, 34.0f), false,
+    if (ImGui::BeginChild("##AllMusicToolbar", ImVec2(content_w, 32.0f), false,
                           ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar)) {
-        auto renderModeBtn = [this](const char* label, int mode) {
+
+        // 模式切换胶囊按钮：样式与色值与 Sidebar / BottomBar 纯正液态玻璃主题色完全对齐 (满足截图三要求)
+        auto renderModeBtn = [this, r, g, b](const char* label, int mode) {
             bool is_act = (all_music_view_mode_ == mode);
-            ImGui::PushStyleColor(ImGuiCol_Button, is_act ? UIConfig::Color::Accent : IM_COL32(35, 42, 60, 180));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, is_act ? UIConfig::Color::Accent : IM_COL32(48, 58, 80, 220));
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, UIConfig::Color::Accent);
-            ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.0f);
-            if (ImGui::Button(label, ImVec2(104.0f, 28.0f))) {
+            ImU32 btn_bg = is_act ? IM_COL32(r, g, b, 70) : IM_COL32(28, 34, 46, 170);
+            ImU32 btn_hov = is_act ? IM_COL32(r, g, b, 95) : IM_COL32(42, 50, 68, 210);
+            ImU32 btn_act = IM_COL32(r, g, b, 120);
+            ImU32 btn_border = is_act ? UIConfig::Color::GlassBorder : IM_COL32(255, 255, 255, 25);
+            ImU32 text_col = is_act ? UIConfig::Color::TextActive : UIConfig::Color::TextNormal;
+
+            ImGui::PushStyleColor(ImGuiCol_Button, btn_bg);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, btn_hov);
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, btn_act);
+            ImGui::PushStyleColor(ImGuiCol_Text, text_col);
+            ImGui::PushStyleColor(ImGuiCol_Border, btn_border);
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 7.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(12.0f, 4.0f));
+
+            if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+            if (ImGui::Button(label, ImVec2(0.0f, 26.0f))) {
                 all_music_view_mode_ = mode;
             }
-            ImGui::PopStyleVar();
-            ImGui::PopStyleColor(3);
+            if (Fonts::Small) ImGui::PopFont();
+
+            ImGui::PopStyleVar(3);
+            ImGui::PopStyleColor(5);
         };
 
         renderModeBtn("按音频格式", 0);
@@ -189,46 +215,22 @@ void MainStageView::renderAllMusicView(float x, float y, float w, float h, const
         renderModeBtn("按艺术家/专辑", 1);
         ImGui::SameLine(0.0f, 8.0f);
         renderModeBtn("按存储目录", 2);
-
-        // 右侧快捷操作按钮
-        float right_w = 260.0f;
-        if (content_w > 600.0f) {
-            ImGui::SameLine(content_w - right_w, 0.0f);
-
-            ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(35, 42, 60, 160));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(48, 58, 80, 200));
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(58, 70, 95, 230));
-            ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.0f);
-
-            if (ImGui::Button("展开全部", ImVec2(76.0f, 28.0f))) {
-                for (auto& [k, v] : tree_expanded_) v = true;
-            }
-            ImGui::SameLine(0.0f, 6.0f);
-            if (ImGui::Button("折叠全部", ImVec2(76.0f, 28.0f))) {
-                for (auto& [k, v] : tree_expanded_) v = false;
-            }
-            ImGui::SameLine(0.0f, 6.0f);
-            if (ImGui::Button("随机播放", ImVec2(86.0f, 28.0f))) {
-                std::vector<Track> shuffled = tracks;
-                std::random_device rd;
-                std::mt19937 g(rd());
-                std::shuffle(shuffled.begin(), shuffled.end(), g);
-                PlayerAdmin::getInstance().playTracks(shuffled, 0);
-            }
-
-            ImGui::PopStyleVar();
-            ImGui::PopStyleColor(3);
-        }
     }
     ImGui::EndChild();
 
-    // 2. 树状列表主滚动视口
-    float tree_y = content_y + 40.0f;
-    float tree_h = content_h - 40.0f;
+    // 2. 树状列表主滚动视口 (去除垂直滚动条，满足截图一要求)
+    float tree_y = content_y + 36.0f;
+    float tree_h = content_h - 36.0f;
     ImGui::SetCursorScreenPos(ImVec2(content_x, tree_y));
-    if (ImGui::BeginChild("##AllMusicTreeScroll", ImVec2(content_w, tree_h), false, ImGuiWindowFlags_NoBackground)) {
 
-        // 通用曲目行渲染器
+    // 隐藏滚动条，完全杜绝截图一的粗灰滚动条，同时支持鼠标滚轮与触控屏自然滑动
+    ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 0.0f);
+    if (ImGui::BeginChild("##AllMusicTreeScroll", ImVec2(content_w, tree_h), false,
+                          ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoBackground)) {
+
+        float dt = ImGui::GetIO().DeltaTime;
+
+        // 通用曲目行渲染器 (字阶适中精致，满足截图四要求；高亮与主题色对齐，满足截图三要求)
         auto renderTrackRow = [&](const Track& track, size_t row_idx, const std::vector<Track>& queue_context,
                                   size_t index_in_queue, float indent) {
             bool is_current = current_track.has_value() && (current_track->id == track.id || current_track->file_path == track.file_path);
@@ -237,7 +239,7 @@ void MainStageView::renderAllMusicView(float x, float y, float w, float h, const
             ImGui::PushID(static_cast<int>(track.id * 1000 + row_idx));
 
             float avail_w = ImGui::GetContentRegionAvail().x;
-            float row_h = 34.0f;
+            float row_h = 30.0f; // 紧凑优雅行高
             ImVec2 row_pos = ImGui::GetCursorScreenPos();
             ImVec2 row_min(row_pos.x + indent, row_pos.y);
             ImVec2 row_max(row_pos.x + avail_w, row_pos.y + row_h);
@@ -247,90 +249,104 @@ void MainStageView::renderAllMusicView(float x, float y, float w, float h, const
 
             ImDrawList* cur_dl = ImGui::GetWindowDrawList();
 
-            // 背景悬停与激活发烧玻璃底纹
+            // 背景悬停与在播液态玻璃主题高亮底纹 (对齐 Theme 色，不突兀)
             if (is_current) {
-                cur_dl->AddRectFilled(row_min, row_max, IM_COL32(250, 45, 72, 38), 6.0f);
-                cur_dl->AddRect(row_min, row_max, IM_COL32(250, 45, 72, 90), 6.0f, 0, 1.0f);
+                cur_dl->AddRectFilled(row_min, row_max, IM_COL32(r, g, b, 50), 6.0f);
+                cur_dl->AddRectFilled(row_min, row_max, UIConfig::Color::GlassActive, 6.0f);
+                cur_dl->AddRect(row_min, row_max, UIConfig::Color::GlassBorder, 6.0f, 0, 1.0f);
             } else if (hovered) {
                 cur_dl->AddRectFilled(row_min, row_max, UIConfig::Color::GlassHover, 6.0f);
-                cur_dl->AddRect(row_min, row_max, UIConfig::Color::GlassBorder, 6.0f, 0, 1.0f);
+                cur_dl->AddRect(row_min, row_max, IM_COL32(255, 255, 255, 25), 6.0f, 0, 1.0f);
             }
 
             float left_x = row_min.x + 8.0f;
-            float text_y = row_pos.y + 8.0f;
+            float text_y = row_pos.y + 6.0f;
 
             // 状态角标与律动频谱动画
             if (is_playing) {
                 float t = static_cast<float>(ImGui::GetTime());
-                float b1 = 4.0f + 6.0f * std::abs(std::sin(t * 6.0f));
-                float b2 = 3.0f + 8.0f * std::abs(std::sin(t * 7.5f + 1.2f));
-                float b3 = 5.0f + 7.0f * std::abs(std::sin(t * 5.2f + 2.5f));
+                float b1 = 3.5f + 5.0f * std::abs(std::sin(t * 6.0f));
+                float b2 = 2.5f + 6.5f * std::abs(std::sin(t * 7.5f + 1.2f));
+                float b3 = 4.0f + 6.0f * std::abs(std::sin(t * 5.2f + 2.5f));
                 float cy = row_pos.y + row_h * 0.5f;
 
-                cur_dl->AddLine(ImVec2(left_x, cy + b1 * 0.5f), ImVec2(left_x, cy - b1 * 0.5f), UIConfig::Color::Accent, 2.0f);
-                cur_dl->AddLine(ImVec2(left_x + 5.0f, cy + b2 * 0.5f), ImVec2(left_x + 5.0f, cy - b2 * 0.5f), UIConfig::Color::Accent, 2.0f);
-                cur_dl->AddLine(ImVec2(left_x + 10.0f, cy + b3 * 0.5f), ImVec2(left_x + 10.0f, cy - b3 * 0.5f), UIConfig::Color::Accent, 2.0f);
-                left_x += 20.0f;
-            } else if (is_current) {
-                cur_dl->AddText(ImVec2(left_x, text_y), UIConfig::Color::Accent, "▶");
+                cur_dl->AddLine(ImVec2(left_x, cy + b1 * 0.5f), ImVec2(left_x, cy - b1 * 0.5f), accent, 2.0f);
+                cur_dl->AddLine(ImVec2(left_x + 4.5f, cy + b2 * 0.5f), ImVec2(left_x + 4.5f, cy - b2 * 0.5f), accent, 2.0f);
+                cur_dl->AddLine(ImVec2(left_x + 9.0f, cy + b3 * 0.5f), ImVec2(left_x + 9.0f, cy - b3 * 0.5f), accent, 2.0f);
                 left_x += 18.0f;
+            } else if (is_current) {
+                // 暂停状态下显示发光主题角标
+                cur_dl->AddText(ImVec2(left_x, text_y), accent, "▶");
+                left_x += 16.0f;
             } else {
                 char num_buf[16];
                 std::snprintf(num_buf, sizeof(num_buf), "%02zu.", row_idx + 1);
-                cur_dl->AddText(ImVec2(left_x, text_y), IM_COL32(150, 165, 185, 200), num_buf);
-                left_x += 28.0f;
+                if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+                cur_dl->AddText(ImVec2(left_x, text_y + 1.0f), IM_COL32(140, 155, 175, 200), num_buf);
+                if (Fonts::Small) ImGui::PopFont();
+                left_x += 24.0f;
             }
 
-            // 曲目标题
-            ImU32 title_color = is_current ? UIConfig::Color::Accent : (hovered ? UIConfig::Color::TextActive : IM_COL32(230, 235, 245, 255));
+            // 曲目标题 (适中字阶，播放中保持白色纯净优雅)
+            ImU32 title_color = (is_current || hovered) ? UIConfig::Color::TextActive : IM_COL32(215, 225, 238, 230);
             cur_dl->AddText(ImVec2(left_x, text_y), title_color, track.title.c_str());
 
             float title_w = ImGui::CalcTextSize(track.title.c_str()).x;
             left_x += title_w + 10.0f;
 
-            // 艺术家
+            // 艺术家 (Small 字号)
             if (!track.artist.empty()) {
                 std::string art = "- " + track.artist;
-                cur_dl->AddText(ImVec2(left_x, text_y), UIConfig::Color::TextMuted, art.c_str());
+                if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+                cur_dl->AddText(ImVec2(left_x, text_y + 1.0f), UIConfig::Color::TextMuted, art.c_str());
+                if (Fonts::Small) ImGui::PopFont();
             }
 
             // 右侧区域：播放按钮 + 时长 + 格式徽标
-            float right_x = row_max.x - 10.0f;
+            float right_x = row_max.x - 8.0f;
 
-            float btn_w = 46.0f;
-            float btn_h = 22.0f;
+            float btn_w = 42.0f;
+            float btn_h = 20.0f;
             float btn_x = right_x - btn_w;
-            float btn_y = row_pos.y + 6.0f;
+            float btn_y = row_pos.y + 5.0f;
             bool btn_hov = ImGui::IsMouseHoveringRect(ImVec2(btn_x, btn_y), ImVec2(btn_x + btn_w, btn_y + btn_h));
             bool btn_click = btn_hov && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
 
             cur_dl->AddRectFilled(ImVec2(btn_x, btn_y), ImVec2(btn_x + btn_w, btn_y + btn_h),
-                                  btn_hov ? UIConfig::Color::Accent : IM_COL32(45, 55, 75, 180), 4.0f);
-            cur_dl->AddText(ImVec2(btn_x + 9.0f, btn_y + 3.0f), IM_COL32(255, 255, 255, 255), "播放");
+                                  btn_hov ? IM_COL32(r, g, b, 90) : IM_COL32(40, 48, 66, 170), 4.0f);
+            cur_dl->AddRect(ImVec2(btn_x, btn_y), ImVec2(btn_x + btn_w, btn_y + btn_h),
+                            btn_hov ? UIConfig::Color::GlassBorder : IM_COL32(255, 255, 255, 20), 4.0f, 0, 1.0f);
+            if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+            cur_dl->AddText(ImVec2(btn_x + 8.0f, btn_y + 2.0f), IM_COL32(255, 255, 255, 255), "播放");
+            if (Fonts::Small) ImGui::PopFont();
 
-            right_x = btn_x - 14.0f;
+            right_x = btn_x - 12.0f;
 
             // 时长
             if (track.duration_sec > 0) {
                 char dur_buf[32];
                 std::snprintf(dur_buf, sizeof(dur_buf), "%02u:%02u", track.duration_sec / 60, track.duration_sec % 60);
+                if (Fonts::Small) ImGui::PushFont(Fonts::Small);
                 float dur_w = ImGui::CalcTextSize(dur_buf).x;
                 right_x -= dur_w;
-                cur_dl->AddText(ImVec2(right_x, text_y), IM_COL32(160, 175, 195, 220), dur_buf);
-                right_x -= 14.0f;
+                cur_dl->AddText(ImVec2(right_x, text_y + 1.0f), IM_COL32(150, 165, 185, 200), dur_buf);
+                if (Fonts::Small) ImGui::PopFont();
+                right_x -= 12.0f;
             }
 
-            // 音频规格徽标
+            // 音频规格徽标 (精致紧凑)
             std::string badge = track.getFormatBadge();
+            if (Fonts::Small) ImGui::PushFont(Fonts::Small);
             float badge_txt_w = ImGui::CalcTextSize(badge.c_str()).x;
-            float badge_w = badge_txt_w + 12.0f;
-            float badge_h = 19.0f;
+            float badge_w = badge_txt_w + 10.0f;
+            float badge_h = 17.0f;
             float badge_x = right_x - badge_w;
-            float badge_y = row_pos.y + 7.0f;
+            float badge_y = row_pos.y + 6.5f;
 
-            cur_dl->AddRectFilled(ImVec2(badge_x, badge_y), ImVec2(badge_x + badge_w, badge_y + badge_h), IM_COL32(20, 26, 38, 220), 4.0f);
-            cur_dl->AddRect(ImVec2(badge_x, badge_y), ImVec2(badge_x + badge_w, badge_y + badge_h), IM_COL32(60, 80, 110, 180), 4.0f, 0, 1.0f);
-            cur_dl->AddText(ImVec2(badge_x + 6.0f, badge_y + 2.0f), IM_COL32(65, 190, 255, 240), badge.c_str());
+            cur_dl->AddRectFilled(ImVec2(badge_x, badge_y), ImVec2(badge_x + badge_w, badge_y + badge_h), IM_COL32(18, 24, 34, 210), 3.0f);
+            cur_dl->AddRect(ImVec2(badge_x, badge_y), ImVec2(badge_x + badge_w, badge_y + badge_h), IM_COL32(50, 70, 95, 160), 3.0f, 0, 1.0f);
+            cur_dl->AddText(ImVec2(badge_x + 5.0f, badge_y + 1.0f), IM_COL32(65, 190, 255, 230), badge.c_str());
+            if (Fonts::Small) ImGui::PopFont();
 
             if (clicked || btn_click) {
                 player.playTracks(queue_context, index_in_queue);
@@ -339,15 +355,26 @@ void MainStageView::renderAllMusicView(float x, float y, float w, float h, const
             ImGui::PopID();
         };
 
-        // 通用树节点 Header 渲染器
+        // 通用树节点 Header 渲染器 (圆润矢量倒角 + 180度平滑旋转展开动效，满足截图五要求；Regular 适度字阶，满足截图四要求)
         auto renderTreeNodeHeader = [&](const std::string& key, const char* node_title, const char* badge,
                                         size_t count, const std::vector<Track>& group_tracks, float indent) -> bool {
             bool is_open = tree_expanded_.find(key) == tree_expanded_.end() ? true : tree_expanded_[key];
 
+            // 180° 旋转阻尼平滑插值计算 (1.0f = 展开向下, 0.0f = 折叠向上)
+            float target_t = is_open ? 1.0f : 0.0f;
+            if (tree_anim_t_.find(key) == tree_anim_t_.end()) {
+                tree_anim_t_[key] = target_t;
+            }
+            float& cur_t = tree_anim_t_[key];
+            cur_t += (target_t - cur_t) * std::clamp(dt * 13.0f, 0.0f, 1.0f);
+            if (std::abs(target_t - cur_t) < 0.005f) {
+                cur_t = target_t;
+            }
+
             ImGui::PushID(key.c_str());
 
             float avail_w = ImGui::GetContentRegionAvail().x;
-            float node_h = 38.0f;
+            float node_h = 32.0f; // 精致紧凑高度
             ImVec2 pos = ImGui::GetCursorScreenPos();
             ImVec2 node_min(pos.x + indent, pos.y);
             ImVec2 node_max(pos.x + avail_w, pos.y + node_h);
@@ -362,58 +389,77 @@ void MainStageView::renderAllMusicView(float x, float y, float w, float h, const
 
             ImDrawList* cur_dl = ImGui::GetWindowDrawList();
 
-            ImU32 bg_col = is_open ? IM_COL32(32, 40, 58, 200) : (hovered ? IM_COL32(38, 48, 68, 180) : IM_COL32(24, 30, 44, 160));
-            cur_dl->AddRectFilled(node_min, node_max, bg_col, 8.0f);
-            cur_dl->AddRect(node_min, node_max, is_open ? UIConfig::Color::GlassBorder : IM_COL32(255, 255, 255, 25), 8.0f, 0, 1.0f);
+            ImU32 bg_col = is_open ? IM_COL32(30, 36, 52, 190) : (hovered ? IM_COL32(36, 44, 62, 170) : IM_COL32(22, 28, 40, 150));
+            cur_dl->AddRectFilled(node_min, node_max, bg_col, 7.0f);
+            cur_dl->AddRect(node_min, node_max, is_open ? UIConfig::Color::GlassBorder : IM_COL32(255, 255, 255, 25), 7.0f, 0, 1.0f);
 
-            float left_x = node_min.x + 12.0f;
-            float text_y = pos.y + 10.0f;
+            // =========================================================================
+            // 绘制纯矢量圆角三角形，并进行 180° 旋转平滑动画 (完美彻底解决截图五痛点)
+            // cur_t = 1.0f (展开态): 角度 = +PI/2 (指向正下方 ▼)
+            // cur_t = 0.0f (收起态): 角度 = -PI/2 (指向正上方 ▲, 旋转整整 180 度)
+            // =========================================================================
+            float angle = -1.5707963f + cur_t * 3.14159265f;
+            ImVec2 tri_center(node_min.x + 14.0f, pos.y + node_h * 0.5f);
+            const float tri_r = 4.2f;
 
-            // 折叠指示箭头
-            const char* arrow = is_open ? "▼" : "▶";
-            cur_dl->AddText(ImVec2(left_x, text_y), UIConfig::Color::Accent, arrow);
-            left_x += 18.0f;
+            ImVec2 tp0(tri_center.x + tri_r * std::cos(angle), tri_center.y + tri_r * std::sin(angle));
+            ImVec2 tp1(tri_center.x + tri_r * std::cos(angle + 2.0943951f), tri_center.y + tri_r * std::sin(angle + 2.0943951f));
+            ImVec2 tp2(tri_center.x + tri_r * std::cos(angle - 2.0943951f), tri_center.y + tri_r * std::sin(angle - 2.0943951f));
 
-            // 徽标
+            ImU32 tri_col = is_open ? accent : IM_COL32(180, 195, 215, 210);
+            DrawRoundedTriangle(cur_dl, tp0, tp1, tp2, 1.2f, tri_col);
+
+            float left_x = node_min.x + 26.0f;
+            float text_y = pos.y + 7.5f;
+
+            // 格式徽标 (主题色匹配，满足截图三；Small 字阶，满足截图四)
             if (badge && badge[0] != '\0') {
-                float b_w = ImGui::CalcTextSize(badge).x + 10.0f;
-                cur_dl->AddRectFilled(ImVec2(left_x, pos.y + 9.0f), ImVec2(left_x + b_w, pos.y + 28.0f), IM_COL32(250, 45, 72, 45), 4.0f);
-                cur_dl->AddRect(ImVec2(left_x, pos.y + 9.0f), ImVec2(left_x + b_w, pos.y + 28.0f), UIConfig::Color::Accent, 4.0f, 0, 1.0f);
-                cur_dl->AddText(ImVec2(left_x + 5.0f, pos.y + 11.0f), UIConfig::Color::Accent, badge);
-                left_x += b_w + 10.0f;
+                if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+                float b_w = ImGui::CalcTextSize(badge).x + 8.0f;
+                float b_h = 17.0f;
+                float b_y = pos.y + (node_h - b_h) * 0.5f;
+                cur_dl->AddRectFilled(ImVec2(left_x, b_y), ImVec2(left_x + b_w, b_y + b_h), IM_COL32(r, g, b, 45), 3.0f);
+                cur_dl->AddRect(ImVec2(left_x, b_y), ImVec2(left_x + b_w, b_y + b_h), IM_COL32(r, g, b, 120), 3.0f, 0, 1.0f);
+                cur_dl->AddText(ImVec2(left_x + 4.0f, b_y + 1.0f), IM_COL32(r, g, b, 240), badge);
+                if (Fonts::Small) ImGui::PopFont();
+                left_x += b_w + 8.0f;
             }
 
-            // 标题
-            if (Fonts::Medium) ImGui::PushFont(Fonts::Medium);
-            cur_dl->AddText(ImVec2(left_x, text_y - 2.0f), UIConfig::Color::TextActive, node_title);
-            if (Fonts::Medium) ImGui::PopFont();
+            // 标题 (使用 Regular 15px 替代原 Medium 20px，字体更加匀称精致，彻底解决截图四文字过大问题)
+            cur_dl->AddText(ImVec2(left_x, text_y), UIConfig::Color::TextActive, node_title);
 
             // 右侧曲目统计与播放全部
-            float right_x = node_max.x - 12.0f;
+            float right_x = node_max.x - 8.0f;
 
-            float play_btn_w = 64.0f;
-            float play_btn_h = 24.0f;
+            float play_btn_w = 58.0f;
+            float play_btn_h = 22.0f;
             float play_btn_x = right_x - play_btn_w;
-            float play_btn_y = pos.y + 7.0f;
+            float play_btn_y = pos.y + (node_h - play_btn_h) * 0.5f;
             bool play_hov = ImGui::IsMouseHoveringRect(ImVec2(play_btn_x, play_btn_y), ImVec2(play_btn_x + play_btn_w, play_btn_y + play_btn_h));
             bool play_click = play_hov && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
 
             cur_dl->AddRectFilled(ImVec2(play_btn_x, play_btn_y), ImVec2(play_btn_x + play_btn_w, play_btn_y + play_btn_h),
-                                  play_hov ? UIConfig::Color::Accent : IM_COL32(50, 60, 85, 200), 4.0f);
-            cur_dl->AddText(ImVec2(play_btn_x + 8.0f, play_btn_y + 4.0f), IM_COL32(255, 255, 255, 255), "播放全部");
+                                  play_hov ? IM_COL32(r, g, b, 90) : IM_COL32(45, 54, 74, 180), 4.0f);
+            cur_dl->AddRect(ImVec2(play_btn_x, play_btn_y), ImVec2(play_btn_x + play_btn_w, play_btn_y + play_btn_h),
+                            play_hov ? UIConfig::Color::GlassBorder : IM_COL32(255, 255, 255, 25), 4.0f, 0, 1.0f);
+            if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+            cur_dl->AddText(ImVec2(play_btn_x + 6.0f, play_btn_y + 3.0f), IM_COL32(255, 255, 255, 255), "播放全部");
+            if (Fonts::Small) ImGui::PopFont();
 
             if (play_click && !group_tracks.empty()) {
                 player.playTracks(group_tracks, 0);
             }
 
-            right_x = play_btn_x - 14.0f;
+            right_x = play_btn_x - 12.0f;
 
             std::string count_str = std::to_string(count) + " 首曲目";
+            if (Fonts::Small) ImGui::PushFont(Fonts::Small);
             float count_w = ImGui::CalcTextSize(count_str.c_str()).x;
             right_x -= count_w;
-            cur_dl->AddText(ImVec2(right_x, text_y), UIConfig::Color::TextMuted, count_str.c_str());
+            cur_dl->AddText(ImVec2(right_x, text_y + 1.0f), UIConfig::Color::TextMuted, count_str.c_str());
+            if (Fonts::Small) ImGui::PopFont();
 
-            ImGui::Dummy(ImVec2(0.0f, 4.0f));
+            ImGui::Dummy(ImVec2(0.0f, 3.0f));
             ImGui::PopID();
 
             return is_open;
@@ -459,11 +505,11 @@ void MainStageView::renderAllMusicView(float x, float y, float w, float h, const
                 bool open = renderTreeNodeHeader(g.key, g.name.c_str(), g.badge.c_str(), g.group_tracks.size(), g.group_tracks, 0.0f);
                 if (open) {
                     for (size_t i = 0; i < g.group_tracks.size(); ++i) {
-                        renderTrackRow(g.group_tracks[i], i, g.group_tracks, i, 22.0f);
+                        renderTrackRow(g.group_tracks[i], i, g.group_tracks, i, 20.0f);
                         ImGui::Dummy(ImVec2(0.0f, 2.0f));
                     }
                 }
-                ImGui::Dummy(ImVec2(0.0f, 6.0f));
+                ImGui::Dummy(ImVec2(0.0f, 4.0f));
             }
 
         } else if (all_music_view_mode_ == 1) {
@@ -486,17 +532,17 @@ void MainStageView::renderAllMusicView(float x, float y, float w, float h, const
                 if (art_open) {
                     for (const auto& [album_name, alb_tracks] : albums) {
                         std::string alb_key = "alb_" + artist_name + "_" + album_name;
-                        bool alb_open = renderTreeNodeHeader(alb_key, album_name.c_str(), "专辑", alb_tracks.size(), alb_tracks, 18.0f);
+                        bool alb_open = renderTreeNodeHeader(alb_key, album_name.c_str(), "专辑", alb_tracks.size(), alb_tracks, 16.0f);
                         if (alb_open) {
                             for (size_t i = 0; i < alb_tracks.size(); ++i) {
-                                renderTrackRow(alb_tracks[i], i, alb_tracks, i, 36.0f);
+                                renderTrackRow(alb_tracks[i], i, alb_tracks, i, 32.0f);
                                 ImGui::Dummy(ImVec2(0.0f, 2.0f));
                             }
                         }
-                        ImGui::Dummy(ImVec2(0.0f, 4.0f));
+                        ImGui::Dummy(ImVec2(0.0f, 3.0f));
                     }
                 }
-                ImGui::Dummy(ImVec2(0.0f, 6.0f));
+                ImGui::Dummy(ImVec2(0.0f, 5.0f));
             }
 
         } else {
@@ -514,15 +560,16 @@ void MainStageView::renderAllMusicView(float x, float y, float w, float h, const
                 bool dir_open = renderTreeNodeHeader(dir_key, dir_name.c_str(), "目录", dir_tracks.size(), dir_tracks, 0.0f);
                 if (dir_open) {
                     for (size_t i = 0; i < dir_tracks.size(); ++i) {
-                        renderTrackRow(dir_tracks[i], i, dir_tracks, i, 22.0f);
+                        renderTrackRow(dir_tracks[i], i, dir_tracks, i, 20.0f);
                         ImGui::Dummy(ImVec2(0.0f, 2.0f));
                     }
                 }
-                ImGui::Dummy(ImVec2(0.0f, 6.0f));
+                ImGui::Dummy(ImVec2(0.0f, 5.0f));
             }
         }
     }
     ImGui::EndChild();
+    ImGui::PopStyleVar(); // Pop ScrollbarSize
 }
 
 void MainStageView::renderPlaylistView(uint64_t pid, std::vector<Playlist>& playlists, float x, float y, float w, float h) {

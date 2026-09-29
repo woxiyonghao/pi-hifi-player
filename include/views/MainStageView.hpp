@@ -52,4 +52,5 @@ class MainStageView {
     // 所有音乐树列表视图配置与折叠展开状态追踪
     int all_music_view_mode_ = 0; // 0: 按音频格式分类, 1: 按艺术家/专辑, 2: 按存储目录
     std::unordered_map<std::string, bool> tree_expanded_;
+    std::unordered_map<std::string, float> tree_anim_t_;
 };

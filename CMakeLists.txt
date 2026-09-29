@@ -13,6 +13,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 add_compile_options(-Wall -Wextra -Wpedantic)
 
 # 4. 平台差异化依赖与优化配置
+find_package(SQLite3 REQUIRED)
 if(APPLE)
     message(STATUS ">> [HiFi Build] 当前检测为 macOS 开发调试平台")
     find_package(SDL2 REQUIRED)
@@ -75,12 +76,14 @@ target_include_directories(
 if(APPLE)
     target_link_libraries(${PROJECT_NAME} PRIVATE
         audio_engine
+        SQLite3::SQLite3
         ${SDL2_LIBRARIES}
         OpenGL::GL
     )
 else()
     target_link_libraries(${PROJECT_NAME} PRIVATE
         audio_engine
+        SQLite3::SQLite3
         pthread
         ${SDL2_LIBRARIES}
         ${GLESV2_LIBRARIES}
