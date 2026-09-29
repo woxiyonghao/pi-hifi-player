@@ -92,71 +92,76 @@ void SystemSettingsView::render(float x, float y, float w, float h) {
     float margin_x = UIConfig::Layout::ContainerMarginX; // 16.0f
     float margin_y = UIConfig::Layout::ContainerMarginY; // 16.0f
     ImVec2 card_min(x + margin_x, y + margin_y);
-    ImVec2 card_max(x + w - margin_x, y + h - 26.0f);
+    ImVec2 card_max(x + w - margin_x, y + h - 86.0f);
 
     ImDrawList* dl = ImGui::GetWindowDrawList();
 
     // 1. 渲染顶级深空高密度毛玻璃主卡片
     GlassCardRenderer::drawCard(dl, card_min, card_max, UIConfig::Layout::ContainerRounding, "main_stage");
 
-    // 2. 绘制标题「系统设置」 (无任何副标题，完全对齐用户指令)
+    // 2. 绘制标题「系统设置」 (右上角无任何标签，完全对齐用户指令)
     ImVec2 title_pos(card_min.x + 20.0f, card_min.y + 16.0f);
     if (Fonts::Medium) ImGui::PushFont(Fonts::Medium);
     dl->AddText(title_pos, UIConfig::Color::TextActive, "系统设置");
     if (Fonts::Medium) ImGui::PopFont();
 
-    // 右上角系统状态徽章
-    const char* sys_tag = "树莓派 5 纯音中枢 · Bit-Perfect";
-    if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-    ImVec2 tag_sz = ImGui::CalcTextSize(sys_tag);
-    float tag_x = card_max.x - tag_sz.x - 28.0f;
-    float tag_y = card_min.y + 18.0f;
-
-    ImU32 accent = ThemeManager::getInstance().getAccentColor();
-    const ImU32 r = (accent >> IM_COL32_R_SHIFT) & 0xFF;
-    const ImU32 g = (accent >> IM_COL32_G_SHIFT) & 0xFF;
-    const ImU32 b = (accent >> IM_COL32_B_SHIFT) & 0xFF;
-
-    dl->AddRectFilled(ImVec2(tag_x - 8.0f, tag_y - 2.0f), ImVec2(card_max.x - 20.0f, tag_y + tag_sz.y + 2.0f),
-                      IM_COL32(r, g, b, 35), 4.0f);
-    dl->AddRect(ImVec2(tag_x - 8.0f, tag_y - 2.0f), ImVec2(card_max.x - 20.0f, tag_y + tag_sz.y + 2.0f),
-                IM_COL32(r, g, b, 120), 4.0f, 0, 1.0f);
-    dl->AddText(ImVec2(tag_x, tag_y), UIConfig::Color::TextActive, sys_tag);
-    if (Fonts::Small) ImGui::PopFont();
-
-    // 3. 开启独立滚动子区域 (覆盖四大发烧设置板块)
+    // 3. 开启独立滚动子区域 (覆盖四大发烧设置板块，支持滑轮、触控拖拽与半透明纤细滚动条)
     float content_x = card_min.x + 16.0f;
-    float content_y = card_min.y + 50.0f;
+    float content_y = card_min.y + 54.0f;
     float content_w = card_max.x - card_min.x - 32.0f;
     float content_h = card_max.y - content_y - 12.0f;
 
+    ImU32 accent = ThemeManager::getInstance().getAccentColor();
+
     ImGui::SetCursorScreenPos(ImVec2(content_x, content_y));
-    ImGui::BeginChild("##SystemSettingsScroll", ImVec2(content_w, content_h), false,
-                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoBackground);
 
-    ImDrawList* child_dl = ImGui::GetWindowDrawList();
-    float cur_y = content_y;
+    // 精美半透明纤细滚动条样式
+    ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 6.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarRounding, 3.0f);
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarBg, IM_COL32(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarGrab, IM_COL32(255, 255, 255, 45));
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarGrabHovered, IM_COL32(255, 255, 255, 90));
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarGrabActive, accent);
 
-    // 板块一：音频重放与时钟引擎
-    renderAudioSection(child_dl, content_x, cur_y, content_w);
-    cur_y += 156.0f;
+    if (ImGui::BeginChild("##SystemSettingsScroll", ImVec2(content_w, content_h), false,
+                          ImGuiWindowFlags_NoBackground)) {
 
-    // 板块二：硬件性能与显示控制
-    renderHardwareSection(child_dl, content_x, cur_y, content_w);
-    cur_y += 156.0f;
+        // 支持触控屏与鼠标在背景区域直接拖拽平滑滚动
+        if (ImGui::IsWindowHovered() && !ImGui::IsAnyItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 4.0f)) {
+            float drag_dy = ImGui::GetIO().MouseDelta.y;
+            ImGui::SetScrollY(ImGui::GetScrollY() - drag_dy);
+        }
 
-    // 板块三：曲库与存储中枢
-    renderLibrarySection(child_dl, content_x, cur_y, content_w);
-    cur_y += 108.0f;
+        ImDrawList* child_dl = ImGui::GetWindowDrawList();
+        float section_w = ImGui::GetContentRegionAvail().x; // 扣除滚动条后的可用内容宽度
 
-    // 板块四：系统维护与电源管控
-    renderPowerSection(child_dl, content_x, cur_y, content_w);
-    cur_y += 96.0f;
+        // 板块一：音频重放与时钟引擎 (146px)
+        ImVec2 p_audio = ImGui::GetCursorScreenPos();
+        renderAudioSection(child_dl, p_audio.x, p_audio.y, section_w);
+        ImGui::SetCursorScreenPos(ImVec2(p_audio.x, p_audio.y + 146.0f));
+        ImGui::Dummy(ImVec2(0.0f, 10.0f));
 
-    // 占位缓冲确保底部完整滑出
-    ImGui::Dummy(ImVec2(content_w, cur_y - content_y + 16.0f));
+        // 板块二：硬件性能与显示控制 (146px)
+        ImVec2 p_hw = ImGui::GetCursorScreenPos();
+        renderHardwareSection(child_dl, p_hw.x, p_hw.y, section_w);
+        ImGui::SetCursorScreenPos(ImVec2(p_hw.x, p_hw.y + 146.0f));
+        ImGui::Dummy(ImVec2(0.0f, 10.0f));
 
+        // 板块三：曲库与存储中枢 (98px)
+        ImVec2 p_lib = ImGui::GetCursorScreenPos();
+        renderLibrarySection(child_dl, p_lib.x, p_lib.y, section_w);
+        ImGui::SetCursorScreenPos(ImVec2(p_lib.x, p_lib.y + 98.0f));
+        ImGui::Dummy(ImVec2(0.0f, 10.0f));
+
+        // 板块四：系统维护与电源管控 (88px)
+        ImVec2 p_power = ImGui::GetCursorScreenPos();
+        renderPowerSection(child_dl, p_power.x, p_power.y, section_w);
+        ImGui::SetCursorScreenPos(ImVec2(p_power.x, p_power.y + 88.0f));
+        ImGui::Dummy(ImVec2(0.0f, 16.0f)); // 底部缓冲留白
+    }
     ImGui::EndChild();
+    ImGui::PopStyleColor(4);
+    ImGui::PopStyleVar(2);
 
     // 4. Toast 反馈微弹窗渲染
     renderToast(dl, card_min.x, card_min.y, card_max.x - card_min.x, card_max.y - card_min.y);
