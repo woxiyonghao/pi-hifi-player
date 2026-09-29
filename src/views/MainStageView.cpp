@@ -1830,33 +1830,95 @@ void MainStageView::renderThemeSettingsView(float x, float y, float w, float h) 
     dl->AddText(ImVec2(slider_max.x - v_txt_w, slider_y), UIConfig::Color::TextActive, v_percent_buf);
     if (Fonts::Small) ImGui::PopFont();
 
-    // 绘制明度渐变条 (从纯黑到当前 Hue/Sat 的最大饱和纯色)
+    // 绘制明度渐变条 (从纯黑到当前 Hue/Sat 的最大饱和纯色，采用 Triangle Strip 完美全圆角胶囊光栅化)
     float max_r, max_g, max_b;
     ImGui::ColorConvertHSVtoRGB(cur_h, cur_s, 1.0f, max_r, max_g, max_b);
-    ImU32 max_col = IM_COL32(static_cast<int>(max_r * 255.0f), static_cast<int>(max_g * 255.0f), static_cast<int>(max_b * 255.0f), 255);
 
-    dl->AddRectFilledMultiColor(slider_min, slider_max,
-                                IM_COL32(0, 0, 0, 255), max_col, max_col, IM_COL32(0, 0, 0, 255));
-    dl->AddRect(slider_min, slider_max, IM_COL32(255, 255, 255, 40), slider_h * 0.5f, 0, 1.0f);
+    float track_r = slider_h * 0.5f;
+    float cy = slider_min.y + track_r;
+    float cx_left = slider_min.x + track_r;
+    float cx_right = slider_max.x - track_r;
+
+    // 硬件级顶点 Triangle Strip 绘制 100% 顺滑全圆角胶囊横向渐变条 (彻底去除直角毛刺，呈现圆润质感)
+    const int num_slices = 64;
+    dl->PrimReserve(num_slices * 6, (num_slices + 1) * 2);
+
+    ImDrawIdx base_vtx = static_cast<ImDrawIdx>(dl->_VtxCurrentIdx);
+    ImVec2 uv_white = ImGui::GetIO().Fonts->TexUvWhitePixel;
+
+    for (int k = 0; k <= num_slices; ++k) {
+        float t = static_cast<float>(k) / static_cast<float>(num_slices);
+        float x = slider_min.x + t * right_panel_w;
+
+        float dy = track_r;
+        if (x < cx_left) {
+            float dx = cx_left - x;
+            dy = std::sqrt(std::max(0.0f, track_r * track_r - dx * dx));
+        } else if (x > cx_right) {
+            float dx = x - cx_right;
+            dy = std::sqrt(std::max(0.0f, track_r * track_r - dx * dx));
+        }
+
+        ImVec2 v_top(x, cy - dy);
+        ImVec2 v_bot(x, cy + dy);
+
+        uint32_t c_r = static_cast<uint32_t>(std::clamp(max_r * t * 255.0f, 0.0f, 255.0f));
+        uint32_t c_g = static_cast<uint32_t>(std::clamp(max_g * t * 255.0f, 0.0f, 255.0f));
+        uint32_t c_b = static_cast<uint32_t>(std::clamp(max_b * t * 255.0f, 0.0f, 255.0f));
+        ImU32 col_t = IM_COL32(c_r, c_g, c_b, 255);
+
+        dl->PrimWriteVtx(v_top, uv_white, col_t);
+        dl->PrimWriteVtx(v_bot, uv_white, col_t);
+    }
+
+    for (int k = 0; k < num_slices; ++k) {
+        ImDrawIdx i0 = static_cast<ImDrawIdx>(base_vtx + k * 2);
+        ImDrawIdx i1 = static_cast<ImDrawIdx>(base_vtx + k * 2 + 1);
+        ImDrawIdx i2 = static_cast<ImDrawIdx>(base_vtx + (k + 1) * 2);
+        ImDrawIdx i3 = static_cast<ImDrawIdx>(base_vtx + (k + 1) * 2 + 1);
+
+        dl->PrimWriteIdx(i0);
+        dl->PrimWriteIdx(i1);
+        dl->PrimWriteIdx(i3);
+
+        dl->PrimWriteIdx(i0);
+        dl->PrimWriteIdx(i3);
+        dl->PrimWriteIdx(i2);
+    }
+
+    // 绘制胶囊外圈 1px 高光边框
+    dl->AddRect(slider_min, slider_max, IM_COL32(255, 255, 255, 50), track_r, 0, 1.0f);
+
+    // 明度游标尺寸与极简全圆角胶囊设计 (对齐 macOS 与苹果风格)
+    float thumb_w = 14.0f;
+    float thumb_h = slider_h + 6.0f; // 稍高于轨道，呈现立体质感
+    float thumb_r = thumb_w * 0.5f;   // 100% 全圆角胶囊
+    float thumb_travel = right_panel_w - thumb_w;
+    float thumb_x = slider_min.x + thumb_w * 0.5f + cur_v * thumb_travel;
 
     // 明度滑条交互
-    ImGui::SetCursorScreenPos(slider_min);
-    ImGui::InvisibleButton("##MacBrightnessSlider", ImVec2(right_panel_w, slider_h));
+    ImGui::SetCursorScreenPos(ImVec2(slider_min.x, cy - thumb_h * 0.5f));
+    ImGui::InvisibleButton("##MacBrightnessSlider", ImVec2(right_panel_w, thumb_h));
     if (ImGui::IsItemActive()) {
         float mx = ImGui::GetIO().MousePos.x;
-        float new_v = std::clamp((mx - slider_min.x) / right_panel_w, 0.05f, 1.0f);
+        float new_v = std::clamp((mx - (slider_min.x + thumb_w * 0.5f)) / thumb_travel, 0.05f, 1.0f);
         float new_r, new_g, new_b;
         ImGui::ColorConvertHSVtoRGB(cur_h, cur_s, new_v, new_r, new_g, new_b);
         tm.setCustomColor(ImVec4(new_r, new_g, new_b, 1.0f));
     }
 
-    // 绘制明度游标手柄 (类似图二圆角矩形手柄)
-    float thumb_x = slider_min.x + cur_v * right_panel_w;
-    float thumb_w = 12.0f;
-    ImVec2 t0(thumb_x - thumb_w * 0.5f, slider_min.y - 2.5f);
-    ImVec2 t1(thumb_x + thumb_w * 0.5f, slider_max.y + 2.5f);
-    dl->AddRectFilled(t0, t1, IM_COL32(255, 255, 255, 255), 4.0f);
-    dl->AddRect(t0, t1, IM_COL32(0, 0, 0, 140), 4.0f, 0, 1.0f);
+    // 绘制极简圆滑胶囊手柄 (全圆角 pill 造型，配备微投影与精工倒角)
+    ImVec2 t0(thumb_x - thumb_r, cy - thumb_h * 0.5f);
+    ImVec2 t1(thumb_x + thumb_r, cy + thumb_h * 0.5f);
+
+    // 1. 柔和环境微投影
+    dl->AddRectFilled(ImVec2(t0.x, t0.y + 1.5f), ImVec2(t1.x, t1.y + 2.5f), IM_COL32(0, 0, 0, 90), thumb_r);
+    // 2. 润白实体胶囊手柄
+    dl->AddRectFilled(t0, t1, IM_COL32(255, 255, 255, 255), thumb_r);
+    // 3. 内部高光层
+    dl->AddRect(ImVec2(t0.x + 0.5f, t0.y + 0.5f), ImVec2(t1.x - 0.5f, t1.y - 0.5f), IM_COL32(255, 255, 255, 200), thumb_r - 0.5f, 0, 1.0f);
+    // 4. 金属微光轮廓线
+    dl->AddRect(t0, t1, IM_COL32(0, 0, 0, 110), thumb_r, 0, 1.0f);
 
     // 2. 颜色预览大块与三行格式编码 (完全对齐图二的 ff2e8c / hsl / rgb)
     float info_y = slider_max.y + 12.0f;
