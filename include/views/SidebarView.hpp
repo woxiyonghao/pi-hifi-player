@@ -31,7 +31,10 @@ class SidebarView {
         current_tab_ = SidebarTab::CustomPlaylist;
     }
 
-    void setOnCreatePlaylist(CreatePlaylistCallback cb) { on_create_playlist_ = cb; }
+    void setOnCreatePlaylist(CreatePlaylistCallback cb) {
+        on_create_playlist_ = cb;
+        playlist_widget_.setOnCreatePlaylist(cb);
+    }
 
     // 主题色获取与设置
     void setAccentColor(ImU32 col) { UIConfig::Color::Accent = col; }

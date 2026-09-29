@@ -44,6 +44,7 @@ private:
     void update(float dt);
     void render();
     void renderBackground(float screen_w, float screen_h);
+    void renderCreatePlaylistModal(float screen_w, float screen_h);
 
 private:
     SDL_Window* window_ = nullptr;
@@ -55,6 +56,11 @@ private:
 
     // 数据源与状态模型
     std::vector<Playlist> playlists_;
+
+    // 新建播放列表模态弹窗状态
+    bool show_create_playlist_modal_ = false;
+    bool create_playlist_focus_needed_ = false;
+    char new_playlist_name_buf_[64] = "";
 
     // 发烧 UI 界面核心三驾马车与主题引擎
     SidebarView sidebar_;

@@ -112,20 +112,28 @@ void MainStageView::renderPlaylistView(uint64_t pid, std::vector<Playlist>& play
     std::string subtitle = target_playlist 
         ? ("包含曲目: " + std::to_string(target_playlist->getTrackCount()) + " 首 · 总时长: " + 
            std::to_string(target_playlist->getTotalDurationSec() / 60) + " 分钟")
-        : "空歌单";
+        : "暂无歌单";
 
     ImDrawList* dl = ImGui::GetWindowDrawList();
     drawLiquidCard(dl, card_min, card_max, title.c_str(), subtitle.c_str());
-
-    if (!target_playlist) return;
-
-    auto& player = PlayerAdmin::getInstance();
-    const auto& current_track = player.getCurrentTrack();
 
     float content_x = card_min.x + 20.0f;
     float content_y = card_min.y + 75.0f;
     float content_w = card_max.x - card_min.x - 40.0f;
     float content_h = card_max.y - card_min.y - 90.0f;
+
+    if (!target_playlist) {
+        ImGui::SetCursorScreenPos(ImVec2(content_x, content_y));
+        if (ImGui::BeginChild("##TrackListContentChildEmpty", ImVec2(content_w, content_h), false, ImGuiWindowFlags_NoBackground)) {
+            ImGui::Spacing();
+            ImGui::TextColored(ImVec4(0.6f, 0.65f, 0.75f, 1.0f), "当前暂无歌单。点击左侧边栏「+ 添加播放列表」即可创建您的专属歌单。");
+        }
+        ImGui::EndChild();
+        return;
+    }
+
+    auto& player = PlayerAdmin::getInstance();
+    const auto& current_track = player.getCurrentTrack();
 
     ImGui::SetCursorScreenPos(ImVec2(content_x, content_y));
     ImGuiWindowFlags child_flags = ImGuiWindowFlags_NoBackground;

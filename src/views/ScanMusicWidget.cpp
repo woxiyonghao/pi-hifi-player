@@ -653,17 +653,10 @@ void ScanMusicWidget::renderCompletedState([[maybe_unused]] ImDrawList* dl, ImVe
         ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
     }
 
-    // 点击刷新图标：停止当前音乐播放，并立即直接重新开始扫描本地歌曲 (进入 Scanning 动画)
+    // 点击刷新图标：弹出二次确认框，询问用户是否重新扫描歌曲
     if (clicked_refresh) {
         ImGui::GetIO().MouseClicked[0] = false;
-        PlayerAdmin::getInstance().stop();
-
-        std::error_code ec;
-        const std::string& scan_path = AppConfig::Path::getMusicDir();
-        if (!std::filesystem::exists(scan_path, ec)) {
-            std::filesystem::create_directories(scan_path, ec);
-        }
-        MusicScanManager::getInstance().startScan(scan_path);
+        show_rescan_confirm_modal_ = true;
     }
 
     const ImU32 accent = UIConfig::Color::Accent;
@@ -687,4 +680,98 @@ void ScanMusicWidget::renderCompletedState([[maybe_unused]] ImDrawList* dl, ImVe
                                                    : IM_COL32(215, 222, 235, 190);
     float rot = hov_refresh ? -std::fmod(static_cast<float>(ImGui::GetTime()) * 4.0f, 6.2831853f) : 0.0f;
     drawRefreshIcon(dl, btn_c, btn_size, icon_col, rot);
+
+    // =========================================================================
+    // 8. 重新扫描二次确认模态弹窗
+    // =========================================================================
+    if (show_rescan_confirm_modal_) {
+        renderRescanConfirmModal(ImVec2((p_min.x + p_max.x) * 0.5f, (p_min.y + p_max.y) * 0.5f));
+    }
+}
+
+void ScanMusicWidget::renderRescanConfirmModal(ImVec2 center) {
+    // 1. 全屏柔焦半透明遮罩，阻断下层鼠标与手势穿透
+    ImDrawList* fg_dl = ImGui::GetForegroundDrawList();
+    ImGuiIO& io = ImGui::GetIO();
+    fg_dl->AddRectFilled(ImVec2(0.0f, 0.0f), io.DisplaySize, IM_COL32(0, 0, 0, 160));
+
+    // 2. 居中模态对话框尺寸与几何排版
+    const float modal_w = 400.0f;
+    const float modal_h = 186.0f;
+    const float modal_x = center.x - modal_w * 0.5f;
+    const float modal_y = center.y - modal_h * 0.5f;
+
+    ImGui::SetNextWindowPos(ImVec2(modal_x, modal_y));
+    ImGui::SetNextWindowSize(ImVec2(modal_w, modal_h));
+
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                             ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+                             ImGuiWindowFlags_NoCollapse;
+
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, IM_COL32(22, 26, 36, 252));
+    ImGui::PushStyleColor(ImGuiCol_Border, UIConfig::Color::GlassBorder);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 14.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(24.0f, 20.0f));
+
+    if (ImGui::Begin("##RescanConfirmModalDialog", nullptr, flags)) {
+        // 标题
+        if (Fonts::Medium) ImGui::PushFont(Fonts::Medium);
+        ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 1.0f), "重新扫描本地歌曲");
+        if (Fonts::Medium) ImGui::PopFont();
+
+        ImGui::Dummy(ImVec2(0.0f, 8.0f));
+
+        // 提示说明文案
+        if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+        ImGui::TextColored(ImVec4(0.85f, 0.88f, 0.94f, 0.95f), "确定要重新扫描本地歌曲库吗？");
+        ImGui::Spacing();
+        ImGui::TextColored(ImVec4(0.6f, 0.65f, 0.75f, 0.85f), "重新扫描将清空当前结果，并停止当前正在播放的曲目。");
+        if (Fonts::Small) ImGui::PopFont();
+
+        ImGui::Dummy(ImVec2(0.0f, 16.0f));
+
+        // 底部按钮：取消 / 确认扫描
+        const float btn_w = 110.0f;
+        const float btn_h = 34.0f;
+        ImGui::SetCursorPosX(modal_w - 24.0f - btn_w * 2.0f - 12.0f);
+
+        // 1. 取消按钮
+        ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(40, 46, 60, 180));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(52, 60, 78, 220));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(65, 75, 96, 250));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
+        if (ImGui::Button("取消", ImVec2(btn_w, btn_h)) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+            show_rescan_confirm_modal_ = false;
+        }
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor(3);
+
+        ImGui::SameLine(0.0f, 12.0f);
+
+        // 2. 确认扫描按钮
+        ImGui::PushStyleColor(ImGuiCol_Button, UIConfig::Color::Accent);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(255, 65, 95, 255));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(230, 30, 60, 255));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
+
+        if (ImGui::Button("确认扫描", ImVec2(btn_w, btn_h)) || ImGui::IsKeyPressed(ImGuiKey_Enter)) {
+            show_rescan_confirm_modal_ = false;
+            PlayerAdmin::getInstance().stop();
+
+            std::error_code ec;
+            const std::string& scan_path = AppConfig::Path::getMusicDir();
+            if (!std::filesystem::exists(scan_path, ec)) {
+                std::filesystem::create_directories(scan_path, ec);
+            }
+            MusicScanManager::getInstance().startScan(scan_path);
+        }
+
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor(3);
+    }
+    ImGui::End();
+
+    ImGui::PopStyleVar(3);
+    ImGui::PopStyleColor(2);
 }

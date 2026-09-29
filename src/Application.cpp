@@ -15,6 +15,42 @@
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_opengl3.h"
 
+namespace {
+
+// 计算 UTF-8 字符数 (支持中英文、数字、标点，1 个汉字计数为 1 个字)
+inline size_t getUtf8Length(const char* s) {
+    if (!s) return 0;
+    size_t length = 0;
+    while (*s) {
+        unsigned char c = static_cast<unsigned char>(*s);
+        if (c < 0x80) s += 1;
+        else if ((c >> 5) == 0x06) s += 2;
+        else if ((c >> 4) == 0x0E) s += 3;
+        else if ((c >> 3) == 0x1E) s += 4;
+        else s += 1;
+        length++;
+    }
+    return length;
+}
+
+// 截断至最多 max_chars 个 UTF-8 字符，防止多字节字符截断撕裂乱码
+inline std::string truncateUtf8(const std::string& str, size_t max_chars) {
+    size_t length = 0;
+    size_t byte_index = 0;
+    while (byte_index < str.length() && length < max_chars) {
+        unsigned char c = static_cast<unsigned char>(str[byte_index]);
+        if (c < 0x80) byte_index += 1;
+        else if ((c >> 5) == 0x06) byte_index += 2;
+        else if ((c >> 4) == 0x0E) byte_index += 3;
+        else if ((c >> 3) == 0x1E) byte_index += 4;
+        else byte_index += 1;
+        length++;
+    }
+    return str.substr(0, byte_index);
+}
+
+} // namespace
+
 Application::Application() = default;
 
 Application::~Application() {
@@ -108,32 +144,17 @@ bool Application::initImGui() {
 }
 
 void Application::initData() {
-    // 初始化发烧测试歌单 (Mock 数据，后续可由 MusicScanManager 替换)
-    {
-        Playlist p1(101, "蔡琴经典试音");
-        p1.addTrack(Track{1, "渡口", "蔡琴", "民歌蔡琴", "/music/dukou.flac",
-                          AudioFormat::FLAC, 192000, 24, 215});
-        p1.addTrack(Track{2, "被遗忘的时光", "蔡琴", "民歌蔡琴", "/music/shiguang.flac",
-                          AudioFormat::FLAC, 192000, 24, 180});
+    // 移除原有 Mock 测试歌单数据，初始为空歌单
+    playlists_.clear();
 
-        Playlist p2(102, "交响大动态母带");
-        p2.addTrack(Track{3, "1812序曲", "柴可夫斯基", "Mercury", "/music/1812.dsf",
-                          AudioFormat::DSD_DSF, 2822400, 1, 940});
+    // 默认无选中的自定义歌单
+    sidebar_.setSelectedPlaylistId(0);
 
-        Playlist p3(103, "爵士黑胶典藏");
-
-        playlists_.push_back(p1);
-        playlists_.push_back(p2);
-        playlists_.push_back(p3);
-    }
-
-    // 侧边栏默认高亮首个歌单，并绑定新建歌单交互
-    sidebar_.setSelectedPlaylistId(101);
+    // 绑定添加播放列表交互：弹出最多 8 字的输入确认模态框
     sidebar_.setOnCreatePlaylist([this]() {
-        uint64_t next_id = playlists_.empty() ? 101 : (playlists_.back().getId() + 1);
-        std::string name = "新发烧歌单 " + std::to_string(next_id - 100);
-        playlists_.emplace_back(next_id, name);
-        sidebar_.setSelectedPlaylistId(next_id);
+        show_create_playlist_modal_ = true;
+        create_playlist_focus_needed_ = true;
+        new_playlist_name_buf_[0] = '\0';
     });
 }
 
@@ -301,6 +322,11 @@ void Application::render() {
     // [底部] 播放控制胶囊栏 (1024 × 600 屏幕下部)
     bottom_bar_.render(screen_w, screen_h);
 
+    // [顶层模态弹窗] 新建播放列表对话框
+    if (show_create_playlist_modal_) {
+        renderCreatePlaylistModal(screen_w, screen_h);
+    }
+
     // 3. 提交绘图并进行 OpenGL 光栅化清屏
     ImGui::Render();
     glViewport(0, 0, display_w, display_h);
@@ -309,6 +335,143 @@ void Application::render() {
 
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
     SDL_GL_SwapWindow(window_);
+}
+
+void Application::renderCreatePlaylistModal(float screen_w, float screen_h) {
+    // 1. 全屏柔焦半透明遮罩，阻断下层鼠标与手势穿透
+    ImDrawList* fg_dl = ImGui::GetForegroundDrawList();
+    fg_dl->AddRectFilled(ImVec2(0.0f, 0.0f), ImVec2(screen_w, screen_h), IM_COL32(0, 0, 0, 160));
+
+    // 2. 居中模态卡片尺寸与排版
+    const float modal_w = 380.0f;
+    const float modal_h = 200.0f;
+    const float modal_x = (screen_w - modal_w) * 0.5f;
+    const float modal_y = (screen_h - modal_h) * 0.5f;
+
+    ImGui::SetNextWindowPos(ImVec2(modal_x, modal_y));
+    ImGui::SetNextWindowSize(ImVec2(modal_w, modal_h));
+
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                             ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+                             ImGuiWindowFlags_NoCollapse;
+
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, IM_COL32(22, 26, 36, 252));
+    ImGui::PushStyleColor(ImGuiCol_Border, UIConfig::Color::GlassBorder);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 14.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(24.0f, 20.0f));
+
+    if (ImGui::Begin("##CreatePlaylistModalDialog", nullptr, flags)) {
+        // 标题
+        if (Fonts::Medium) ImGui::PushFont(Fonts::Medium);
+        ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 1.0f), "新建播放列表");
+        if (Fonts::Medium) ImGui::PopFont();
+
+        ImGui::Dummy(ImVec2(0.0f, 8.0f));
+
+        // 预判字符数限制并截断至最多 8 个字
+        size_t utf8_len = getUtf8Length(new_playlist_name_buf_);
+        if (utf8_len > 8) {
+            std::string truncated = truncateUtf8(new_playlist_name_buf_, 8);
+            std::snprintf(new_playlist_name_buf_, sizeof(new_playlist_name_buf_), "%s", truncated.c_str());
+            utf8_len = 8;
+        }
+
+        // 输入框样式
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, IM_COL32(32, 38, 52, 220));
+        ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, IM_COL32(40, 48, 65, 230));
+        ImGui::PushStyleColor(ImGuiCol_FrameBgActive, IM_COL32(45, 54, 75, 240));
+        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 255, 255, 255));
+        ImGui::PushStyleColor(ImGuiCol_Border, UIConfig::Color::GlassBorder);
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(12.0f, 8.0f));
+
+        if (create_playlist_focus_needed_) {
+            ImGui::SetKeyboardFocusHere();
+            create_playlist_focus_needed_ = false;
+        }
+
+        ImGui::SetNextItemWidth(modal_w - 48.0f);
+        bool enter_pressed = ImGui::InputTextWithHint("##playlist_name_input", "输入播放列表名称 (最多8个字)",
+                                                     new_playlist_name_buf_, sizeof(new_playlist_name_buf_),
+                                                     ImGuiInputTextFlags_EnterReturnsTrue);
+
+        ImGui::PopStyleVar(3);
+        ImGui::PopStyleColor(5);
+
+        // 重新获取输入后字数并执行硬限制截断
+        utf8_len = getUtf8Length(new_playlist_name_buf_);
+        if (utf8_len > 8) {
+            std::string truncated = truncateUtf8(new_playlist_name_buf_, 8);
+            std::snprintf(new_playlist_name_buf_, sizeof(new_playlist_name_buf_), "%s", truncated.c_str());
+            utf8_len = 8;
+        }
+
+        // 字数提示
+        std::string count_str = std::to_string(utf8_len) + " / 8 字";
+        if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+        float count_w = ImGui::CalcTextSize(count_str.c_str()).x;
+        ImGui::SetCursorPosX(modal_w - 24.0f - count_w);
+        ImGui::TextColored(ImVec4(0.6f, 0.65f, 0.75f, 0.8f), "%s", count_str.c_str());
+        if (Fonts::Small) ImGui::PopFont();
+
+        ImGui::Dummy(ImVec2(0.0f, 12.0f));
+
+        // 底部按钮栏：取消 / 确认
+        const float btn_w = 96.0f;
+        const float btn_h = 34.0f;
+        ImGui::SetCursorPosX(modal_w - 24.0f - btn_w * 2.0f - 12.0f);
+
+        // 1. 取消按钮
+        ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(40, 46, 60, 180));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(52, 60, 78, 220));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(65, 75, 96, 250));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
+        if (ImGui::Button("取消", ImVec2(btn_w, btn_h)) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+            show_create_playlist_modal_ = false;
+            new_playlist_name_buf_[0] = '\0';
+        }
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor(3);
+
+        ImGui::SameLine(0.0f, 12.0f);
+
+        // 2. 确认按钮
+        std::string trimmed_name(new_playlist_name_buf_);
+        while (!trimmed_name.empty() && (trimmed_name.front() == ' ' || trimmed_name.front() == '\t')) trimmed_name.erase(trimmed_name.begin());
+        while (!trimmed_name.empty() && (trimmed_name.back() == ' ' || trimmed_name.back() == '\t')) trimmed_name.pop_back();
+        bool can_confirm = !trimmed_name.empty() && (getUtf8Length(trimmed_name.c_str()) <= 8);
+
+        if (!can_confirm) {
+            ImGui::BeginDisabled();
+        }
+
+        ImGui::PushStyleColor(ImGuiCol_Button, UIConfig::Color::Accent);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(255, 65, 95, 255));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(230, 30, 60, 255));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
+
+        if (ImGui::Button("确认", ImVec2(btn_w, btn_h)) || (can_confirm && enter_pressed)) {
+            uint64_t next_id = playlists_.empty() ? 101 : (playlists_.back().getId() + 1);
+            playlists_.emplace_back(next_id, trimmed_name);
+            sidebar_.setSelectedPlaylistId(next_id);
+
+            show_create_playlist_modal_ = false;
+            new_playlist_name_buf_[0] = '\0';
+        }
+
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor(3);
+
+        if (!can_confirm) {
+            ImGui::EndDisabled();
+        }
+    }
+    ImGui::End();
+
+    ImGui::PopStyleVar(3);
+    ImGui::PopStyleColor(2);
 }
 
 int Application::run() {

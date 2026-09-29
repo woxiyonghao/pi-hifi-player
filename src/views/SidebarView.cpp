@@ -6,6 +6,11 @@
 #include <algorithm>
 
 SidebarView::SidebarView() {
+    playlist_widget_.setOnCreatePlaylist([this]() {
+        if (on_create_playlist_) {
+            on_create_playlist_();
+        }
+    });
 }
 
 // ==============================================================================
