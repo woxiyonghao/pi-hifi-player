@@ -44,6 +44,7 @@ private:
     void update(float dt);
     void render();
     void renderBackground(float screen_w, float screen_h);
+    void renderAccuphaseBackground(float screen_w, float screen_h, float raw_level_l, float raw_level_r);
     void renderCreatePlaylistModal(float screen_w, float screen_h);
 
 private:
@@ -67,6 +68,11 @@ private:
     MainStageView main_stage_;
     BottomBarView bottom_bar_;
     VUMeterRenderer vu_renderer_;
+
+    // 金嗓子 E-260 旗舰功放贴图与动圈指针状态
+    uint32_t accuphase_tex_id_ = 0;
+    float acc_needle_l_ = -2.18f;
+    float acc_needle_r_ = -2.18f;
 
     // 侧边栏持久化状态追踪
     SidebarTab last_saved_tab_ = SidebarTab::AllMusic;

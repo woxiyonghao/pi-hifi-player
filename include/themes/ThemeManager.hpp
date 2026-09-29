@@ -22,7 +22,8 @@ enum class ThemeId : int {
 enum class BackgroundVisualMode : int {
     LEDSpectrum = 0, // 48 列全屏分段 LED 律动矩阵 (全屏贯通)
     VUMeter = 1,     // 发烧双通道机械动圈大表头 (全景对称)
-    PureBlack = 2    // 极简纯净发烧机架 (0 干扰纯音直通)
+    Accuphase = 2,   // 金嗓子 E-260 旗舰功放全景原机大表头
+    PureBlack = 3    // 极简纯净发烧机架 (0 干扰纯音直通)
 };
 
 // ==============================================================================
@@ -43,6 +44,7 @@ struct ThemePresetInfo {
     ImU32 main_stage_bg;       // 主舞台基底色
     ImVec4 clear_color;        // OpenGL 清屏底色
     MeterThemeType meter_theme;// 对应动圈表头主题
+    BackgroundVisualMode default_bg_mode; // 预设关联默认背景模式
 };
 
 // ==============================================================================

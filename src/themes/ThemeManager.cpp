@@ -25,7 +25,8 @@ ThemeManager::ThemeManager() {
         IM_COL32(18, 22, 28, 240),
         IM_COL32(10, 14, 20, 255),
         ImVec4(0.015f, 0.03f, 0.06f, 1.0f),
-        MeterThemeType::ModernCrimson
+        MeterThemeType::ModernCrimson,
+        BackgroundVisualMode::LEDSpectrum
     });
 
     presets_.push_back({
@@ -42,24 +43,26 @@ ThemeManager::ThemeManager() {
         IM_COL32(10, 18, 30, 240),
         IM_COL32(6, 12, 22, 255),
         ImVec4(0.012f, 0.025f, 0.05f, 1.0f),
-        MeterThemeType::McIntosh
+        MeterThemeType::McIntosh,
+        BackgroundVisualMode::VUMeter
     });
 
     presets_.push_back({
         ThemeId::Accuphase,
         "金嗓子香槟金",
         "Accuphase Champagne",
-        "Yokohama, Japan · 日本发烧机皇精密香槟拉丝面板，暖白炽光双表头温润生动",
+        "Yokohama, Japan · 日本发烧机皇精密香槟拉丝面板，E-260 暖光双表头温润生动",
         "甜美人声 · 温暖弦乐",
-        IM_COL32(234, 179, 8, 255),  // #EAB308 香槟暖金
-        IM_COL32(234, 179, 8, 60),
-        IM_COL32(234, 179, 8, 150),
+        IM_COL32(226, 199, 146, 255),  // #E2C792 原机香槟暖金
+        IM_COL32(226, 199, 146, 60),
+        IM_COL32(226, 199, 146, 150),
         IM_COL32(249, 115, 22, 240), // 暖橙金峰值顶
         IM_COL32(60, 45, 10, 25),
         IM_COL32(24, 20, 14, 240),
         IM_COL32(16, 13, 8, 255),
         ImVec4(0.035f, 0.028f, 0.015f, 1.0f),
-        MeterThemeType::Accuphase
+        MeterThemeType::Accuphase,
+        BackgroundVisualMode::Accuphase
     });
 
     presets_.push_back({
@@ -76,7 +79,8 @@ ThemeManager::ThemeManager() {
         IM_COL32(26, 18, 14, 240),
         IM_COL32(18, 11, 8, 255),
         ImVec4(0.035f, 0.02f, 0.01f, 1.0f),
-        MeterThemeType::RetroTape
+        MeterThemeType::RetroTape,
+        BackgroundVisualMode::VUMeter
     });
 }
 
@@ -99,7 +103,7 @@ void ThemeManager::init() {
     if (!saved_bg_str.empty()) {
         try {
             int bg_val = std::stoi(saved_bg_str);
-            if (bg_val >= 0 && bg_val <= 2) {
+            if (bg_val >= 0 && bg_val <= 3) {
                 bg_mode_ = static_cast<BackgroundVisualMode>(bg_val);
             }
         } catch (...) {
@@ -129,6 +133,10 @@ void ThemeManager::init() {
 void ThemeManager::setTheme(ThemeId id, bool save) {
     current_theme_ = id;
     applyCurrentTheme();
+
+    if (id != ThemeId::Custom) {
+        setBackgroundVisualMode(getCurrentPreset().default_bg_mode, save);
+    }
 
     if (save) {
         MusicDatabase::getInstance().setSetting("theme_id", std::to_string(static_cast<int>(id)));

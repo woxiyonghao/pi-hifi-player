@@ -1666,20 +1666,21 @@ void MainStageView::renderThemeSettingsView(float x, float y, float w, float h) 
     dl->AddText(ImVec2(sec_x0 + 16.0f, s2_head_y), UIConfig::Color::TextActive, "背景律动");
     if (Fonts::Regular) ImGui::PopFont();
 
-    // [Options] 3 个动效风格按钮
+    // [Options] 4 个动效风格按钮 (含金嗓子 E-260 旗舰功放贴图)
     auto cur_bg_mode = tm.getBackgroundVisualMode();
-    const char* mode_labels[3] = {
-        "48列全景 LED 频谱矩阵",
-        "双通道机械动圈大表头",
-        "极简纯黑发烧机架直通"
+    const char* mode_labels[4] = {
+        "48列全景 LED 频谱",
+        "麦景图动圈大表头",
+        "金嗓子 E-260 功放",
+        "极简纯黑发烧机架"
     };
 
-    float mode_btn_gap = 12.0f;
-    float mode_btn_w = (c_inner_w - mode_btn_gap * 2.0f) / 3.0f;
+    float mode_btn_gap = 10.0f;
+    float mode_btn_w = (c_inner_w - mode_btn_gap * 3.0f) / 4.0f;
     float mode_btn_h = 28.0f;
     float mode_btn_y = sec2_y0 + 34.0f;
 
-    for (int m = 0; m < 3; ++m) {
+    for (int m = 0; m < 4; ++m) {
         float mx0 = sec_x0 + 16.0f + m * (mode_btn_w + mode_btn_gap);
         ImVec2 m_min(mx0, mode_btn_y);
         ImVec2 m_max(mx0 + mode_btn_w, mode_btn_y + mode_btn_h);
