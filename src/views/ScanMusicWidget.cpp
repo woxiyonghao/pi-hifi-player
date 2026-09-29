@@ -12,6 +12,7 @@
 #include <tools/PlayerAdmin.hpp>
 #include "tools/MusicDatabase.hpp"
 #include "widgets/GlassCardRenderer.hpp"
+#include "themes/ThemeManager.hpp"
 ScanMusicWidget::ScanMusicWidget() = default;
 
 namespace {
@@ -213,6 +214,11 @@ inline void injectMockTracksIfEmpty(std::map<AudioFormat, std::vector<Track>>& f
 
 void ScanMusicWidget::drawSearchIcon(ImDrawList* dl, ImVec2 center, float radius, float offset_x, float offset_y,
                                      bool is_scanning) {
+    ImU32 accent = ThemeManager::getInstance().getAccentColor();
+    uint8_t r = (accent >> IM_COL32_R_SHIFT) & 0xFF;
+    uint8_t g = (accent >> IM_COL32_G_SHIFT) & 0xFF;
+    uint8_t b = (accent >> IM_COL32_B_SHIFT) & 0xFF;
+
     // 叠加 2D 上下左右平滑巡游偏移量
     ImVec2 pos(center.x + offset_x, center.y + offset_y);
 
@@ -223,30 +229,30 @@ void ScanMusicWidget::drawSearchIcon(ImDrawList* dl, ImVec2 center, float radius
     // 1. 镜片半透明微光底板 (通透液态玻璃质感)
     dl->AddCircleFilled(lens_c, lens_r - 2.0f, IM_COL32(255, 255, 255, 12), 48);
 
-    // 2. 外部主镜框 (主题色玫瑰红 + 柔和外发光光圈)
-    dl->AddCircle(lens_c, lens_r + 2.5f, IM_COL32(250, 45, 72, 50), 48, 2.0f); // 柔和外发光
-    dl->AddCircle(lens_c, lens_r, UIConfig::Color::Accent, 48, 3.5f);          // 玫瑰红金属镜圈
+    // 2. 外部主镜框 (动态主题色 + 柔和外发光光圈)
+    dl->AddCircle(lens_c, lens_r + 2.5f, IM_COL32(r, g, b, 50), 48, 2.0f); // 柔和外发光
+    dl->AddCircle(lens_c, lens_r, accent, 48, 3.5f);                      // 金属镜圈
 
     // 3. 镜片弧光反射 (左上圆弧高光，呈现晶莹剔透感)
     dl->PathArcTo(lens_c, lens_r - 6.0f, -2.4f, -0.9f, 16);
     dl->PathStroke(IM_COL32(255, 255, 255, 140), 0, 2.0f);
 
-    // 4. 镜内探索引导小圆 (渲染主题色玫瑰红 + 柔和内发光)
-    dl->AddCircleFilled(lens_c, lens_r * 0.38f, IM_COL32(250, 45, 72, 35), 32);
-    dl->AddCircle(lens_c, lens_r * 0.38f, UIConfig::Color::Accent, 32, 2.0f);
+    // 4. 镜内探索引导小圆 (渲染主题色 + 柔和内发光)
+    dl->AddCircleFilled(lens_c, lens_r * 0.38f, IM_COL32(r, g, b, 35), 32);
+    dl->AddCircle(lens_c, lens_r * 0.38f, accent, 32, 2.0f);
 
     // 扫描态特有增强动效：镜片内部雷达探照波与旋转光针
     if (is_scanning) {
         // 雷达扩散脉冲波
         float ping_r = std::fmod(anim_timer_ * 28.0f, lens_r * 0.75f);
         int ping_alpha = static_cast<int>((1.0f - (ping_r / (lens_r * 0.75f))) * 160.0f);
-        dl->AddCircle(lens_c, ping_r, IM_COL32(250, 45, 72, ping_alpha), 24, 1.2f);
+        dl->AddCircle(lens_c, ping_r, IM_COL32(r, g, b, ping_alpha), 24, 1.2f);
 
         // 旋转扫描光线 (雷达声纳指针)
         float sweep_ang = anim_timer_ * 5.5f;
         ImVec2 sweep_tip(lens_c.x + std::cos(sweep_ang) * (lens_r * 0.72f),
                          lens_c.y + std::sin(sweep_ang) * (lens_r * 0.72f));
-        dl->AddLine(lens_c, sweep_tip, UIConfig::Color::Accent, 1.8f);
+        dl->AddLine(lens_c, sweep_tip, accent, 1.8f);
     }
 
     // 5. 45度斜向手柄 (指向右下方，圆润手感)
@@ -308,16 +314,21 @@ void ScanMusicWidget::renderIdleState(ImDrawList* dl, ImVec2 center,
     // 按钮渲染层次结构：
     // Blur 态：具有清晰半透明 Alpha 质感，无外发光，不抢视觉重心
     // Onhover 态：完全对齐左侧边栏「扫描音乐」主题色胶囊，环境辉光绽放 + 1px 折射微光边
+    ImU32 accent = ThemeManager::getInstance().getAccentColor();
+    uint8_t r = (accent >> IM_COL32_R_SHIFT) & 0xFF;
+    uint8_t g = (accent >> IM_COL32_G_SHIFT) & 0xFF;
+    uint8_t b = (accent >> IM_COL32_B_SHIFT) & 0xFF;
+
     if (is_hovered) {
         // ---------------- Hover 态 (onhover) ----------------
         // 1. 发光辉光层 (双层微光扩散)
         dl->AddRectFilled(ImVec2(btn_p0.x - 5.0f, btn_p0.y - 5.0f), ImVec2(btn_p1.x + 5.0f, btn_p1.y + 5.0f),
-                          IM_COL32(250, 45, 72, 30), btn_rounding + 4.0f);
+                          IM_COL32(r, g, b, 30), btn_rounding + 4.0f);
         dl->AddRectFilled(ImVec2(btn_p0.x - 2.5f, btn_p0.y - 2.5f), ImVec2(btn_p1.x + 2.5f, btn_p1.y + 2.5f),
-                          IM_COL32(250, 45, 72, 60), btn_rounding + 2.0f);
+                          IM_COL32(r, g, b, 60), btn_rounding + 2.0f);
 
-        // 2. 严格对齐左侧边栏选中的主题色液态玻璃配方 (对齐后与侧边栏完全一致)
-        dl->AddRectFilled(btn_p0, btn_p1, IM_COL32(250, 45, 72, 85), btn_rounding);
+        // 2. 严格对齐主题色液态玻璃配方
+        dl->AddRectFilled(btn_p0, btn_p1, IM_COL32(r, g, b, 85), btn_rounding);
         dl->AddRectFilled(btn_p0, btn_p1, UIConfig::Color::GlassActive, btn_rounding); // 30 Alpha 磨砂白
 
         // 3. 1px 微光折射圆角边框
@@ -325,8 +336,8 @@ void ScanMusicWidget::renderIdleState(ImDrawList* dl, ImVec2 center,
     } else {
         // ---------------- Blur 态 (未悬停) ----------------
         // 1. 无外发光晕，消除光晕带来的膨胀感与过亮感
-        // 2. 带有轻盈 Alpha 的半透明玫瑰红底板 + 微量通透层，清晰透出暗色背景
-        dl->AddRectFilled(btn_p0, btn_p1, IM_COL32(250, 45, 72, 65), btn_rounding);
+        // 2. 带有轻盈 Alpha 的半透明主题色底板 + 微量通透层，清晰透出暗色背景
+        dl->AddRectFilled(btn_p0, btn_p1, IM_COL32(r, g, b, 65), btn_rounding);
         dl->AddRectFilled(btn_p0, btn_p1, IM_COL32(255, 255, 255, 12), btn_rounding);
 
         // 3. 极细柔和边缘轮廓
@@ -357,18 +368,34 @@ void ScanMusicWidget::renderIdleState(ImDrawList* dl, ImVec2 center,
 
 namespace {
 
-// 绘制高保真纯净太阳光球与多层辐射日冕 (纯净球形光晕，去除多余白色线条)
-void drawSmoothSolarSphere(ImDrawList* dl, ImVec2 center, float pulse) {
-    // 1. 广域深空外日冕柔和微光辉晕 (由 36px 向外平滑渐隐入深空背景，填补中心区域)
-    dl->AddCircleFilled(center, 36.0f * pulse, IM_COL32(250, 45, 72, 20), 48);
-    dl->AddCircleFilled(center, 28.0f * pulse, IM_COL32(250, 45, 72, 45), 48);
-    dl->AddCircleFilled(center, 21.0f * pulse, IM_COL32(250, 45, 72, 85), 48);
-    dl->AddCircleFilled(center, 15.0f * pulse, IM_COL32(250, 45, 72, 140), 48);
+// 绘制高保真纯净太阳光球与多层辐射日冕 (根据主题色动态调配外日冕与色球层)
+void drawSmoothSolarSphere(ImDrawList* dl, ImVec2 center, float pulse, ImU32 accent) {
+    uint8_t r = (accent >> IM_COL32_R_SHIFT) & 0xFF;
+    uint8_t g = (accent >> IM_COL32_G_SHIFT) & 0xFF;
+    uint8_t b = (accent >> IM_COL32_B_SHIFT) & 0xFF;
 
-    // 2. 高温过渡色球层 (由玫瑰红经由暖粉过渡至白炽)
-    dl->AddCircleFilled(center, 11.0f * pulse, IM_COL32(255, 120, 145, 190), 48);
-    dl->AddCircleFilled(center, 7.5f * pulse, IM_COL32(255, 185, 205, 230), 40);
-    dl->AddCircleFilled(center, 5.0f * pulse, IM_COL32(255, 235, 245, 250), 36);
+    // 1. 广域深空外日冕柔和微光辉晕 (由 36px 向外平滑渐隐入深空背景，填补中心区域)
+    dl->AddCircleFilled(center, 36.0f * pulse, IM_COL32(r, g, b, 20), 48);
+    dl->AddCircleFilled(center, 28.0f * pulse, IM_COL32(r, g, b, 45), 48);
+    dl->AddCircleFilled(center, 21.0f * pulse, IM_COL32(r, g, b, 85), 48);
+    dl->AddCircleFilled(center, 15.0f * pulse, IM_COL32(r, g, b, 140), 48);
+
+    // 2. 高温过渡色球层 (由主题色经由白炽过渡)
+    uint8_t r1 = static_cast<uint8_t>(r + (255 - r) * 0.40f);
+    uint8_t g1 = static_cast<uint8_t>(g + (255 - g) * 0.40f);
+    uint8_t b1 = static_cast<uint8_t>(b + (255 - b) * 0.40f);
+
+    uint8_t r2 = static_cast<uint8_t>(r + (255 - r) * 0.70f);
+    uint8_t g2 = static_cast<uint8_t>(g + (255 - g) * 0.70f);
+    uint8_t b2 = static_cast<uint8_t>(b + (255 - b) * 0.70f);
+
+    uint8_t r3 = static_cast<uint8_t>(r + (255 - r) * 0.90f);
+    uint8_t g3 = static_cast<uint8_t>(g + (255 - g) * 0.90f);
+    uint8_t b3 = static_cast<uint8_t>(b + (255 - b) * 0.90f);
+
+    dl->AddCircleFilled(center, 11.0f * pulse, IM_COL32(r1, g1, b1, 190), 48);
+    dl->AddCircleFilled(center, 7.5f * pulse, IM_COL32(r2, g2, b2, 230), 40);
+    dl->AddCircleFilled(center, 5.0f * pulse, IM_COL32(r3, g3, b3, 250), 36);
 
     // 3. 极热白炽恒星核 (100% 纯净白炽圆球)
     dl->AddCircleFilled(center, 3.2f * pulse, IM_COL32(255, 255, 255, 255), 32);
@@ -417,6 +444,15 @@ void drawRefreshIcon(ImDrawList* dl, ImVec2 center, float size, ImU32 col, float
 } // anonymous namespace
 
 void ScanMusicWidget::drawLaserWarpAnimation(ImDrawList* dl, ImVec2 emitter_pos, ImVec2 p_min, ImVec2 p_max) {
+    ImU32 accent = ThemeManager::getInstance().getAccentColor();
+    uint8_t r = (accent >> IM_COL32_R_SHIFT) & 0xFF;
+    uint8_t g = (accent >> IM_COL32_G_SHIFT) & 0xFF;
+    uint8_t b = (accent >> IM_COL32_B_SHIFT) & 0xFF;
+
+    uint8_t r_light = static_cast<uint8_t>(r + (255 - r) * 0.75f);
+    uint8_t g_light = static_cast<uint8_t>(g + (255 - g) * 0.75f);
+    uint8_t b_light = static_cast<uint8_t>(b + (255 - b) * 0.75f);
+
     // 裁剪在卡片矩形内部，防止满屏激光与粒子溢出主舞台卡片
     dl->PushClipRect(p_min, p_max, true);
 
@@ -454,12 +490,12 @@ void ScanMusicWidget::drawLaserWarpAnimation(ImDrawList* dl, ImVec2 emitter_pos,
         }
 
         // 1.0px 发丝级细腻线条
-        dl->AddLine(ImVec2(x1, y1), ImVec2(x2, y2), IM_COL32(250, 45, 72, alpha), 1.0f);
+        dl->AddLine(ImVec2(x1, y1), ImVec2(x2, y2), IM_COL32(r, g, b, alpha), 1.0f);
 
         // 高亮主光束核心叠加入射白炽微光
         if (alpha > 150) {
             ImVec2 mid(x1 + (x2 - x1) * 0.5f, y1 + (y2 - y1) * 0.5f);
-            dl->AddLine(mid, ImVec2(x2, y2), IM_COL32(255, 210, 225, static_cast<int>(alpha * 0.65f)), 1.0f);
+            dl->AddLine(mid, ImVec2(x2, y2), IM_COL32(r_light, g_light, b_light, static_cast<int>(alpha * 0.65f)), 1.0f);
         }
     }
 
@@ -487,21 +523,21 @@ void ScanMusicWidget::drawLaserWarpAnimation(ImDrawList* dl, ImVec2 emitter_pos,
         int p_type = j % 12;
         if (p_type < 7) {
             // (1) 普通深空微光星尘：细微点缀
-            dl->AddCircleFilled(ImVec2(px, py), p_size, IM_COL32(255, 195, 210, p_alpha), 10);
+            dl->AddCircleFilled(ImVec2(px, py), p_size, IM_COL32(r_light, g_light, b_light, p_alpha), 10);
         } else if (p_type < 10) {
             // (2) 带有主题色柔和光晕的恒星粒子：双层微发光
             float halo_r = p_size * 2.6f;
-            dl->AddCircleFilled(ImVec2(px, py), halo_r, IM_COL32(250, 45, 72, static_cast<int>(p_alpha * 0.35f)), 16);
+            dl->AddCircleFilled(ImVec2(px, py), halo_r, IM_COL32(r, g, b, static_cast<int>(p_alpha * 0.35f)), 16);
             dl->AddCircleFilled(ImVec2(px, py), p_size, IM_COL32(255, 255, 255, p_alpha), 12);
         } else {
             // (3) 星球大战原版同款 4 芒十字衍射星芒 (Cross Star Flares)
             float flare_len = 4.0f + p_curve * 10.0f;
-            dl->AddCircleFilled(ImVec2(px, py), p_size * 2.0f, IM_COL32(250, 45, 72, static_cast<int>(p_alpha * 0.45f)),
+            dl->AddCircleFilled(ImVec2(px, py), p_size * 2.0f, IM_COL32(r, g, b, static_cast<int>(p_alpha * 0.45f)),
                                 16);
             dl->AddLine(ImVec2(px - flare_len, py), ImVec2(px + flare_len, py),
-                        IM_COL32(255, 235, 245, static_cast<int>(p_alpha * 0.85f)), 1.0f);
+                        IM_COL32(r_light, g_light, b_light, static_cast<int>(p_alpha * 0.85f)), 1.0f);
             dl->AddLine(ImVec2(px, py - flare_len), ImVec2(px, py + flare_len),
-                        IM_COL32(255, 235, 245, static_cast<int>(p_alpha * 0.85f)), 1.0f);
+                        IM_COL32(r_light, g_light, b_light, static_cast<int>(p_alpha * 0.85f)), 1.0f);
             dl->AddCircleFilled(ImVec2(px, py), 1.5f, IM_COL32(255, 255, 255, 255), 8);
         }
     }
@@ -510,7 +546,7 @@ void ScanMusicWidget::drawLaserWarpAnimation(ImDrawList* dl, ImVec2 emitter_pos,
     // 3. 核心太阳光球 (纯 GPU 硬件顶点色连续插值渐变，0 色阶硬边，与深空自然融合)
     // =========================================================================
     float pulse = 1.0f + 0.03f * std::sin(anim_timer_ * 2.5f);
-    drawSmoothSolarSphere(dl, emitter_pos, pulse);
+    drawSmoothSolarSphere(dl, emitter_pos, pulse, accent);
 
     dl->PopClipRect();
 }
@@ -562,9 +598,27 @@ void ScanMusicWidget::renderCompletedState([[maybe_unused]] ImDrawList* dl, ImVe
 
     ImGui::SetCursorScreenPos(ImVec2(p_min.x + pad_x, p_min.y + pad_y));
 
-    // 开启主纵向滚动容器
+    // 开启主纵向滚动容器 (配置精美半透明纤细滚动条样式，支持鼠标滚轮与触控屏手势拖拽)
+    ImU32 accent = ThemeManager::getInstance().getAccentColor();
+    ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 6.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarRounding, 3.0f);
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarBg, IM_COL32(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarGrab, IM_COL32(255, 255, 255, 45));
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarGrabHovered, IM_COL32(255, 255, 255, 90));
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarGrabActive, accent);
+
     ImGui::BeginChild("##ScanCompletedScrollRoot", ImVec2(content_w, content_h), false,
-                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoBackground);
+                      ImGuiWindowFlags_NoBackground);
+
+    // 纵向拖拽平滑滚动：当用户在主区域（包括各格式行内外）上下拖拽时，平滑滚动页面
+    if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem) &&
+        ImGui::IsMouseDragging(ImGuiMouseButton_Left, 4.0f)) {
+        float drag_dy = ImGui::GetIO().MouseDelta.y;
+        float drag_dx = ImGui::GetIO().MouseDelta.x;
+        if (std::abs(drag_dy) >= std::abs(drag_dx) && drag_dy != 0.0f) {
+            ImGui::SetScrollY(ImGui::GetScrollY() - drag_dy);
+        }
+    }
 
     // 按照指定格式顺序依次渲染各个板块
     for (AudioFormat fmt : FORMAT_ORDER) {
@@ -608,7 +662,8 @@ void ScanMusicWidget::renderCompletedState([[maybe_unused]] ImDrawList* dl, ImVe
         if (is_dragging_row && active_drag_row_id == row_id) {
             if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
                 float delta_x = ImGui::GetIO().MouseDelta.x;
-                if (delta_x != 0.0f) {
+                float delta_y = ImGui::GetIO().MouseDelta.y;
+                if (std::abs(delta_x) > std::abs(delta_y) && delta_x != 0.0f) {
                     ImGui::SetScrollX(ImGui::GetScrollX() - delta_x);
                 }
             } else {
@@ -619,8 +674,9 @@ void ScanMusicWidget::renderCompletedState([[maybe_unused]] ImDrawList* dl, ImVe
 
         for (size_t i = 0; i < tracks_in_fmt.size(); ++i) {
             if (i > 0) ImGui::SameLine(0.0f, item_gap_x);
-            if (MusicItem::render(ImGui::GetWindowDrawList(), ImVec2(card_w, card_h), tracks_in_fmt[i],
-                                  meta.default_tag)) {
+            bool clicked = MusicItem::render(ImGui::GetWindowDrawList(), ImVec2(card_w, card_h), tracks_in_fmt[i],
+                                             meta.default_tag);
+            if (clicked && !ImGui::IsMouseDragging(ImGuiMouseButton_Left, 6.0f)) {
                 if (!playlists.empty()) {
                     playlists[0].addTrack(tracks_in_fmt[i]);
                     MusicDatabase::getInstance().savePlaylists(playlists);
@@ -637,6 +693,8 @@ void ScanMusicWidget::renderCompletedState([[maybe_unused]] ImDrawList* dl, ImVe
     }
 
     ImGui::EndChild();
+    ImGui::PopStyleColor(4);
+    ImGui::PopStyleVar(2);
 
     // =========================================================================
     // 7. 右上角发烧级 32px 矢量刷新 (Rescan) 按钮
@@ -662,7 +720,6 @@ void ScanMusicWidget::renderCompletedState([[maybe_unused]] ImDrawList* dl, ImVe
         show_rescan_confirm_modal_ = true;
     }
 
-    const ImU32 accent = UIConfig::Color::Accent;
     const ImU32 r = (accent >> IM_COL32_R_SHIFT) & 0xFF;
     const ImU32 g = (accent >> IM_COL32_G_SHIFT) & 0xFF;
     const ImU32 b = (accent >> IM_COL32_B_SHIFT) & 0xFF;

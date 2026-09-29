@@ -131,9 +131,23 @@ void CustomPlaylistView::render(uint64_t pid, std::vector<Playlist>& playlists, 
     const auto& current_track = player.getCurrentTrack();
 
     ImGui::SetCursorScreenPos(ImVec2(content_x, content_y));
-    ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 0.0f);
-    ImGuiWindowFlags child_flags = ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar;
-    if (ImGui::BeginChild("##TrackListContentChild", ImVec2(content_w, content_h), false, child_flags)) {
+    ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 6.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarRounding, 3.0f);
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarBg, IM_COL32(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarGrab, IM_COL32(255, 255, 255, 45));
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarGrabHovered, IM_COL32(255, 255, 255, 90));
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarGrabActive, accent);
+
+    if (ImGui::BeginChild("##TrackListContentChild", ImVec2(content_w, content_h), false, ImGuiWindowFlags_NoBackground)) {
+
+        // 触控与鼠标拖拽平滑滚动：上下滑动时自然滚动歌单曲目列表
+        if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem) &&
+            ImGui::IsMouseDragging(ImGuiMouseButton_Left, 4.0f)) {
+            float drag_dy = ImGui::GetIO().MouseDelta.y;
+            if (drag_dy != 0.0f) {
+                ImGui::SetScrollY(ImGui::GetScrollY() - drag_dy);
+            }
+        }
         const auto& tracks = target_playlist->getTracks();
         if (tracks.empty()) {
             // 空状态：右上角已常驻「+ 添加歌曲」，中央保持纯净发烧通透
@@ -280,7 +294,7 @@ void CustomPlaylistView::render(uint64_t pid, std::vector<Playlist>& playlists, 
                     break;
                 }
 
-                if (clicked || play_click) {
+                if ((clicked || play_click) && !ImGui::IsMouseDragging(ImGuiMouseButton_Left, 6.0f)) {
                     player.playPlaylist(*target_playlist, i);
                 }
 
@@ -290,7 +304,8 @@ void CustomPlaylistView::render(uint64_t pid, std::vector<Playlist>& playlists, 
         }
     }
     ImGui::EndChild();
-    ImGui::PopStyleVar(); // Pop ScrollbarSize
+    ImGui::PopStyleColor(4);
+    ImGui::PopStyleVar(2);
 
     // 渲染添加歌曲模态弹窗
     if (show_add_music_modal_ && target_playlist) {

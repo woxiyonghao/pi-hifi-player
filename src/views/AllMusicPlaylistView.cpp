@@ -154,10 +154,25 @@ void AllMusicPlaylistView::render(float x, float y, float w, float h, const std:
     float tree_h = content_h - 36.0f;
     ImGui::SetCursorScreenPos(ImVec2(content_x, tree_y));
 
-    // 隐藏滚动条，完全杜绝粗灰滚动条，同时支持鼠标滚轮与触控屏自然滑动
-    ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 0.0f);
+    // 开启精美半透明纤细滚动条样式，支持鼠标滚轮与触控屏手势拖拽
+    ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 6.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarRounding, 3.0f);
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarBg, IM_COL32(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarGrab, IM_COL32(255, 255, 255, 45));
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarGrabHovered, IM_COL32(255, 255, 255, 90));
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarGrabActive, accent);
+
     if (ImGui::BeginChild("##AllMusicTreeScroll", ImVec2(content_w, tree_h), false,
-                          ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoBackground)) {
+                          ImGuiWindowFlags_NoBackground)) {
+
+        // 触控与鼠标拖拽平滑滚动：上下滑动时自然滚动曲目列表
+        if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem) &&
+            ImGui::IsMouseDragging(ImGuiMouseButton_Left, 4.0f)) {
+            float drag_dy = ImGui::GetIO().MouseDelta.y;
+            if (drag_dy != 0.0f) {
+                ImGui::SetScrollY(ImGui::GetScrollY() - drag_dy);
+            }
+        }
 
         float dt = ImGui::GetIO().DeltaTime;
 
@@ -279,7 +294,7 @@ void AllMusicPlaylistView::render(float x, float y, float w, float h, const std:
             cur_dl->AddText(ImVec2(badge_x + 5.0f, badge_y + 1.0f), IM_COL32(65, 190, 255, 230), badge.c_str());
             if (Fonts::Small) ImGui::PopFont();
 
-            if (clicked || btn_click) {
+            if ((clicked || btn_click) && !ImGui::IsMouseDragging(ImGuiMouseButton_Left, 6.0f)) {
                 player.playTracks(queue_context, index_in_queue);
             }
 
@@ -313,7 +328,7 @@ void AllMusicPlaylistView::render(float x, float y, float w, float h, const std:
             bool clicked = ImGui::InvisibleButton("##NodeBtn", ImVec2(avail_w, node_h));
             bool hovered = ImGui::IsItemHovered();
 
-            if (clicked) {
+            if (clicked && !ImGui::IsMouseDragging(ImGuiMouseButton_Left, 6.0f)) {
                 is_open = !is_open;
                 tree_expanded_[key] = is_open;
             }
@@ -496,5 +511,6 @@ void AllMusicPlaylistView::render(float x, float y, float w, float h, const std:
         }
     }
     ImGui::EndChild();
-    ImGui::PopStyleVar(); // Pop ScrollbarSize
+    ImGui::PopStyleColor(4);
+    ImGui::PopStyleVar(2);
 }

@@ -41,6 +41,15 @@ void SidebarView::renderTopNav(const std::vector<Playlist>& playlists, float wid
 
     ImGui::BeginChild("##TopContainerContent", ImVec2(inner_w, inner_h), false, child_flags);
 
+    // 触控与鼠标拖拽平滑滚动：当歌单列表超长时支持手势滑动
+    if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem) &&
+        ImGui::IsMouseDragging(ImGuiMouseButton_Left, 4.0f)) {
+        float drag_dy = ImGui::GetIO().MouseDelta.y;
+        if (drag_dy != 0.0f) {
+            ImGui::SetScrollY(ImGui::GetScrollY() - drag_dy);
+        }
+    }
+
     ImDrawList* dl = ImGui::GetWindowDrawList();
 
     // 双通道分层：通道 0 绘制滑动发光胶囊，通道 1 绘制文字图标
@@ -136,8 +145,13 @@ void SidebarView::renderTopNav(const std::vector<Playlist>& playlists, float wid
 void SidebarView::render(const std::vector<Playlist>& playlists, float width, float height,
                          float top_offset_x, float top_offset_y,
                          float dac_offset_x, float dac_offset_y) {
-    ImGui::SetNextWindowPos(ImVec2(-350.0f, -250.0f));
-    ImGui::SetNextWindowSize(ImVec2(1024.0f + 700.0f, 600.0f + 500.0f));
+    // 限制侧边栏主窗口最右边界严格不超过 width (230px)，绝不向右侵入并劫持主舞台鼠标与滚轮事件
+    const float win_min_x = -350.0f;
+    const float win_min_y = -250.0f;
+    const float win_w = width - win_min_x; // -350 + 580 = 230.0f，严格止步于主舞台左边界
+    const float win_h = height - win_min_y + 250.0f;
+    ImGui::SetNextWindowPos(ImVec2(win_min_x, win_min_y));
+    ImGui::SetNextWindowSize(ImVec2(win_w, win_h));
 
     ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar 
                            | ImGuiWindowFlags_NoResize 
