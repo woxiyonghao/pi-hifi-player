@@ -3,6 +3,7 @@
 #include "public/UIConfig.hpp"
 #include "widgets/GlassCardRenderer.hpp"
 #include "widgets/DrawUtils.hpp"
+#include "tools/MusicDatabase.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -598,6 +599,39 @@ void MainStageView::renderPlaylistView(uint64_t pid, std::vector<Playlist>& play
     ImDrawList* dl = ImGui::GetWindowDrawList();
     drawLiquidCard(dl, card_min, card_max, title.c_str(), subtitle.c_str());
 
+    const ImU32 accent = UIConfig::Color::Accent;
+    const ImU32 r = (accent >> IM_COL32_R_SHIFT) & 0xFF;
+    const ImU32 g = (accent >> IM_COL32_G_SHIFT) & 0xFF;
+    const ImU32 b = (accent >> IM_COL32_B_SHIFT) & 0xFF;
+
+    // 右上角 "+ 添加歌曲" 按钮 (无论歌单是否为空，均常驻方便随时加歌)
+    if (target_playlist) {
+        float add_btn_w = 96.0f;
+        float add_btn_h = 28.0f;
+        float add_btn_x = card_max.x - 20.0f - add_btn_w;
+        float add_btn_y = card_min.y + 18.0f;
+
+        ImGui::SetCursorScreenPos(ImVec2(add_btn_x, add_btn_y));
+        ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(r, g, b, 60));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(r, g, b, 95));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(r, g, b, 130));
+        ImGui::PushStyleColor(ImGuiCol_Text, UIConfig::Color::TextActive);
+        ImGui::PushStyleColor(ImGuiCol_Border, UIConfig::Color::GlassBorder);
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+
+        if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+        if (ImGui::Button("+ 添加歌曲", ImVec2(add_btn_w, add_btn_h))) {
+            show_add_music_modal_ = true;
+            selected_track_ids_to_add_.clear();
+            add_music_search_buf_[0] = '\0';
+        }
+        if (Fonts::Small) ImGui::PopFont();
+
+        ImGui::PopStyleVar(2);
+        ImGui::PopStyleColor(5);
+    }
+
     float content_x = card_min.x + 20.0f;
     float content_y = card_min.y + 75.0f;
     float content_w = card_max.x - card_min.x - 40.0f;
@@ -617,44 +651,598 @@ void MainStageView::renderPlaylistView(uint64_t pid, std::vector<Playlist>& play
     const auto& current_track = player.getCurrentTrack();
 
     ImGui::SetCursorScreenPos(ImVec2(content_x, content_y));
-    ImGuiWindowFlags child_flags = ImGuiWindowFlags_NoBackground;
+    ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 0.0f);
+    ImGuiWindowFlags child_flags = ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar;
     if (ImGui::BeginChild("##TrackListContentChild", ImVec2(content_w, content_h), false, child_flags)) {
         const auto& tracks = target_playlist->getTracks();
         if (tracks.empty()) {
-            ImGui::Spacing();
-            ImGui::TextColored(ImVec4(0.6f, 0.65f, 0.75f, 1.0f), "当前歌单暂无曲目，请前往「扫描音乐」检索并导入本地发烧曲目。");
+            // 空状态：去除原先被划掉的文字，在卡片正中央渲染精致发烧液态玻璃「添加」按钮 (对齐 screenshot media_1790649458109)
+            float btn_w = 140.0f;
+            float btn_h = 44.0f;
+            float btn_x = content_x + (content_w - btn_w) * 0.5f;
+            float btn_y = content_y + (content_h - btn_h) * 0.5f - 20.0f;
+
+            ImGui::SetCursorScreenPos(ImVec2(btn_x, btn_y));
+            ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(r, g, b, 70));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(r, g, b, 120));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(r, g, b, 160));
+            ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 255, 255, 255));
+            ImGui::PushStyleColor(ImGuiCol_Border, UIConfig::Color::GlassBorder);
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+
+            if (Fonts::Medium) ImGui::PushFont(Fonts::Medium);
+            if (ImGui::Button("添加", ImVec2(btn_w, btn_h))) {
+                show_add_music_modal_ = true;
+                selected_track_ids_to_add_.clear();
+                add_music_search_buf_[0] = '\0';
+            }
+            if (Fonts::Medium) ImGui::PopFont();
+
+            ImGui::PopStyleVar(2);
+            ImGui::PopStyleColor(5);
         } else {
+            // 渲染歌单内曲目行，包含高亮、律动频谱、播放与移除按钮
             for (size_t i = 0; i < tracks.size(); ++i) {
                 const auto& track = tracks[i];
-                bool is_current = current_track.has_value() && current_track->id == track.id;
+                bool is_current = current_track.has_value() && (current_track->id == track.id || current_track->file_path == track.file_path);
+                bool is_playing = is_current && player.isPlaying();
 
-                ImGui::PushID(static_cast<int>(i));
-                
-                // 选定高亮色
+                ImGui::PushID(static_cast<int>(track.id * 1000 + i));
+
+                float avail_w = ImGui::GetContentRegionAvail().x;
+                float row_h = 32.0f;
+                ImVec2 row_pos = ImGui::GetCursorScreenPos();
+                ImVec2 row_min(row_pos.x, row_pos.y);
+                ImVec2 row_max(row_pos.x + avail_w, row_pos.y + row_h);
+
+                bool clicked = ImGui::InvisibleButton("##PlTrackBtn", ImVec2(avail_w, row_h));
+                bool hovered = ImGui::IsItemHovered();
+
+                ImDrawList* cur_dl = ImGui::GetWindowDrawList();
+
                 if (is_current) {
-                    ImGui::TextColored(ImVec4(0.98f, 0.18f, 0.28f, 1.0f), "▶ %02zu. %s", i + 1, track.title.c_str());
-                } else {
-                    ImGui::TextColored(ImVec4(0.9f, 0.93f, 0.98f, 1.0f), "  %02zu. %s", i + 1, track.title.c_str());
+                    cur_dl->AddRectFilled(row_min, row_max, IM_COL32(r, g, b, 50), 6.0f);
+                    cur_dl->AddRectFilled(row_min, row_max, UIConfig::Color::GlassActive, 6.0f);
+                    cur_dl->AddRect(row_min, row_max, UIConfig::Color::GlassBorder, 6.0f, 0, 1.0f);
+                } else if (hovered) {
+                    cur_dl->AddRectFilled(row_min, row_max, UIConfig::Color::GlassHover, 6.0f);
+                    cur_dl->AddRect(row_min, row_max, IM_COL32(255, 255, 255, 25), 6.0f, 0, 1.0f);
                 }
 
-                ImGui::SameLine();
-                ImGui::TextColored(ImVec4(0.6f, 0.65f, 0.75f, 0.8f), "- %s", track.artist.c_str());
+                float left_x = row_min.x + 8.0f;
+                float text_y = row_pos.y + 7.0f;
 
-                ImGui::SameLine();
-                ImGui::TextColored(ImVec4(0.2f, 0.8f, 1.0f, 0.9f), "[%s]", track.getFormatBadge().c_str());
+                // 播放动效或序号
+                if (is_playing) {
+                    float t = static_cast<float>(ImGui::GetTime());
+                    float b1 = 3.5f + 5.0f * std::abs(std::sin(t * 6.0f));
+                    float b2 = 2.5f + 6.5f * std::abs(std::sin(t * 7.5f + 1.2f));
+                    float b3 = 4.0f + 6.0f * std::abs(std::sin(t * 5.2f + 2.5f));
+                    float cy = row_pos.y + row_h * 0.5f;
 
-                // 双击或点击整行启动播放
-                ImGui::SameLine();
-                if (ImGui::SmallButton("播放")) {
+                    cur_dl->AddLine(ImVec2(left_x, cy + b1 * 0.5f), ImVec2(left_x, cy - b1 * 0.5f), accent, 2.0f);
+                    cur_dl->AddLine(ImVec2(left_x + 4.5f, cy + b2 * 0.5f), ImVec2(left_x + 4.5f, cy - b2 * 0.5f), accent, 2.0f);
+                    cur_dl->AddLine(ImVec2(left_x + 9.0f, cy + b3 * 0.5f), ImVec2(left_x + 9.0f, cy - b3 * 0.5f), accent, 2.0f);
+                    left_x += 18.0f;
+                } else if (is_current) {
+                    cur_dl->AddText(ImVec2(left_x, text_y), accent, "▶");
+                    left_x += 16.0f;
+                } else {
+                    char num_buf[16];
+                    std::snprintf(num_buf, sizeof(num_buf), "%02zu.", i + 1);
+                    if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+                    cur_dl->AddText(ImVec2(left_x, text_y + 1.0f), IM_COL32(140, 155, 175, 200), num_buf);
+                    if (Fonts::Small) ImGui::PopFont();
+                    left_x += 24.0f;
+                }
+
+                // 标题
+                ImU32 title_color = (is_current || hovered) ? UIConfig::Color::TextActive : IM_COL32(215, 225, 238, 230);
+                cur_dl->AddText(ImVec2(left_x, text_y), title_color, track.title.c_str());
+
+                float title_w = ImGui::CalcTextSize(track.title.c_str()).x;
+                left_x += title_w + 10.0f;
+
+                // 艺术家
+                if (!track.artist.empty()) {
+                    std::string art = "- " + track.artist;
+                    if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+                    cur_dl->AddText(ImVec2(left_x, text_y + 1.0f), UIConfig::Color::TextMuted, art.c_str());
+                    if (Fonts::Small) ImGui::PopFont();
+                }
+
+                // 右侧按钮栏：移除 + 播放 + 时长 + 格式徽标
+                float right_x = row_max.x - 8.0f;
+
+                // 1. 移除按钮
+                float del_w = 42.0f;
+                float del_h = 20.0f;
+                float del_x = right_x - del_w;
+                float del_y = row_pos.y + 6.0f;
+                bool del_hov = ImGui::IsMouseHoveringRect(ImVec2(del_x, del_y), ImVec2(del_x + del_w, del_y + del_h));
+                bool del_click = del_hov && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+
+                cur_dl->AddRectFilled(ImVec2(del_x, del_y), ImVec2(del_x + del_w, del_y + del_h),
+                                      del_hov ? IM_COL32(200, 45, 55, 150) : IM_COL32(40, 48, 66, 170), 4.0f);
+                cur_dl->AddRect(ImVec2(del_x, del_y), ImVec2(del_x + del_w, del_y + del_h),
+                                del_hov ? IM_COL32(255, 70, 80, 200) : IM_COL32(255, 255, 255, 20), 4.0f, 0, 1.0f);
+                if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+                cur_dl->AddText(ImVec2(del_x + 8.0f, del_y + 2.0f), del_hov ? IM_COL32(255, 120, 130, 255) : IM_COL32(180, 195, 215, 220), "移除");
+                if (Fonts::Small) ImGui::PopFont();
+
+                right_x = del_x - 8.0f;
+
+                // 2. 播放按钮
+                float play_w = 42.0f;
+                float play_h = 20.0f;
+                float play_x = right_x - play_w;
+                float play_y = row_pos.y + 6.0f;
+                bool play_hov = ImGui::IsMouseHoveringRect(ImVec2(play_x, play_y), ImVec2(play_x + play_w, play_y + play_h));
+                bool play_click = play_hov && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+
+                cur_dl->AddRectFilled(ImVec2(play_x, play_y), ImVec2(play_x + play_w, play_y + play_h),
+                                      play_hov ? IM_COL32(r, g, b, 90) : IM_COL32(40, 48, 66, 170), 4.0f);
+                cur_dl->AddRect(ImVec2(play_x, play_y), ImVec2(play_x + play_w, play_y + play_h),
+                                play_hov ? UIConfig::Color::GlassBorder : IM_COL32(255, 255, 255, 20), 4.0f, 0, 1.0f);
+                if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+                cur_dl->AddText(ImVec2(play_x + 8.0f, play_y + 2.0f), IM_COL32(255, 255, 255, 255), "播放");
+                if (Fonts::Small) ImGui::PopFont();
+
+                right_x = play_x - 12.0f;
+
+                // 3. 时长
+                if (track.duration_sec > 0) {
+                    char dur_buf[32];
+                    std::snprintf(dur_buf, sizeof(dur_buf), "%02u:%02u", track.duration_sec / 60, track.duration_sec % 60);
+                    if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+                    float dur_w = ImGui::CalcTextSize(dur_buf).x;
+                    right_x -= dur_w;
+                    cur_dl->AddText(ImVec2(right_x, text_y + 1.0f), IM_COL32(150, 165, 185, 200), dur_buf);
+                    if (Fonts::Small) ImGui::PopFont();
+                    right_x -= 12.0f;
+                }
+
+                // 4. 音频规格徽标
+                std::string badge = track.getFormatBadge();
+                if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+                float badge_txt_w = ImGui::CalcTextSize(badge.c_str()).x;
+                float badge_w = badge_txt_w + 10.0f;
+                float badge_h = 17.0f;
+                float badge_x = right_x - badge_w;
+                float badge_y = row_pos.y + 7.5f;
+
+                cur_dl->AddRectFilled(ImVec2(badge_x, badge_y), ImVec2(badge_x + badge_w, badge_y + badge_h), IM_COL32(18, 24, 34, 210), 3.0f);
+                cur_dl->AddRect(ImVec2(badge_x, badge_y), ImVec2(badge_x + badge_w, badge_y + badge_h), IM_COL32(50, 70, 95, 160), 3.0f, 0, 1.0f);
+                cur_dl->AddText(ImVec2(badge_x + 5.0f, badge_y + 1.0f), IM_COL32(65, 190, 255, 230), badge.c_str());
+                if (Fonts::Small) ImGui::PopFont();
+
+                if (del_click) {
+                    target_playlist->removeTrack(i);
+                    MusicDatabase::getInstance().savePlaylists(playlists);
+                    ImGui::PopID();
+                    break;
+                }
+
+                if (clicked || play_click) {
                     player.playPlaylist(*target_playlist, i);
                 }
 
                 ImGui::PopID();
-                ImGui::Spacing();
+                ImGui::Dummy(ImVec2(0.0f, 2.0f));
             }
         }
     }
     ImGui::EndChild();
+    ImGui::PopStyleVar(); // Pop ScrollbarSize
+
+    // 渲染添加歌曲模态弹窗
+    if (show_add_music_modal_ && target_playlist) {
+        renderAddMusicToPlaylistModal(target_playlist, playlists);
+    }
+}
+
+void MainStageView::renderAddMusicToPlaylistModal(Playlist* target_playlist, std::vector<Playlist>& playlists) {
+    if (!target_playlist) return;
+
+    ImGuiIO& io = ImGui::GetIO();
+    float screen_w = io.DisplaySize.x;
+    float screen_h = io.DisplaySize.y;
+
+    // 1. 全透明交互遮罩 (拦截底层鼠标点击，绝不添加发黑灰蒙层，底层视觉 100% 通透保留)
+    ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
+    ImGui::SetNextWindowSize(io.DisplaySize);
+    ImGuiWindowFlags backdrop_flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                                      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+                                      ImGuiWindowFlags_NoBackground;
+    if (ImGui::Begin("##AddMusicModalBackdrop", nullptr, backdrop_flags)) {
+        ImGui::InvisibleButton("##AddMusicBackdropClickBlocker", io.DisplaySize);
+        if (ImGui::IsItemClicked()) {
+            show_add_music_modal_ = false;
+            selected_track_ids_to_add_.clear();
+        }
+    }
+    ImGui::End();
+
+    // 2. 居中模态卡片尺寸与排版 (580px × 470px)
+    const float modal_w = 580.0f;
+    const float modal_h = 470.0f;
+    const float modal_x = (screen_w - modal_w) * 0.5f;
+    const float modal_y = (screen_h - modal_h) * 0.5f;
+
+    ImGui::SetNextWindowPos(ImVec2(modal_x, modal_y));
+    ImGui::SetNextWindowSize(ImVec2(modal_w, modal_h));
+
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                             ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+                             ImGuiWindowFlags_NoCollapse;
+
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, IM_COL32(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_Border, IM_COL32(0, 0, 0, 0));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 16.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(24.0f, 20.0f));
+
+    if (ImGui::Begin("##AddMusicModalDialog", nullptr, flags)) {
+        // 绘制发烧级纯正毛玻璃卡片底板与柔和漫射阴影
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        ImVec2 p_min = ImGui::GetWindowPos();
+        ImVec2 p_max(p_min.x + modal_w, p_min.y + modal_h);
+
+        dl->AddRectFilled(ImVec2(p_min.x - 2.0f, p_min.y + 4.0f),
+                          ImVec2(p_max.x + 2.0f, p_max.y + 14.0f),
+                          IM_COL32(0, 0, 0, 120), 18.0f);
+        GlassCardRenderer::drawFrosted(dl, p_min, p_max, 16.0f);
+
+        const ImU32 accent = UIConfig::Color::Accent;
+        const uint32_t r = (accent >> IM_COL32_R_SHIFT) & 0xFF;
+        const uint32_t g = (accent >> IM_COL32_G_SHIFT) & 0xFF;
+        const uint32_t b = (accent >> IM_COL32_B_SHIFT) & 0xFF;
+
+        // 顶层 Header: 标题与目标歌单、右上角关闭按钮
+        if (Fonts::Medium) ImGui::PushFont(Fonts::Medium);
+        ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 1.0f), "添加歌曲到歌单");
+        if (Fonts::Medium) ImGui::PopFont();
+
+        ImGui::SameLine();
+        ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 3.0f);
+        if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+        std::string tag_str = "「" + target_playlist->getName() + "」";
+        ImGui::TextColored(ImVec4(static_cast<float>(r) / 255.0f, static_cast<float>(g) / 255.0f, static_cast<float>(b) / 255.0f, 0.95f), "%s", tag_str.c_str());
+        if (Fonts::Small) ImGui::PopFont();
+
+        // 右上角 "✕" 关闭按钮
+        float close_btn_size = 24.0f;
+        ImGui::SameLine(modal_w - 24.0f - close_btn_size);
+        ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(0, 0, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(255, 255, 255, 30));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(255, 255, 255, 50));
+        ImGui::PushStyleColor(ImGuiCol_Text, UIConfig::Color::TextMuted);
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 12.0f);
+        if (ImGui::Button("✕", ImVec2(close_btn_size, close_btn_size))) {
+            show_add_music_modal_ = false;
+            selected_track_ids_to_add_.clear();
+        }
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor(4);
+
+        ImGui::Dummy(ImVec2(0.0f, 8.0f));
+
+        // 搜索输入框
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, IM_COL32(32, 38, 52, 220));
+        ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, IM_COL32(40, 48, 65, 230));
+        ImGui::PushStyleColor(ImGuiCol_FrameBgActive, IM_COL32(45, 54, 75, 240));
+        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 255, 255, 255));
+        ImGui::PushStyleColor(ImGuiCol_Border, UIConfig::Color::GlassBorder);
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(12.0f, 7.0f));
+
+        ImGui::SetNextItemWidth(modal_w - 48.0f);
+        ImGui::InputTextWithHint("##AddMusicSearchInput", "搜索曲名、艺术家、专辑或格式...",
+                                 add_music_search_buf_, sizeof(add_music_search_buf_));
+
+        ImGui::PopStyleVar(3);
+        ImGui::PopStyleColor(5);
+
+        ImGui::Dummy(ImVec2(0.0f, 10.0f));
+
+        // 获取全部曲目与筛选
+        std::vector<Track> all_scanned = MusicScanManager::getInstance().getScannedTracks();
+        if (all_scanned.empty()) {
+            all_scanned = MusicDatabase::getInstance().loadScannedTracks();
+        }
+
+        std::string search_query = add_music_search_buf_;
+        std::transform(search_query.begin(), search_query.end(), search_query.begin(), ::tolower);
+
+        std::vector<Track> filtered_tracks;
+        for (const auto& t : all_scanned) {
+            if (search_query.empty()) {
+                filtered_tracks.push_back(t);
+                continue;
+            }
+            std::string t_title = t.title;
+            std::string t_artist = t.artist;
+            std::string t_album = t.album;
+            std::string t_badge = t.getFormatBadge();
+            std::transform(t_title.begin(), t_title.end(), t_title.begin(), ::tolower);
+            std::transform(t_artist.begin(), t_artist.end(), t_artist.begin(), ::tolower);
+            std::transform(t_album.begin(), t_album.end(), t_album.begin(), ::tolower);
+            std::transform(t_badge.begin(), t_badge.end(), t_badge.begin(), ::tolower);
+
+            if (t_title.find(search_query) != std::string::npos ||
+                t_artist.find(search_query) != std::string::npos ||
+                t_album.find(search_query) != std::string::npos ||
+                t_badge.find(search_query) != std::string::npos) {
+                filtered_tracks.push_back(t);
+            }
+        }
+
+        // 中间曲目列表区域 (无粗滚动条，支持自然滚动)
+        float list_w = modal_w - 48.0f;
+        float list_h = modal_h - 180.0f;
+
+        ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 0.0f);
+        if (ImGui::BeginChild("##AddMusicTrackListScroll", ImVec2(list_w, list_h), true,
+                              ImGuiWindowFlags_NoScrollbar)) {
+
+            if (all_scanned.empty()) {
+                ImGui::Dummy(ImVec2(0.0f, 40.0f));
+                ImGui::SetCursorPosX((list_w - 280.0f) * 0.5f);
+                if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+                ImGui::TextColored(ImVec4(0.6f, 0.65f, 0.75f, 0.85f), "曲库暂无扫描曲目，请先前往「扫描音乐」");
+                if (Fonts::Small) ImGui::PopFont();
+
+                ImGui::Dummy(ImVec2(0.0f, 12.0f));
+                ImGui::SetCursorPosX((list_w - 120.0f) * 0.5f);
+                if (ImGui::Button("前往扫描音乐", ImVec2(120.0f, 32.0f))) {
+                    if (on_navigate_tab_) {
+                        on_navigate_tab_(SidebarTab::ScanMusic);
+                    }
+                    show_add_music_modal_ = false;
+                }
+            } else if (filtered_tracks.empty()) {
+                ImGui::Dummy(ImVec2(0.0f, 50.0f));
+                ImGui::SetCursorPosX((list_w - 200.0f) * 0.5f);
+                if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+                ImGui::TextColored(ImVec4(0.6f, 0.65f, 0.75f, 0.85f), "未找到符合条件的音频曲目");
+                if (Fonts::Small) ImGui::PopFont();
+            } else {
+                for (size_t i = 0; i < filtered_tracks.size(); ++i) {
+                    const auto& trk = filtered_tracks[i];
+
+                    // 检查是否已经在歌单中
+                    bool already_in = false;
+                    for (const auto& pt : target_playlist->getTracks()) {
+                        if (pt.id == trk.id || pt.file_path == trk.file_path) {
+                            already_in = true;
+                            break;
+                        }
+                    }
+
+                    // 检查是否在当前选集
+                    auto sel_it = std::find(selected_track_ids_to_add_.begin(), selected_track_ids_to_add_.end(), trk.id);
+                    bool is_selected = (sel_it != selected_track_ids_to_add_.end());
+
+                    ImGui::PushID(static_cast<int>(trk.id * 1000 + i));
+
+                    float row_h = 32.0f;
+                    ImVec2 row_pos = ImGui::GetCursorScreenPos();
+                    ImVec2 row_min(row_pos.x, row_pos.y);
+                    ImVec2 row_max(row_pos.x + list_w - 4.0f, row_pos.y + row_h);
+
+                    bool row_clicked = ImGui::InvisibleButton("##RowBtn", ImVec2(list_w - 4.0f, row_h));
+                    bool row_hovered = ImGui::IsItemHovered();
+
+                    if (row_clicked && !already_in) {
+                        if (is_selected) {
+                            selected_track_ids_to_add_.erase(sel_it);
+                        } else {
+                            selected_track_ids_to_add_.push_back(trk.id);
+                        }
+                    }
+
+                    ImDrawList* cur_dl = ImGui::GetWindowDrawList();
+
+                    // 背景绘制
+                    if (already_in) {
+                        cur_dl->AddRectFilled(row_min, row_max, IM_COL32(25, 30, 42, 120), 5.0f);
+                    } else if (is_selected) {
+                        cur_dl->AddRectFilled(row_min, row_max, IM_COL32(r, g, b, 50), 5.0f);
+                        cur_dl->AddRect(row_min, row_max, UIConfig::Color::GlassBorder, 5.0f, 0, 1.0f);
+                    } else if (row_hovered) {
+                        cur_dl->AddRectFilled(row_min, row_max, UIConfig::Color::GlassHover, 5.0f);
+                    }
+
+                    // 左侧复选框绘制
+                    float box_size = 16.0f;
+                    float box_x = row_min.x + 8.0f;
+                    float box_y = row_pos.y + (row_h - box_size) * 0.5f;
+
+                    if (already_in) {
+                        // 已添加图标 (灰色背景对勾)
+                        cur_dl->AddRectFilled(ImVec2(box_x, box_y), ImVec2(box_x + box_size, box_y + box_size), IM_COL32(50, 60, 75, 180), 3.0f);
+                        cur_dl->AddText(ImVec2(box_x + 2.5f, box_y - 1.0f), IM_COL32(140, 155, 175, 200), "✓");
+                    } else if (is_selected) {
+                        // 选中图标 (主题色高亮对勾)
+                        cur_dl->AddRectFilled(ImVec2(box_x, box_y), ImVec2(box_x + box_size, box_y + box_size), accent, 3.0f);
+                        cur_dl->AddText(ImVec2(box_x + 2.5f, box_y - 1.0f), IM_COL32(255, 255, 255, 255), "✓");
+                    } else {
+                        // 未选中框
+                        cur_dl->AddRect(ImVec2(box_x, box_y), ImVec2(box_x + box_size, box_y + box_size), IM_COL32(100, 115, 135, 180), 3.0f, 0, 1.0f);
+                    }
+
+                    // 曲名
+                    float text_x = box_x + box_size + 12.0f;
+                    float text_y = row_pos.y + 7.0f;
+
+                    ImU32 title_col = already_in ? IM_COL32(130, 145, 165, 180) :
+                                      (is_selected ? UIConfig::Color::TextActive : IM_COL32(215, 225, 238, 230));
+                    cur_dl->AddText(ImVec2(text_x, text_y), title_col, trk.title.c_str());
+
+                    float title_w = ImGui::CalcTextSize(trk.title.c_str()).x;
+                    text_x += title_w + 10.0f;
+
+                    // 艺术家
+                    if (!trk.artist.empty()) {
+                        std::string art = "- " + trk.artist;
+                        if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+                        cur_dl->AddText(ImVec2(text_x, text_y + 1.0f), UIConfig::Color::TextMuted, art.c_str());
+                        if (Fonts::Small) ImGui::PopFont();
+                    }
+
+                    // 右侧：已在歌单标记 或 规格 + 时长
+                    float right_x = row_max.x - 8.0f;
+                    if (already_in) {
+                        if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+                        const char* exist_tag = "已在歌单";
+                        float exist_w = ImGui::CalcTextSize(exist_tag).x;
+                        right_x -= exist_w;
+                        cur_dl->AddText(ImVec2(right_x, text_y + 1.0f), IM_COL32(110, 125, 145, 200), exist_tag);
+                        if (Fonts::Small) ImGui::PopFont();
+                    } else {
+                        // 时长
+                        if (trk.duration_sec > 0) {
+                            char dur_buf[32];
+                            std::snprintf(dur_buf, sizeof(dur_buf), "%02u:%02u", trk.duration_sec / 60, trk.duration_sec % 60);
+                            if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+                            float dur_w = ImGui::CalcTextSize(dur_buf).x;
+                            right_x -= dur_w;
+                            cur_dl->AddText(ImVec2(right_x, text_y + 1.0f), IM_COL32(150, 165, 185, 200), dur_buf);
+                            if (Fonts::Small) ImGui::PopFont();
+                            right_x -= 12.0f;
+                        }
+
+                        // 规格徽标
+                        std::string badge = trk.getFormatBadge();
+                        if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+                        float badge_txt_w = ImGui::CalcTextSize(badge.c_str()).x;
+                        float badge_w = badge_txt_w + 8.0f;
+                        float badge_h = 16.0f;
+                        float badge_x = right_x - badge_w;
+                        float badge_y = row_pos.y + 7.5f;
+
+                        cur_dl->AddRectFilled(ImVec2(badge_x, badge_y), ImVec2(badge_x + badge_w, badge_y + badge_h), IM_COL32(18, 24, 34, 210), 3.0f);
+                        cur_dl->AddRect(ImVec2(badge_x, badge_y), ImVec2(badge_x + badge_w, badge_y + badge_h), IM_COL32(50, 70, 95, 160), 3.0f, 0, 1.0f);
+                        cur_dl->AddText(ImVec2(badge_x + 4.0f, badge_y + 1.0f), IM_COL32(65, 190, 255, 230), badge.c_str());
+                        if (Fonts::Small) ImGui::PopFont();
+                    }
+
+                    ImGui::PopID();
+                    ImGui::Dummy(ImVec2(0.0f, 2.0f));
+                }
+            }
+        }
+        ImGui::EndChild();
+        ImGui::PopStyleVar(); // Pop ScrollbarSize
+
+        ImGui::Dummy(ImVec2(0.0f, 14.0f));
+
+        // 底部工具与操作栏
+        // 计算当前可添加曲目总数
+        size_t available_candidates = 0;
+        for (const auto& trk : filtered_tracks) {
+            bool already_in = false;
+            for (const auto& pt : target_playlist->getTracks()) {
+                if (pt.id == trk.id || pt.file_path == trk.file_path) {
+                    already_in = true;
+                    break;
+                }
+            }
+            if (!already_in) available_candidates++;
+        }
+
+        // 左侧：全选/反选 + 已选计数
+        bool all_avail_selected = (available_candidates > 0) && (selected_track_ids_to_add_.size() >= available_candidates);
+
+        ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(40, 48, 64, 180));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(52, 62, 82, 220));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(65, 78, 102, 250));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 7.0f);
+        if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+
+        const char* sel_all_text = all_avail_selected ? "取消全选" : "全选全部";
+        if (ImGui::Button(sel_all_text, ImVec2(80.0f, 30.0f))) {
+            if (all_avail_selected) {
+                selected_track_ids_to_add_.clear();
+            } else {
+                selected_track_ids_to_add_.clear();
+                for (const auto& trk : filtered_tracks) {
+                    bool already_in = false;
+                    for (const auto& pt : target_playlist->getTracks()) {
+                        if (pt.id == trk.id || pt.file_path == trk.file_path) {
+                            already_in = true;
+                            break;
+                        }
+                    }
+                    if (!already_in) {
+                        selected_track_ids_to_add_.push_back(trk.id);
+                    }
+                }
+            }
+        }
+
+        ImGui::SameLine(0.0f, 14.0f);
+        std::string sel_summary = "已选 " + std::to_string(selected_track_ids_to_add_.size()) + " 首曲目";
+        ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 5.0f);
+        ImGui::TextColored(ImVec4(0.6f, 0.65f, 0.75f, 0.85f), "%s", sel_summary.c_str());
+
+        if (Fonts::Small) ImGui::PopFont();
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor(3);
+
+        // 右侧：取消 + 确认添加
+        float btn_w = 90.0f;
+        float confirm_w = 100.0f;
+        ImGui::SameLine(modal_w - 24.0f - btn_w - 10.0f - confirm_w);
+
+        // 取消按钮
+        ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(40, 46, 60, 180));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(52, 60, 78, 220));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(65, 75, 96, 250));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 7.0f);
+        if (ImGui::Button("取消", ImVec2(btn_w, 30.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+            show_add_music_modal_ = false;
+            selected_track_ids_to_add_.clear();
+        }
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor(3);
+
+        // 确认添加按钮
+        ImGui::SameLine(0.0f, 10.0f);
+        bool has_selection = !selected_track_ids_to_add_.empty();
+        ImU32 conf_bg = has_selection ? accent : IM_COL32(r, g, b, 70);
+        ImU32 conf_hov = has_selection ? IM_COL32(std::min<uint32_t>(255u, r + 30u), std::min<uint32_t>(255u, g + 30u), std::min<uint32_t>(255u, b + 30u), 255) : conf_bg;
+
+        ImGui::PushStyleColor(ImGuiCol_Button, conf_bg);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, conf_hov);
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(r, g, b, 200));
+        ImGui::PushStyleColor(ImGuiCol_Text, has_selection ? IM_COL32(255, 255, 255, 255) : IM_COL32(200, 200, 200, 160));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 7.0f);
+
+        if (ImGui::Button("确认添加", ImVec2(confirm_w, 30.0f)) && has_selection) {
+            for (uint64_t tid : selected_track_ids_to_add_) {
+                auto it = std::find_if(all_scanned.begin(), all_scanned.end(), [tid](const Track& trk) {
+                    return trk.id == tid;
+                });
+                if (it != all_scanned.end()) {
+                    target_playlist->addTrack(*it);
+                }
+            }
+            // 立即持久化至 SQLite 数据库
+            MusicDatabase::getInstance().savePlaylists(playlists);
+
+            show_add_music_modal_ = false;
+            selected_track_ids_to_add_.clear();
+        }
+
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor(4);
+    }
+    ImGui::End();
+    ImGui::PopStyleVar(3);
+    ImGui::PopStyleColor(2);
 }
 
 void MainStageView::renderEqualizerView(float x, float y, float w, float h) {
