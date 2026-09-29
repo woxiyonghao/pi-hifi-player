@@ -21,11 +21,13 @@
 class MainStageView {
   public:
     using NavigateTabCallback = std::function<void(SidebarTab)>;
+    using SelectPlaylistCallback = std::function<void(SidebarTab, uint64_t)>;
 
     MainStageView();
     ~MainStageView() = default;
 
     void setOnNavigateTab(NavigateTabCallback cb) { on_navigate_tab_ = std::move(cb); }
+    void setOnSelectPlaylist(SelectPlaylistCallback cb) { on_select_playlist_ = std::move(cb); }
 
     // 渲染主舞台视图
     void render(SidebarTab current_tab, uint64_t selected_playlist_id, std::vector<Playlist>& playlists,
@@ -48,6 +50,7 @@ class MainStageView {
     ScanMusicWidget scan_widget_;
     EQConfigView eq_view_;
     NavigateTabCallback on_navigate_tab_;
+    SelectPlaylistCallback on_select_playlist_;
 
     // 所有音乐树列表视图配置与折叠展开状态追踪
     int all_music_view_mode_ = 0; // 0: 按音频格式分类, 1: 按艺术家/专辑, 2: 按存储目录
@@ -59,4 +62,8 @@ class MainStageView {
     char add_music_search_buf_[128] = "";
     std::vector<uint64_t> selected_track_ids_to_add_;
     void renderAddMusicToPlaylistModal(Playlist* target_playlist, std::vector<Playlist>& playlists);
+
+    // 歌单删除二次确认模态对话框
+    bool show_delete_playlist_modal_ = false;
+    void renderDeletePlaylistModal(Playlist* target_playlist, std::vector<Playlist>& playlists);
 };

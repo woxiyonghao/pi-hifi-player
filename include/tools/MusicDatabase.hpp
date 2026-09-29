@@ -32,6 +32,10 @@ public:
     bool savePlaylists(const std::vector<Playlist>& playlists);
     std::vector<Playlist> loadPlaylists();
 
+    // 应用配置与状态持久化接口 (如侧边栏选中项等)
+    bool setSetting(const std::string& key, const std::string& value);
+    std::string getSetting(const std::string& key, const std::string& default_val = "");
+
 private:
     MusicDatabase() = default;
 

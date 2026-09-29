@@ -74,6 +74,11 @@ bool MusicDatabase::init(const std::string& db_path) {
             sort_order INTEGER NOT NULL,
             PRIMARY KEY(playlist_id, sort_order)
         );
+
+        CREATE TABLE IF NOT EXISTS app_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
     )";
 
     char* err_msg = nullptr;
@@ -301,4 +306,43 @@ std::vector<Playlist> MusicDatabase::loadPlaylists() {
     sqlite3_finalize(pl_stmt);
 
     return playlists;
+}
+
+bool MusicDatabase::setSetting(const std::string& key, const std::string& value) {
+    if (!init()) return false;
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    const char* sql = "INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?);";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        return false;
+    }
+
+    sqlite3_bind_text(stmt, 1, key.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, value.c_str(), -1, SQLITE_STATIC);
+    bool ok = (sqlite3_step(stmt) == SQLITE_DONE);
+    sqlite3_finalize(stmt);
+    return ok;
+}
+
+std::string MusicDatabase::getSetting(const std::string& key, const std::string& default_val) {
+    if (!init()) return default_val;
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    const char* sql = "SELECT value FROM app_settings WHERE key = ?;";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        return default_val;
+    }
+
+    sqlite3_bind_text(stmt, 1, key.c_str(), -1, SQLITE_STATIC);
+    std::string result = default_val;
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        const unsigned char* val = sqlite3_column_text(stmt, 0);
+        if (val) {
+            result = reinterpret_cast<const char*>(val);
+        }
+    }
+    sqlite3_finalize(stmt);
+    return result;
 }

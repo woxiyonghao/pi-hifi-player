@@ -67,4 +67,8 @@ private:
     MainStageView main_stage_;
     BottomBarView bottom_bar_;
     VUMeterRenderer vu_renderer_;
+
+    // 侧边栏持久化状态追踪
+    SidebarTab last_saved_tab_ = SidebarTab::AllMusic;
+    uint64_t last_saved_playlist_id_ = 0;
 };

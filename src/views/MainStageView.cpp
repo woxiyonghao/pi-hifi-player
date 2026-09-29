@@ -604,11 +604,36 @@ void MainStageView::renderPlaylistView(uint64_t pid, std::vector<Playlist>& play
     const ImU32 g = (accent >> IM_COL32_G_SHIFT) & 0xFF;
     const ImU32 b = (accent >> IM_COL32_B_SHIFT) & 0xFF;
 
-    // 右上角 "+ 添加歌曲" 按钮 (无论歌单是否为空，均常驻方便随时加歌)
+    // 右上角工具按钮栏 (从右边排序是：删除播放列表，添加歌曲)
     if (target_playlist) {
+        // 1. 最右侧：删除播放列表按钮 (具有微红警示色悬停底纹)
+        float del_btn_w = 96.0f;
+        float del_btn_h = 28.0f;
+        float del_btn_x = card_max.x - 20.0f - del_btn_w;
+        float del_btn_y = card_min.y + 18.0f;
+
+        ImGui::SetCursorScreenPos(ImVec2(del_btn_x, del_btn_y));
+        ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(38, 44, 58, 170));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(200, 45, 55, 170));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(230, 30, 45, 210));
+        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(220, 230, 245, 220));
+        ImGui::PushStyleColor(ImGuiCol_Border, IM_COL32(255, 255, 255, 25));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+
+        if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+        if (ImGui::Button("删除播放列表", ImVec2(del_btn_w, del_btn_h))) {
+            show_delete_playlist_modal_ = true;
+        }
+        if (Fonts::Small) ImGui::PopFont();
+
+        ImGui::PopStyleVar(2);
+        ImGui::PopStyleColor(5);
+
+        // 2. 左侧：+ 添加歌曲按钮 (经典液态玻璃主题色)
         float add_btn_w = 96.0f;
         float add_btn_h = 28.0f;
-        float add_btn_x = card_max.x - 20.0f - add_btn_w;
+        float add_btn_x = del_btn_x - 10.0f - add_btn_w;
         float add_btn_y = card_min.y + 18.0f;
 
         ImGui::SetCursorScreenPos(ImVec2(add_btn_x, add_btn_y));
@@ -815,6 +840,11 @@ void MainStageView::renderPlaylistView(uint64_t pid, std::vector<Playlist>& play
     // 渲染添加歌曲模态弹窗
     if (show_add_music_modal_ && target_playlist) {
         renderAddMusicToPlaylistModal(target_playlist, playlists);
+    }
+
+    // 渲染删除播放列表二次确认模态弹窗
+    if (show_delete_playlist_modal_ && target_playlist) {
+        renderDeletePlaylistModal(target_playlist, playlists);
     }
 }
 
@@ -1244,6 +1274,149 @@ void MainStageView::renderAddMusicToPlaylistModal(Playlist* target_playlist, std
 
             show_add_music_modal_ = false;
             selected_track_ids_to_add_.clear();
+        }
+
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor(4);
+    }
+    ImGui::End();
+    ImGui::PopStyleVar(3);
+    ImGui::PopStyleColor(2);
+}
+
+void MainStageView::renderDeletePlaylistModal(Playlist* target_playlist, std::vector<Playlist>& playlists) {
+    if (!target_playlist) return;
+
+    ImGuiIO& io = ImGui::GetIO();
+    float screen_w = io.DisplaySize.x;
+    float screen_h = io.DisplaySize.y;
+
+    // 1. 全透明交互遮罩 (拦截底层鼠标点击，绝不发黑遮挡)
+    ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
+    ImGui::SetNextWindowSize(io.DisplaySize);
+    ImGuiWindowFlags backdrop_flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                                      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+                                      ImGuiWindowFlags_NoBackground;
+    if (ImGui::Begin("##DeletePlaylistModalBackdrop", nullptr, backdrop_flags)) {
+        ImGui::InvisibleButton("##DeletePlaylistBackdropClickBlocker", io.DisplaySize);
+        if (ImGui::IsItemClicked()) {
+            show_delete_playlist_modal_ = false;
+        }
+    }
+    ImGui::End();
+
+    // 2. 居中模态卡片尺寸与排版 (400px × 210px)
+    const float modal_w = 400.0f;
+    const float modal_h = 210.0f;
+    const float modal_x = (screen_w - modal_w) * 0.5f;
+    const float modal_y = (screen_h - modal_h) * 0.5f;
+
+    ImGui::SetNextWindowPos(ImVec2(modal_x, modal_y));
+    ImGui::SetNextWindowSize(ImVec2(modal_w, modal_h));
+
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                             ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+                             ImGuiWindowFlags_NoCollapse;
+
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, IM_COL32(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_Border, IM_COL32(0, 0, 0, 0));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 16.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(24.0f, 22.0f));
+
+    if (ImGui::Begin("##DeletePlaylistModalDialog", nullptr, flags)) {
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        ImVec2 p_min = ImGui::GetWindowPos();
+        ImVec2 p_max(p_min.x + modal_w, p_min.y + modal_h);
+
+        dl->AddRectFilled(ImVec2(p_min.x - 2.0f, p_min.y + 4.0f),
+                          ImVec2(p_max.x + 2.0f, p_max.y + 14.0f),
+                          IM_COL32(0, 0, 0, 120), 18.0f);
+        GlassCardRenderer::drawFrosted(dl, p_min, p_max, 16.0f);
+
+        // 标题
+        if (Fonts::Medium) ImGui::PushFont(Fonts::Medium);
+        ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 1.0f), "删除播放列表");
+        if (Fonts::Medium) ImGui::PopFont();
+
+        ImGui::Dummy(ImVec2(0.0f, 10.0f));
+
+        // 提示说明文案
+        if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+        std::string confirm_text = "确定要删除播放列表「" + target_playlist->getName() + "」吗？";
+        ImGui::TextColored(ImVec4(0.92f, 0.94f, 0.98f, 0.95f), "%s", confirm_text.c_str());
+        ImGui::Spacing();
+        ImGui::TextColored(ImVec4(0.6f, 0.65f, 0.75f, 0.85f), "删除后该歌单将从侧边栏移除，本地磁盘音频源文件不受影响。");
+        if (Fonts::Small) ImGui::PopFont();
+
+        ImGui::Dummy(ImVec2(0.0f, 20.0f));
+
+        // 底部按钮栏：取消 / 确认删除
+        const float btn_w = 96.0f;
+        const float btn_h = 32.0f;
+        ImGui::SetCursorPosX(modal_w - 24.0f - btn_w * 2.0f - 12.0f);
+
+        // 1. 取消按钮
+        ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(40, 46, 60, 180));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(52, 60, 78, 220));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(65, 75, 96, 250));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 7.0f);
+        if (ImGui::Button("取消", ImVec2(btn_w, btn_h)) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+            show_delete_playlist_modal_ = false;
+        }
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor(3);
+
+        // 2. 确认删除按钮 (红色警示色)
+        ImGui::SameLine(0.0f, 12.0f);
+        ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(200, 45, 55, 210));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(230, 40, 55, 255));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(180, 30, 45, 255));
+        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 255, 255, 255));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 7.0f);
+
+        if (ImGui::Button("确认删除", ImVec2(btn_w, btn_h))) {
+            size_t del_index = playlists.size();
+            for (size_t i = 0; i < playlists.size(); ++i) {
+                if (playlists[i].getId() == target_playlist->getId()) {
+                    del_index = i;
+                    break;
+                }
+            }
+
+            if (del_index < playlists.size()) {
+                SidebarTab next_tab = SidebarTab::AllMusic;
+                uint64_t next_pl_id = 0;
+
+                // 核心寻址逻辑 (严格符合用户指示)：
+                // 1. 如果下一个是播放列表，则选中它 (del_index + 1 < playlists.size())
+                if (del_index + 1 < playlists.size()) {
+                    next_tab = SidebarTab::CustomPlaylist;
+                    next_pl_id = playlists[del_index + 1].getId();
+                }
+                // 2. 如果是添加按钮，则往上寻找 (del_index > 0)
+                else if (del_index > 0) {
+                    next_tab = SidebarTab::CustomPlaylist;
+                    next_pl_id = playlists[del_index - 1].getId();
+                }
+                // 3. 往上没有的话，那就是全部音乐了
+                else {
+                    next_tab = SidebarTab::AllMusic;
+                    next_pl_id = 0;
+                }
+
+                // 从列表中删除
+                playlists.erase(playlists.begin() + del_index);
+                // 立即持久化至 SQLite 数据库
+                MusicDatabase::getInstance().savePlaylists(playlists);
+
+                // 通知主控制器切换激活项
+                if (on_select_playlist_) {
+                    on_select_playlist_(next_tab, next_pl_id);
+                }
+            }
+
+            show_delete_playlist_modal_ = false;
         }
 
         ImGui::PopStyleVar();

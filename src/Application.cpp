@@ -156,8 +156,43 @@ void Application::initData() {
     // 3. 从数据库恢复持久化的播放列表与其中曲目
     playlists_ = MusicDatabase::getInstance().loadPlaylists();
 
-    // 默认无选中的自定义歌单
-    sidebar_.setSelectedPlaylistId(0);
+    // 4. 从数据库恢复上次退出时的侧边栏选中项与歌单状态
+    std::string saved_tab_str = MusicDatabase::getInstance().getSetting("sidebar_tab", "");
+    std::string saved_pl_id_str = MusicDatabase::getInstance().getSetting("sidebar_playlist_id", "0");
+
+    if (!saved_tab_str.empty()) {
+        try {
+            int tab_val = std::stoi(saved_tab_str);
+            SidebarTab tab = static_cast<SidebarTab>(tab_val);
+            uint64_t pl_id = std::stoull(saved_pl_id_str);
+
+            if (tab == SidebarTab::CustomPlaylist) {
+                bool found = false;
+                for (const auto& pl : playlists_) {
+                    if (pl.getId() == pl_id) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (found) {
+                    sidebar_.setSelectedPlaylistId(pl_id);
+                } else if (!playlists_.empty()) {
+                    sidebar_.setSelectedPlaylistId(playlists_[0].getId());
+                } else {
+                    sidebar_.setCurrentTab(SidebarTab::AllMusic);
+                }
+            } else {
+                sidebar_.setCurrentTab(tab);
+            }
+        } catch (...) {
+            sidebar_.setCurrentTab(SidebarTab::AllMusic);
+        }
+    } else {
+        sidebar_.setCurrentTab(SidebarTab::AllMusic);
+    }
+
+    last_saved_tab_ = sidebar_.getCurrentTab();
+    last_saved_playlist_id_ = sidebar_.getSelectedPlaylistId();
 
     // 绑定添加播放列表交互：弹出最多 8 字的输入确认模态框
     sidebar_.setOnCreatePlaylist([this]() {
@@ -169,6 +204,19 @@ void Application::initData() {
     // 绑定主舞台 Tab 快速跳转回调
     main_stage_.setOnNavigateTab([this](SidebarTab tab) {
         sidebar_.setCurrentTab(tab);
+        MusicDatabase::getInstance().setSetting("sidebar_tab", std::to_string(static_cast<int>(tab)));
+        MusicDatabase::getInstance().setSetting("sidebar_playlist_id", "0");
+    });
+
+    // 绑定主舞台歌单选择/删除后的路由回调
+    main_stage_.setOnSelectPlaylist([this](SidebarTab tab, uint64_t pl_id) {
+        if (tab == SidebarTab::CustomPlaylist) {
+            sidebar_.setSelectedPlaylistId(pl_id);
+        } else {
+            sidebar_.setCurrentTab(tab);
+        }
+        MusicDatabase::getInstance().setSetting("sidebar_tab", std::to_string(static_cast<int>(sidebar_.getCurrentTab())));
+        MusicDatabase::getInstance().setSetting("sidebar_playlist_id", std::to_string(sidebar_.getSelectedPlaylistId()));
     });
 }
 
@@ -339,6 +387,16 @@ void Application::render() {
     // [顶层模态弹窗] 新建播放列表对话框
     if (show_create_playlist_modal_) {
         renderCreatePlaylistModal(screen_w, screen_h);
+    }
+
+    // 侧边栏选中项发生变动时立即持久化
+    SidebarTab cur_tab = sidebar_.getCurrentTab();
+    uint64_t cur_pl_id = sidebar_.getSelectedPlaylistId();
+    if (cur_tab != last_saved_tab_ || cur_pl_id != last_saved_playlist_id_) {
+        last_saved_tab_ = cur_tab;
+        last_saved_playlist_id_ = cur_pl_id;
+        MusicDatabase::getInstance().setSetting("sidebar_tab", std::to_string(static_cast<int>(cur_tab)));
+        MusicDatabase::getInstance().setSetting("sidebar_playlist_id", std::to_string(cur_pl_id));
     }
 
     // 3. 提交绘图并进行 OpenGL 光栅化清屏
@@ -527,6 +585,10 @@ int Application::run() {
         update(dt);
         render();
     }
+
+    // 退出前确保持久化最后的侧边栏选中项
+    MusicDatabase::getInstance().setSetting("sidebar_tab", std::to_string(static_cast<int>(sidebar_.getCurrentTab())));
+    MusicDatabase::getInstance().setSetting("sidebar_playlist_id", std::to_string(sidebar_.getSelectedPlaylistId()));
 
     return 0;
 }

@@ -23,12 +23,19 @@ class SidebarView {
                 float height = UIConfig::Layout::ScreenHeight);
 
     SidebarTab getCurrentTab() const { return current_tab_; }
-    void setCurrentTab(SidebarTab tab) { current_tab_ = tab; }
+    void setCurrentTab(SidebarTab tab) {
+        current_tab_ = tab;
+        if (tab != SidebarTab::CustomPlaylist) {
+            selected_playlist_id_ = 0;
+        }
+    }
 
     uint64_t getSelectedPlaylistId() const { return selected_playlist_id_; }
     void setSelectedPlaylistId(uint64_t id) {
         selected_playlist_id_ = id;
-        current_tab_ = SidebarTab::CustomPlaylist;
+        if (id > 0) {
+            current_tab_ = SidebarTab::CustomPlaylist;
+        }
     }
 
     void setOnCreatePlaylist(CreatePlaylistCallback cb) {
