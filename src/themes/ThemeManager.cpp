@@ -82,6 +82,78 @@ ThemeManager::ThemeManager() {
         MeterThemeType::RetroTape,
         BackgroundVisualMode::VUMeter
     });
+
+    presets_.push_back({
+        ThemeId::Marantz,
+        "经典马兰士",
+        "Marantz Emerald",
+        "Kawasaki, Japan · 70年代经典圆型舷窗与蓝绿祖母绿夜光，SA-10 纯模拟温厚高贵",
+        "甜润醇厚 · 模拟乐感",
+        IM_COL32(16, 185, 129, 255),  // #10B981 翡翠祖母绿
+        IM_COL32(16, 185, 129, 60),
+        IM_COL32(16, 185, 129, 150),
+        IM_COL32(52, 211, 153, 240),  // 亮绿峰值顶
+        IM_COL32(6, 40, 30, 25),
+        IM_COL32(10, 24, 20, 240),
+        IM_COL32(6, 16, 13, 255),
+        ImVec4(0.012f, 0.035f, 0.025f, 1.0f),
+        MeterThemeType::Marantz,
+        BackgroundVisualMode::VUMeter
+    });
+
+    presets_.push_back({
+        ThemeId::Burmester,
+        "柏林之声冷银",
+        "Burmester Pure Silver",
+        "Berlin, Germany · 德国顶级镜面镀铬与冷银极简工艺，069 旗舰 CD 纯粹真实与天鹅绒高音",
+        "极高解析 · 德国精密",
+        IM_COL32(226, 232, 240, 255), // #E2E8F0 银白冷辉
+        IM_COL32(203, 213, 225, 60),
+        IM_COL32(148, 163, 184, 150),
+        IM_COL32(248, 250, 252, 250), // 镜面铂金反光
+        IM_COL32(30, 41, 59, 25),
+        IM_COL32(15, 23, 42, 240),
+        IM_COL32(11, 15, 25, 255),
+        ImVec4(0.02f, 0.025f, 0.035f, 1.0f),
+        MeterThemeType::Burmester,
+        BackgroundVisualMode::VUMeter
+    });
+
+    presets_.push_back({
+        ThemeId::NaimAudio,
+        "英国名暗夜翠",
+        "Naim Classic Green",
+        "Salisbury, UK · 英国名机极简铸铝机箱与经典橄榄/暗夜翠绿微光，快节奏 PRaT 活生感",
+        "音乐节奏 · 饱满弹跳",
+        IM_COL32(34, 197, 94, 255),   // #22C55E 经典翠绿
+        IM_COL32(34, 197, 94, 60),
+        IM_COL32(34, 197, 94, 150),
+        IM_COL32(74, 222, 128, 240),  // 亮翠峰值顶
+        IM_COL32(20, 50, 25, 25),
+        IM_COL32(14, 20, 16, 240),
+        IM_COL32(9, 14, 11, 255),
+        ImVec4(0.015f, 0.025f, 0.018f, 1.0f),
+        MeterThemeType::NaimAudio,
+        BackgroundVisualMode::VUMeter
+    });
+
+    presets_.push_back({
+        ThemeId::MarkLevinson,
+        "马克莱文森赤晶",
+        "Mark Levinson Ruby Red",
+        "Woodbridge, Connecticut · 极品发烧黑晶阳极氧化拉丝铝面板，红宝石 LED 点阵沉稳权威",
+        "沉稳权威 · 宽广纵深",
+        IM_COL32(239, 68, 68, 255),   // #EF4444 发烧赤晶
+        IM_COL32(239, 68, 68, 60),
+        IM_COL32(239, 68, 68, 150),
+        IM_COL32(252, 165, 165, 240), // 宝石粉红高亮
+        IM_COL32(50, 15, 15, 25),
+        IM_COL32(20, 14, 16, 240),
+        IM_COL32(13, 9, 10, 255),
+        ImVec4(0.025f, 0.015f, 0.018f, 1.0f),
+        MeterThemeType::MarkLevinson,
+        BackgroundVisualMode::VUMeter
+    });
 }
 
 void ThemeManager::init() {
@@ -90,7 +162,7 @@ void ThemeManager::init() {
     if (!saved_theme_str.empty()) {
         try {
             int tid = std::stoi(saved_theme_str);
-            if (tid >= 0 && tid <= 4) {
+            if (tid >= 0 && tid <= 8) {
                 current_theme_ = static_cast<ThemeId>(tid);
             }
         } catch (...) {

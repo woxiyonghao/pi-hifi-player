@@ -142,17 +142,21 @@ uint64_t DsfParser::readFrames(float* buffer, uint64_t max_frames) {
         for (size_t b = 0; b < BYTES_PER_PCM_FRAME; ++b) {
             ones_l += __builtin_popcount(block_buffer_left_[current_block_pos_ + b]);
         }
-        float sample_l = static_cast<float>(ones_l - 32) / 32.0f;
+        float raw_l = static_cast<float>(ones_l - 32) / 32.0f;
 
         // 抽取右声道 8 字节
         int ones_r = 0;
         for (size_t b = 0; b < BYTES_PER_PCM_FRAME; ++b) {
             ones_r += __builtin_popcount(block_buffer_right_[current_block_pos_ + b]);
         }
-        float sample_r = static_cast<float>(ones_r - 32) / 32.0f;
+        float raw_r = static_cast<float>(ones_r - 32) / 32.0f;
 
-        buffer[frames_decoded * 2 + 0] = sample_l;
-        buffer[frames_decoded * 2 + 1] = sample_r;
+        // 低通平滑滤波器，消除 Delta-Sigma 降采样后的高频噪底与沙沙声
+        lp_l_ += 0.35f * (raw_l - lp_l_);
+        lp_r_ += 0.35f * (raw_r - lp_r_);
+
+        buffer[frames_decoded * 2 + 0] = lp_l_;
+        buffer[frames_decoded * 2 + 1] = lp_r_;
 
         current_block_pos_ += BYTES_PER_PCM_FRAME;
         frames_decoded++;
@@ -187,6 +191,8 @@ bool DsfParser::seek(double target_seconds) {
     if (loadNextBlock()) {
         current_block_pos_ = byte_in_block;
         current_sample_idx_ = (block_index * block_size_ + byte_in_block) * 8;
+        lp_l_ = 0.0f;
+        lp_r_ = 0.0f;
         return true;
     }
     return false;
@@ -207,6 +213,8 @@ void DsfParser::close() {
     duration_sec_ = 0.0;
     current_sample_idx_ = 0;
     has_active_block_ = false;
+    lp_l_ = 0.0f;
+    lp_r_ = 0.0f;
 }
 
 } // namespace audio_engine

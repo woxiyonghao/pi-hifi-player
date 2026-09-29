@@ -12,7 +12,11 @@ enum class MeterThemeType {
     Accuphase,     // 旗舰金嗓子香槟金白炽暖光表头 (Champagne Gold)
     RetroTape,     // 复古琥珀色磁带机表头 (Vintage Amber Tape)
     ModernCrimson, // 现代深空玫红极简发烧表头 (Modern Studio)
-    Custom         // 发烧友自由调色大表头 (Custom Audiophile)
+    Custom,        // 发烧友自由调色大表头 (Custom Audiophile)
+    Marantz,       // 经典马兰士翡翠绿舷窗表头 (Marantz Porthole)
+    Burmester,     // 柏林之声冷银拉丝发烧表头 (Burmester Precision)
+    NaimAudio,     // 英国名暗夜翠绿动圈表头 (Naim PRaT Audio)
+    MarkLevinson   // 马克莱文森赤晶宝石双表头 (Mark Levinson Reference)
 };
 
 // ==============================================================================

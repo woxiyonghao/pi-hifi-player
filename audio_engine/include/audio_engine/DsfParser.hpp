@@ -47,6 +47,10 @@ private:
     // 抽样抽取比率 (例如 DSD64 2822400Hz / 64 = 44100Hz PCM 输出)
     static constexpr uint32_t DECIMATION_RATIO = 64;
 
+    // 二阶超声量化噪声平滑低通滤波器状态
+    float lp_l_ = 0.0f;
+    float lp_r_ = 0.0f;
+
     bool loadNextBlock();
 };
 

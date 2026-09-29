@@ -48,8 +48,8 @@ public:
         const size_t current_read = read_pos_.load(std::memory_order_acquire);
         const size_t current_write = write_pos_.load(std::memory_order_relaxed);
 
-        const size_t occupied = current_write - current_read;
-        const size_t available = capacity_ - occupied;
+        const size_t occupied = (current_write >= current_read) ? (current_write - current_read) : 0;
+        const size_t available = (capacity_ > occupied) ? (capacity_ - occupied) : 0;
         const size_t to_write = std::min(count, available);
 
         if (to_write == 0) return 0;
@@ -77,7 +77,7 @@ public:
         const size_t current_write = write_pos_.load(std::memory_order_acquire);
         const size_t current_read = read_pos_.load(std::memory_order_relaxed);
 
-        const size_t occupied = current_write - current_read;
+        const size_t occupied = (current_write >= current_read) ? (current_write - current_read) : 0;
         const size_t to_read = std::min(count, occupied);
 
         if (to_read == 0) return 0;

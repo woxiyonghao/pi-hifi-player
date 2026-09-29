@@ -19,7 +19,7 @@ AudioEngine& AudioEngine::getInstance() {
     return instance;
 }
 
-AudioEngine::AudioEngine() : ring_buffer_(131072) {
+AudioEngine::AudioEngine() : ring_buffer_(262144) {
     // 默认输出驱动：使用跨平台低延迟 SdlAudioSink
     sink_ = std::make_unique<SdlAudioSink>();
 }
@@ -89,6 +89,20 @@ bool AudioEngine::openAndPlay(const std::string& filepath) {
     is_playing_.store(true, std::memory_order_release);
     is_paused_.store(false, std::memory_order_release);
     is_decoding_.store(true, std::memory_order_release);
+
+    // 预缓冲：在声卡推流前先预解码填充环形缓冲区，彻底消除起播断流与沙沙杂音
+    constexpr size_t PREBUFFER_FRAMES = 8192;
+    std::vector<float> prebuf(PREBUFFER_FRAMES * current_spec_.channels);
+    uint64_t pre_read = 0;
+    {
+        std::lock_guard lock(decoder_mutex_);
+        if (decoder_) {
+            pre_read = decoder_->readFrames(prebuf.data(), PREBUFFER_FRAMES);
+        }
+    }
+    if (pre_read > 0) {
+        ring_buffer_.write(prebuf.data(), pre_read * current_spec_.channels);
+    }
 
     sink_->start();
 
@@ -327,9 +341,17 @@ void AudioEngine::onSinkDataNeeded(float* output, size_t frame_count) {
     size_t samples_needed = frame_count * current_spec_.channels;
     size_t samples_read = ring_buffer_.read(output, samples_needed);
 
-    // 若环形缓冲未填满 (或处于末尾)，补 0 防止爆音
+    // 若环形缓冲未填满 (或处于末尾)，平滑渐隐防止方波突变引起的爆音/沙沙声
     if (samples_read < samples_needed) {
-        std::memset(output + samples_read, 0, (samples_needed - samples_read) * sizeof(float));
+        float last_val = (samples_read > 0) ? output[samples_read - 1] : 0.0f;
+        size_t ramp_len = std::min(samples_needed - samples_read, size_t(32));
+        for (size_t i = 0; i < ramp_len; ++i) {
+            float decay = 1.0f - static_cast<float>(i + 1) / static_cast<float>(ramp_len);
+            output[samples_read + i] = last_val * decay;
+        }
+        if (samples_needed > samples_read + ramp_len) {
+            std::memset(output + samples_read + ramp_len, 0, (samples_needed - samples_read - ramp_len) * sizeof(float));
+        }
     }
 
     size_t frames_read = samples_read / current_spec_.channels;
@@ -352,11 +374,8 @@ void AudioEngine::onSinkDataNeeded(float* output, size_t frame_count) {
     } else if (f_state == FadeState::None && vol >= 0.9999f && !is_eq_enabled_.load(std::memory_order_relaxed)) {
         // 【Bit-Perfect 0dB 源码直出】：不进行任何浮点乘法计算，保持原始数据绝对纯净！
     } else {
-        // 【发烧级 64-bit 浮点音量衰减 + 平滑 Hann 升余弦淡入淡出 + TPDF (三角概率分布) Dither 抖动】
-        static thread_local std::mt19937 dither_gen(1337);
-        static thread_local std::uniform_real_distribution<double> dither_dist(-1.0, 1.0);
-        constexpr double DITHER_SCALE = 1.0 / 8388608.0; // 对应 24-bit LSB 尺度
-
+        // 【发烧级纯净 64-bit 浮点音量衰减 + 平滑 Hann 升余弦淡入淡出】
+        // 杜绝伪白噪声注入，呈现绝对深邃的黑底宁静度与零沙沙底噪
         double double_vol = static_cast<double>(vol);
         uint32_t channels = (current_spec_.channels > 0) ? current_spec_.channels : 2;
         uint64_t f_total = fade_total_frames_.load(std::memory_order_relaxed);
@@ -389,13 +408,11 @@ void AudioEngine::onSinkDataNeeded(float* output, size_t frame_count) {
                 }
             }
 
-            double frame_vol = double_vol * static_cast<double>(f_gain);
+            float final_vol = static_cast<float>(double_vol * static_cast<double>(f_gain));
             for (size_t c = 0; c < channels; ++c) {
                 size_t idx = f * channels + c;
                 if (idx < samples_needed) {
-                    double sample = static_cast<double>(output[idx]) * frame_vol;
-                    double tpdf_dither = (dither_dist(dither_gen) + dither_dist(dither_gen)) * 0.5 * DITHER_SCALE;
-                    output[idx] = static_cast<float>(sample + tpdf_dither);
+                    output[idx] *= final_vol;
                 }
             }
         }

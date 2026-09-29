@@ -13,7 +13,11 @@ enum class ThemeId : int {
     McIntosh = 1,      // 麦景图深蓝 (McIntosh Blue Eyes)
     Accuphase = 2,     // 金嗓子香槟金 (Accuphase Champagne Gold)
     RetroTape = 3,     // 复古琥珀卡座 (Vintage Amber Tape)
-    Custom = 4         // 发烧友自由调色
+    Custom = 4,        // 发烧友自由调色
+    Marantz = 5,       // 经典马兰士翡翠绿 (Marantz Emerald)
+    Burmester = 6,     // 柏林之声冷银 (Burmester Pure Silver)
+    NaimAudio = 7,     // 英国名暗夜翠 (Naim Classic Green)
+    MarkLevinson = 8   // 马克莱文森赤晶 (Mark Levinson Ruby Red)
 };
 
 // ==============================================================================

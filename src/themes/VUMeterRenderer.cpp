@@ -86,6 +86,86 @@ MeterPalette getPalette(MeterThemeType theme, ImVec4 custom_col) {
         "APPLE LOSSLESS AUDIO · ULTRA HI-RES"
     };
 
+    static const MeterPalette marantz = {
+        IM_COL32(3, 14, 10, 255),       // 深空底板黑绿
+        IM_COL32(4, 24, 18, 255),       // 表盘深邃暗翡翠底色
+        IM_COL32(52, 211, 153, 130),    // 轴心核心灯泡强光
+        IM_COL32(16, 185, 129, 85),     // 弥散外层柔和翡翠绿
+        IM_COL32(16, 185, 129, 150),    // 荧光外框
+        IM_COL32(167, 243, 208, 220),   // 主刻度弧线
+        IM_COL32(209, 250, 229, 230),   // 安全刻度线
+        IM_COL32(167, 243, 208, 220),   // 安全刻度文字
+        IM_COL32(239, 68, 68, 255),     // 过载警示红 (>=0dB)
+        IM_COL32(255, 59, 48, 255),     // 亮红动圈指针
+        IM_COL32(16, 185, 129, 60),     // 指针背光阴影
+        IM_COL32(20, 36, 28, 255),      // 轴心石墨底座
+        IM_COL32(110, 231, 183, 255),   // 轴心外圈金属圈
+        IM_COL32(16, 185, 129, 180),    // 底部铭牌翡翠绿
+        "SA-CD / DSD DIRECT STREAM",
+        "Marantz Reference Porthole · Pure Class-A Discrete HDAM-SA3",
+        "MUSICAL MASTERING · ZERO NEGATIVE FEEDBACK"
+    };
+
+    static const MeterPalette burmester = {
+        IM_COL32(8, 11, 16, 255),       // 深空冷灰黑
+        IM_COL32(16, 22, 32, 255),      // 镜面冷银暗灰底
+        IM_COL32(241, 245, 249, 120),   // 轴心冷白强光
+        IM_COL32(148, 163, 184, 80),    // 弥散外层银灰微光
+        IM_COL32(203, 213, 225, 150),   // 镜面冷银边框
+        IM_COL32(241, 245, 249, 225),   // 主刻度弧线
+        IM_COL32(226, 232, 240, 230),   // 安全刻度线
+        IM_COL32(241, 245, 249, 225),   // 安全刻度文字
+        IM_COL32(239, 68, 68, 255),     // 过载警示红 (>=0dB)
+        IM_COL32(255, 69, 58, 255),     // 亮红动圈指针
+        IM_COL32(203, 213, 225, 60),    // 指针背光阴影
+        IM_COL32(30, 41, 59, 255),      // 轴心石墨底座
+        IM_COL32(226, 232, 240, 255),   // 轴心镀铬高光圈
+        IM_COL32(203, 213, 225, 180),   // 底部铭牌银白
+        "PRECISION POWER / BALANCED",
+        "Burmester Audiosysteme Berlin · Reference Line Direct Drive",
+        "CHROME PRECISION · DUAL-MONO X-AMP"
+    };
+
+    static const MeterPalette naim = {
+        IM_COL32(7, 12, 8, 255),        // 深空暗绿黑
+        IM_COL32(12, 22, 14, 255),      // 表盘暗夜翠绿底
+        IM_COL32(74, 222, 128, 130),    // 轴心翠绿强光
+        IM_COL32(34, 197, 94, 80),      // 弥散橄榄翠绿
+        IM_COL32(34, 197, 94, 150),     // 翠绿边框
+        IM_COL32(187, 247, 208, 220),   // 主刻度弧线
+        IM_COL32(220, 252, 231, 230),   // 安全刻度线
+        IM_COL32(187, 247, 208, 220),   // 安全刻度文字
+        IM_COL32(239, 68, 68, 255),     // 过载警示红 (>=0dB)
+        IM_COL32(255, 59, 48, 255),     // 亮红动圈指针
+        IM_COL32(34, 197, 94, 60),      // 指针背光阴影
+        IM_COL32(22, 36, 26, 255),      // 轴心铸铝底座
+        IM_COL32(74, 222, 128, 255),    // 轴心外圈翠绿圈
+        IM_COL32(34, 197, 94, 180),     // 底部铭牌翠绿
+        "PACE, RHYTHM & TIMING (PRaT)",
+        "Naim Audio Salisbury · Discrete Regulated Power Supply (DR)",
+        "STATEMENT TOPOLOGY · ULTRA-LOW NOISE FLOOR"
+    };
+
+    static const MeterPalette mark_levinson = {
+        IM_COL32(14, 6, 8, 255),        // 深空黑晶红
+        IM_COL32(26, 10, 14, 255),      // 黑晶阳极红底
+        IM_COL32(248, 113, 113, 130),   // 轴心红宝石强光
+        IM_COL32(239, 68, 68, 85),      // 弥散外层赤晶微光
+        IM_COL32(239, 68, 68, 150),     // 赤晶边框
+        IM_COL32(254, 202, 202, 220),   // 主刻度弧线
+        IM_COL32(254, 226, 226, 230),   // 安全刻度线
+        IM_COL32(254, 202, 202, 220),   // 安全刻度文字
+        IM_COL32(255, 215, 0, 255),     // 金色警示
+        IM_COL32(255, 59, 48, 255),     // 亮红动圈指针
+        IM_COL32(239, 68, 68, 60),      // 指针背光阴影
+        IM_COL32(36, 18, 22, 255),      // 轴心黑晶石底座
+        IM_COL32(248, 113, 113, 255),   // 轴心外圈赤晶圈
+        IM_COL32(239, 68, 68, 180),     // 底部铭牌赤红
+        "PURE PATH DUAL-MONAURAL",
+        "Mark Levinson Reference · Pure Path Direct-Coupled Architecture",
+        "PRECISION LINK DAC · 32-BIT ESS PRO CALIBRATED"
+    };
+
     if (theme == MeterThemeType::Custom) {
         float r_f = std::clamp(custom_col.x, 0.0f, 1.0f);
         float g_f = std::clamp(custom_col.y, 0.0f, 1.0f);
@@ -140,6 +220,10 @@ MeterPalette getPalette(MeterThemeType theme, ImVec4 custom_col) {
         case MeterThemeType::Accuphase:     return accuphase;
         case MeterThemeType::RetroTape:     return retro_tape;
         case MeterThemeType::ModernCrimson: return modern_crimson;
+        case MeterThemeType::Marantz:       return marantz;
+        case MeterThemeType::Burmester:     return burmester;
+        case MeterThemeType::NaimAudio:     return naim;
+        case MeterThemeType::MarkLevinson:  return mark_levinson;
         case MeterThemeType::McIntosh:
         default:                            return mcintosh;
     }
