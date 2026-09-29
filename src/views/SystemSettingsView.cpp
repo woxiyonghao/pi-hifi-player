@@ -113,13 +113,7 @@ void SystemSettingsView::render(float x, float y, float w, float h) {
         ImGui::SetCursorScreenPos(ImVec2(p_hw.x, p_hw.y + 182.0f));
         ImGui::Dummy(ImVec2(0.0f, 10.0f));
 
-        // 板块三：曲库与存储中枢 (98px)
-        ImVec2 p_lib = ImGui::GetCursorScreenPos();
-        renderLibrarySection(child_dl, p_lib.x, p_lib.y, section_w);
-        ImGui::SetCursorScreenPos(ImVec2(p_lib.x, p_lib.y + 98.0f));
-        ImGui::Dummy(ImVec2(0.0f, 10.0f));
-
-        // 板块四：系统维护与电源管控 (88px)
+        // 板块三：系统维护与电源管控 (88px)
         ImVec2 p_power = ImGui::GetCursorScreenPos();
         renderPowerSection(child_dl, p_power.x, p_power.y, section_w);
         ImGui::SetCursorScreenPos(ImVec2(p_power.x, p_power.y + 88.0f));
@@ -384,65 +378,6 @@ void SystemSettingsView::renderHardwareSection(ImDrawList* dl, float x0, float y
                     is_act ? UIConfig::Color::TextActive : UIConfig::Color::TextNormal, idle_opts[i]);
         if (Fonts::Small) ImGui::PopFont();
     }
-}
-
-void SystemSettingsView::renderLibrarySection(ImDrawList* dl, float x0, float y0, float w) {
-    float h = 98.0f;
-    ImVec2 p0(x0, y0);
-    ImVec2 p1(x0 + w, y0 + h);
-
-    dl->AddRectFilled(p0, p1, IM_COL32(20, 26, 36, 175), 10.0f);
-    dl->AddRect(p0, p1, IM_COL32(255, 255, 255, 20), 10.0f, 0, 1.0f);
-    dl->AddLine(ImVec2(p0.x + 10.0f, p0.y), ImVec2(p1.x - 10.0f, p0.y), IM_COL32(255, 255, 255, 38), 1.0f);
-
-    if (Fonts::Regular) ImGui::PushFont(Fonts::Regular);
-    dl->AddText(ImVec2(x0 + 16.0f, y0 + 10.0f), UIConfig::Color::TextActive, "曲库存储与数据中枢");
-    if (Fonts::Regular) ImGui::PopFont();
-
-    // 统计标签
-    std::string track_count_str = "曲库引擎：SQLite 3 高性能 WAL 模式 · 存储路径：~/.config/hifi_player/";
-    if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-    dl->AddText(ImVec2(x0 + 16.0f, y0 + 36.0f), UIConfig::Color::TextMuted, track_count_str.c_str());
-    if (Fonts::Small) ImGui::PopFont();
-
-    // 操作按钮：触发重新扫描 & 清理封面缓存
-    float btn_w = 160.0f;
-    float btn_h = 28.0f;
-    float btn_y = y0 + 58.0f;
-
-    // 按钮 1：转到扫描音乐
-    ImVec2 b1_min(x0 + 16.0f, btn_y);
-    ImVec2 b1_max(x0 + 16.0f + btn_w, btn_y + btn_h);
-    ImGui::SetCursorScreenPos(b1_min);
-    ImGui::InvisibleButton("##GoScanMusicBtn", ImVec2(btn_w, btn_h));
-    bool hov1 = ImGui::IsItemHovered();
-    if (ImGui::IsItemClicked()) {
-        if (on_navigate_tab_) {
-            on_navigate_tab_(0); // SidebarTab::ScanMusic
-        }
-    }
-    dl->AddRectFilled(b1_min, b1_max, hov1 ? IM_COL32(255, 255, 255, 25) : IM_COL32(255, 255, 255, 12), 6.0f);
-    dl->AddRect(b1_min, b1_max, hov1 ? IM_COL32(255, 255, 255, 80) : IM_COL32(255, 255, 255, 30), 6.0f, 0, 1.0f);
-    if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-    ImVec2 t1_sz = ImGui::CalcTextSize("前往扫描音乐");
-    dl->AddText(ImVec2(b1_min.x + (btn_w - t1_sz.x) * 0.5f, btn_y + (btn_h - t1_sz.y) * 0.5f),
-                UIConfig::Color::TextActive, "前往扫描音乐");
-    if (Fonts::Small) ImGui::PopFont();
-
-    // 按钮 2：清空歌曲缓存
-    ImVec2 b2_min(x0 + 24.0f + btn_w, btn_y);
-    ImVec2 b2_max(x0 + 24.0f + btn_w * 2.0f, btn_y + btn_h);
-    ImGui::SetCursorScreenPos(b2_min);
-    ImGui::InvisibleButton("##ClearCacheBtn", ImVec2(btn_w, btn_h));
-    bool hov2 = ImGui::IsItemHovered();
-    (void)hov2;
-    dl->AddRectFilled(b2_min, b2_max, hov2 ? IM_COL32(255, 255, 255, 25) : IM_COL32(255, 255, 255, 12), 6.0f);
-    dl->AddRect(b2_min, b2_max, hov2 ? IM_COL32(255, 255, 255, 80) : IM_COL32(255, 255, 255, 30), 6.0f, 0, 1.0f);
-    if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-    ImVec2 t2_sz = ImGui::CalcTextSize("整理数据库缓存");
-    dl->AddText(ImVec2(b2_min.x + (btn_w - t2_sz.x) * 0.5f, btn_y + (btn_h - t2_sz.y) * 0.5f),
-                UIConfig::Color::TextActive, "整理数据库缓存");
-    if (Fonts::Small) ImGui::PopFont();
 }
 
 void SystemSettingsView::renderPowerSection(ImDrawList* dl, float x0, float y0, float w) {

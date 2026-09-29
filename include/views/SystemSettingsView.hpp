@@ -44,7 +44,6 @@ private:
     // 内部模块卡片渲染闭包
     void renderAudioSection(ImDrawList* dl, float x0, float y0, float w);
     void renderHardwareSection(ImDrawList* dl, float x0, float y0, float w);
-    void renderLibrarySection(ImDrawList* dl, float x0, float y0, float w);
     void renderPowerSection(ImDrawList* dl, float x0, float y0, float w);
 
 private:
