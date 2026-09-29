@@ -4,6 +4,7 @@
 #include "widgets/GlassCardRenderer.hpp"
 #include "tools/MusicDatabase.hpp"
 #include "tools/MusicScanManager.hpp"
+#include "themes/ThemeManager.hpp"
 #include <iostream>
 #include <cmath>
 #include <algorithm>
@@ -150,6 +151,9 @@ void Application::initData() {
     // 1. 初始化发烧 SQLite 数据库
     MusicDatabase::getInstance().init();
 
+    // 1.5 初始化并恢复视觉主题系统 (全景联动)
+    ThemeManager::getInstance().init();
+
     // 2. 从数据库恢复已扫描的本地发烧曲库
     MusicScanManager::getInstance().loadFromDatabase();
 
@@ -278,7 +282,23 @@ void Application::renderBackground(float screen_w, float screen_h) {
         return;
     }
 
-    // 3. 如果播放，在整个 App 的底，渲染音乐动效 (LED 矩阵频谱律动)
+    auto bg_mode = ThemeManager::getInstance().getBackgroundVisualMode();
+    if (bg_mode == BackgroundVisualMode::PureBlack) {
+        return;
+    }
+
+    if (bg_mode == BackgroundVisualMode::VUMeter) {
+        float levels12[12] = {0.0f};
+        player.getSpectrumLevels(levels12, 12);
+        // 低频/中高频能量估算左右声道电平
+        float l = std::clamp((levels12[0] + levels12[1] + levels12[2] + levels12[3] + levels12[4]) * 0.28f, 0.0f, 1.0f);
+        float r = std::clamp((levels12[2] + levels12[3] + levels12[4] + levels12[5] + levels12[6]) * 0.28f, 0.0f, 1.0f);
+        vu_renderer_.setTheme(ThemeManager::getInstance().getMeterTheme());
+        vu_renderer_.render(screen_w, screen_h, l, r);
+        return;
+    }
+
+    // 3. 如果播放且为 LED 频谱模式，在整个 App 的底，渲染音乐动效 (48列 LED 矩阵频谱律动)
     // 获取 12 频段实时音频幅度
     float levels12[12] = {0.0f};
     player.getSpectrumLevels(levels12, 12);
@@ -301,12 +321,10 @@ void Application::renderBackground(float screen_w, float screen_h) {
     const ImU32 g = (accent >> IM_COL32_G_SHIFT) & 0xFF;
     const ImU32 b = (accent >> IM_COL32_B_SHIFT) & 0xFF;
 
-    // 常规点亮方块色 (半透明玫红，柔和穿透毛玻璃卡片，通透而不遮挡前景文字)
-    const ImU32 lit_color = IM_COL32(r, g, b, 140);
-    // 柱顶峰值高亮点 (Peak indicator, 强化动态层次感)
-    const ImU32 peak_color = IM_COL32(std::min(255u, r + 20), std::min(255u, g + 60), std::min(255u, b + 60), 220);
-    // 播放时隐约的点阵暗底 (极低透明度，凸显专业仪器质感)
-    const ImU32 unlit_color = IM_COL32(255, 255, 255, 5);
+    // 常规点亮方块色与顶峰指示色 (完全随主题联动)
+    const ImU32 lit_color = ThemeManager::getInstance().getSpectrumLitColor();
+    const ImU32 peak_color = ThemeManager::getInstance().getSpectrumPeakColor();
+    const ImU32 unlit_color = ThemeManager::getInstance().getSpectrumUnlitColor();
 
     // 全屏全景氛围微辉光 (随着整体低频能量呼吸涌动)
     float bass_energy = (levels12[0] + levels12[1] + levels12[2]) / 3.0f;
@@ -402,7 +420,8 @@ void Application::render() {
     // 3. 提交绘图并进行 OpenGL 光栅化清屏
     ImGui::Render();
     glViewport(0, 0, display_w, display_h);
-    glClearColor(0.015f, 0.03f, 0.06f, 1.0f); // 经典麦景图深蓝黑底
+    ImVec4 clear_col = ThemeManager::getInstance().getClearColor();
+    glClearColor(clear_col.x, clear_col.y, clear_col.z, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
