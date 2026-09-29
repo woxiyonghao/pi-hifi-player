@@ -16,6 +16,10 @@ public:
     // 渲染双通道金嗓子大表头 (覆盖 1024x600 屏幕)
     void render(float screen_w, float screen_h, float raw_level_l, float raw_level_r);
 
+    // 主题与色彩配置接口 (支持自由调色与名机预设全景联动)
+    void setTheme(int theme_id) { theme_id_ = theme_id; }
+    void setCustomColor(ImVec4 color) { custom_color_ = color; }
+
 private:
     // 动圈物理模拟：非对称阻尼计算 (Attack ~12ms 迅猛冲顶, Decay ~280ms 惯性平滑回落)
     void updateBallistics(float target_l, float target_r);
@@ -27,6 +31,9 @@ private:
     void drawCenterDisplay(ImDrawList* dl, float center_x, float screen_h);
 
 private:
+    int theme_id_ = 2; // 默认金嗓子香槟金
+    ImVec4 custom_color_ = ImVec4(0.88f, 0.78f, 0.57f, 1.0f);
+
     // 指针物理状态 (归一化位置 0.0f ~ 1.0f)
     float needle_val_l_ = 0.0f;
     float needle_val_r_ = 0.0f;

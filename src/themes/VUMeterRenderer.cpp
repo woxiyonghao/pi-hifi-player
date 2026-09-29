@@ -110,10 +110,10 @@ MeterPalette getPalette(MeterThemeType theme, ImVec4 custom_col) {
         uint32_t core_g = static_cast<uint32_t>(std::clamp(g_f * 160.0f + 95.0f, 0.0f, 255.0f));
         uint32_t core_b = static_cast<uint32_t>(std::clamp(b_f * 160.0f + 95.0f, 0.0f, 255.0f));
 
-        // 刻度与弧线浅白反光色 (80% 象牙白 + 20% 自定义色)
-        uint32_t arc_r = static_cast<uint32_t>(std::clamp(r_f * 55.0f + 200.0f, 0.0f, 255.0f));
-        uint32_t arc_g = static_cast<uint32_t>(std::clamp(g_f * 55.0f + 200.0f, 0.0f, 255.0f));
-        uint32_t arc_b = static_cast<uint32_t>(std::clamp(b_f * 55.0f + 200.0f, 0.0f, 255.0f));
+        // 刻度与弧线透光强调色 (70% 纯正自定义色 + 30% 象牙白透光亮底)
+        uint32_t arc_r = static_cast<uint32_t>(std::clamp(r_f * 180.0f + 75.0f, 0.0f, 255.0f));
+        uint32_t arc_g = static_cast<uint32_t>(std::clamp(g_f * 180.0f + 75.0f, 0.0f, 255.0f));
+        uint32_t arc_b = static_cast<uint32_t>(std::clamp(b_f * 180.0f + 75.0f, 0.0f, 255.0f));
 
         MeterPalette custom_pal;
         custom_pal.chassis_bg = IM_COL32(chassis_r, chassis_g, chassis_b, 255);

@@ -7,6 +7,144 @@
 #include <cstdio>
 #include <string>
 
+namespace {
+
+// 金嗓子全景发烧调色板 (完美联动 4 大经典名机与发烧友自由调色)
+struct AccuphasePalette {
+    ImU32 chassis_bg;
+    ImU32 meter_bg;
+    ImU32 bezel_outer;
+    ImU32 bezel_inner;
+    ImU32 ribbon_safe;      // 上下色带主色
+    ImU32 ribbon_glow;      // 表盘透光微辉光
+    ImU32 overload_red;     // 过载红色带
+    ImU32 tick_safe;        // 安全刻度线
+    ImU32 text_safe;        // 刻度文字与居中 dB
+    ImU32 needle_color;     // 纯白指针
+    ImU32 needle_glow;      // 指针背光柔和辉光
+    ImU32 emblem_color;     // 中央 Accuphase 徽标
+    ImU32 emblem_glow;      // 徽标呼吸发光
+    ImU32 footer_color;     // 底部发烧铭牌色
+};
+
+AccuphasePalette getAccuphasePalette(int theme_id, ImVec4 custom_col) {
+    // 0: ModernCrimson, 1: McIntosh, 2: Accuphase, 3: RetroTape, 4: Custom
+    if (theme_id == 4) { // Custom 自由调色 (色轮/明度/色格联动)
+        float r_f = std::clamp(custom_col.x, 0.0f, 1.0f);
+        float g_f = std::clamp(custom_col.y, 0.0f, 1.0f);
+        float b_f = std::clamp(custom_col.z, 0.0f, 1.0f);
+
+        uint32_t cr = static_cast<uint32_t>(r_f * 255.0f);
+        uint32_t cg = static_cast<uint32_t>(g_f * 255.0f);
+        uint32_t cb = static_cast<uint32_t>(b_f * 255.0f);
+
+        // 透光高亮色带 (80% 纯正强调色 + 20% 纯白透光亮底)
+        uint32_t rib_r = static_cast<uint32_t>(std::clamp(r_f * 205.0f + 50.0f, 0.0f, 255.0f));
+        uint32_t rib_g = static_cast<uint32_t>(std::clamp(g_f * 205.0f + 50.0f, 0.0f, 255.0f));
+        uint32_t rib_b = static_cast<uint32_t>(std::clamp(b_f * 205.0f + 50.0f, 0.0f, 255.0f));
+
+        uint32_t txt_r = static_cast<uint32_t>(std::clamp(r_f * 45.0f + 210.0f, 0.0f, 255.0f));
+        uint32_t txt_g = static_cast<uint32_t>(std::clamp(g_f * 45.0f + 210.0f, 0.0f, 255.0f));
+        uint32_t txt_b = static_cast<uint32_t>(std::clamp(b_f * 45.0f + 210.0f, 0.0f, 255.0f));
+
+        AccuphasePalette pal;
+        pal.chassis_bg = IM_COL32(14, 11, 8, 255);
+        pal.meter_bg = IM_COL32(7, 8, 10, 255);
+        pal.bezel_outer = IM_COL32(static_cast<uint32_t>(r_f * 50.0f + 30.0f),
+                                   static_cast<uint32_t>(g_f * 50.0f + 30.0f),
+                                   static_cast<uint32_t>(b_f * 50.0f + 30.0f), 255);
+        pal.bezel_inner = IM_COL32(24, 21, 17, 255);
+        pal.ribbon_safe = IM_COL32(rib_r, rib_g, rib_b, 255);
+        pal.ribbon_glow = IM_COL32(cr, cg, cb, 40);
+        pal.overload_red = IM_COL32(235, 38, 24, 255);
+        pal.tick_safe = IM_COL32(txt_r, txt_g, txt_b, 255);
+        pal.text_safe = IM_COL32(txt_r, txt_g, txt_b, 255);
+        pal.needle_color = IM_COL32(255, 255, 255, 255);
+        pal.needle_glow = IM_COL32(cr, cg, cb, 80);
+        pal.emblem_color = IM_COL32(cr, cg, cb, 255);
+        pal.emblem_glow = IM_COL32(cr, cg, cb, 45);
+        pal.footer_color = IM_COL32(cr, cg, cb, 210);
+        return pal;
+    }
+
+    if (theme_id == 0) { // 现代深空玫红
+        return {
+            IM_COL32(14, 8, 11, 255),
+            IM_COL32(8, 7, 10, 255),
+            IM_COL32(75, 25, 38, 255),
+            IM_COL32(24, 17, 20, 255),
+            IM_COL32(255, 115, 140, 255),
+            IM_COL32(250, 45, 72, 40),
+            IM_COL32(255, 215, 0, 255),
+            IM_COL32(255, 220, 230, 255),
+            IM_COL32(255, 220, 230, 255),
+            IM_COL32(255, 255, 255, 255),
+            IM_COL32(250, 45, 72, 80),
+            IM_COL32(250, 45, 72, 255),
+            IM_COL32(250, 45, 72, 45),
+            IM_COL32(250, 45, 72, 210)
+        };
+    }
+
+    if (theme_id == 1) { // 麦景图湖蓝
+        return {
+            IM_COL32(6, 12, 22, 255),
+            IM_COL32(6, 10, 16, 255),
+            IM_COL32(20, 55, 80, 255),
+            IM_COL32(14, 20, 28, 255),
+            IM_COL32(100, 225, 255, 255),
+            IM_COL32(0, 180, 240, 40),
+            IM_COL32(239, 68, 68, 255),
+            IM_COL32(215, 240, 255, 255),
+            IM_COL32(215, 240, 255, 255),
+            IM_COL32(255, 255, 255, 255),
+            IM_COL32(0, 180, 240, 80),
+            IM_COL32(0, 180, 240, 255),
+            IM_COL32(0, 180, 240, 45),
+            IM_COL32(0, 180, 240, 210)
+        };
+    }
+
+    if (theme_id == 3) { // 复古琥珀卡座
+        return {
+            IM_COL32(18, 11, 8, 255),
+            IM_COL32(10, 8, 7, 255),
+            IM_COL32(75, 42, 20, 255),
+            IM_COL32(26, 18, 14, 255),
+            IM_COL32(255, 175, 95, 255),
+            IM_COL32(249, 115, 22, 40),
+            IM_COL32(239, 68, 68, 255),
+            IM_COL32(255, 225, 195, 255),
+            IM_COL32(255, 225, 195, 255),
+            IM_COL32(255, 255, 255, 255),
+            IM_COL32(249, 115, 22, 80),
+            IM_COL32(249, 115, 22, 255),
+            IM_COL32(249, 115, 22, 45),
+            IM_COL32(249, 115, 22, 210)
+        };
+    }
+
+    // 默认金嗓子原机 (ThemeId::Accuphase = 2)
+    return {
+        IM_COL32(14, 11, 8, 255),
+        IM_COL32(7, 8, 10, 255),
+        IM_COL32(65, 54, 40, 255),
+        IM_COL32(24, 21, 17, 255),
+        IM_COL32(212, 232, 252, 255), // 原机经典冰青暖玉色带
+        IM_COL32(212, 232, 252, 25),
+        IM_COL32(235, 38, 24, 255),
+        IM_COL32(228, 240, 252, 255),
+        IM_COL32(228, 240, 252, 255),
+        IM_COL32(255, 255, 255, 255),
+        IM_COL32(212, 232, 252, 60),
+        IM_COL32(0, 235, 150, 255),   // 标志性祖母绿宝石徽标
+        IM_COL32(0, 235, 150, 35),
+        IM_COL32(210, 180, 120, 220)  // 香槟金铭牌
+    };
+}
+
+} // namespace
+
 AccuphaseMeterRenderer::AccuphaseMeterRenderer() {
     needle_val_l_ = 0.0f;
     needle_val_r_ = 0.0f;
@@ -34,10 +172,11 @@ void AccuphaseMeterRenderer::updateBallistics(float target_l, float target_r) {
 void AccuphaseMeterRenderer::render(float screen_w, float screen_h, float raw_level_l, float raw_level_r) {
     updateBallistics(raw_level_l, raw_level_r);
 
+    const AccuphasePalette pal = getAccuphasePalette(theme_id_, custom_color_);
     ImDrawList* dl = ImGui::GetBackgroundDrawList();
 
     // 1. 金嗓子原机香槟黑曜石底板
-    dl->AddRectFilled(ImVec2(0.0f, 0.0f), ImVec2(screen_w, screen_h), IM_COL32(14, 11, 8, 255));
+    dl->AddRectFilled(ImVec2(0.0f, 0.0f), ImVec2(screen_w, screen_h), pal.chassis_bg);
 
     // 2. 双表头几何排版 (左右对称布局)
     const float pad_x = 24.0f;
@@ -56,32 +195,34 @@ void AccuphaseMeterRenderer::render(float screen_w, float screen_h, float raw_le
     drawSingleMeter(dl, left_min, left_max, needle_val_l_, "LEFT CHANNEL");
     drawSingleMeter(dl, right_min, right_max, needle_val_r_, "RIGHT CHANNEL");
 
-    // 4. 中央祖母绿 Accuphase 徽标
+    // 4. 中央 Accuphase 徽标
     drawCenterDisplay(dl, screen_w * 0.5f, screen_h);
 
     // 5. 底部发烧名机铭牌
-    const ImU32 pal_footer = IM_COL32(210, 180, 120, 220);
     const char* footer_left = "Accuphase Laboratory, Inc. · Dual Balanced Precision Power Meter";
     const char* footer_right = "BALANCED AAVA · PURE CLASS A OPERATION";
 
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-    dl->AddText(ImVec2(pad_x + 6.0f, screen_h - 32.0f), pal_footer, footer_left);
+    dl->AddText(ImVec2(pad_x + 6.0f, screen_h - 32.0f), pal.footer_color, footer_left);
     ImVec2 r_sz = ImGui::CalcTextSize(footer_right);
-    dl->AddText(ImVec2(screen_w - r_sz.x - pad_x - 6.0f, screen_h - 32.0f), pal_footer, footer_right);
+    dl->AddText(ImVec2(screen_w - r_sz.x - pad_x - 6.0f, screen_h - 32.0f), pal.footer_color, footer_right);
     if (Fonts::Small) ImGui::PopFont();
 }
 
 void AccuphaseMeterRenderer::drawCenterDisplay(ImDrawList* dl, float center_x, float screen_h) {
     (void)screen_h;
-    // 标志性翡翠绿 Accuphase 徽标呼吸微光 (机皇灵魂)
+    const AccuphasePalette pal = getAccuphasePalette(theme_id_, custom_color_);
+
+    // 标志性 Accuphase 徽标呼吸微光 (机皇灵魂)
     float logo_pulse = (std::sin(static_cast<float>(ImGui::GetTime()) * 1.5f) + 1.0f) * 0.5f;
     int logo_glow_a = static_cast<int>(18.0f + 26.0f * logo_pulse);
-    dl->AddRectFilled(ImVec2(center_x - 60.0f, 15.0f), ImVec2(center_x + 60.0f, 44.0f), IM_COL32(0, 235, 150, logo_glow_a), 6.0f);
+    ImU32 glow_color = (pal.emblem_glow & 0x00FFFFFF) | (static_cast<uint32_t>(logo_glow_a) << IM_COL32_A_SHIFT);
+    dl->AddRectFilled(ImVec2(center_x - 60.0f, 15.0f), ImVec2(center_x + 60.0f, 44.0f), glow_color, 6.0f);
 
     if (Fonts::Medium) ImGui::PushFont(Fonts::Medium);
     const char* logo_str = "Accuphase";
     ImVec2 logo_sz = ImGui::CalcTextSize(logo_str);
-    dl->AddText(ImVec2(center_x - logo_sz.x * 0.5f, 18.0f), IM_COL32(0, 235, 150, 255), logo_str);
+    dl->AddText(ImVec2(center_x - logo_sz.x * 0.5f, 18.0f), pal.emblem_color, logo_str);
     if (Fonts::Medium) ImGui::PopFont();
 
     // 经典红光 7 段数码管音量读数 (-24 dB / -- dB)
@@ -102,6 +243,7 @@ void AccuphaseMeterRenderer::drawCenterDisplay(ImDrawList* dl, float center_x, f
 }
 
 void AccuphaseMeterRenderer::drawSingleMeter(ImDrawList* dl, ImVec2 p_min, ImVec2 p_max, float needle_val, const char* channel_label) {
+    const AccuphasePalette pal = getAccuphasePalette(theme_id_, custom_color_);
     const float w = p_max.x - p_min.x;
     const float h = p_max.y - p_min.y;
     const float cx = p_min.x + w * 0.5f;
@@ -110,11 +252,11 @@ void AccuphaseMeterRenderer::drawSingleMeter(ImDrawList* dl, ImVec2 p_min, ImVec
     dl->PushClipRect(p_min, p_max, true);
 
     // 外层金属压铸框倒角
-    dl->AddRect(ImVec2(p_min.x - 5.0f, p_min.y - 5.0f), ImVec2(p_max.x + 5.0f, p_max.y + 5.0f), IM_COL32(55, 48, 38, 255), 6.0f, 0, 2.0f);
-    dl->AddRect(ImVec2(p_min.x - 2.0f, p_min.y - 2.0f), ImVec2(p_max.x + 2.0f, p_max.y + 2.0f), IM_COL32(24, 21, 17, 255), 4.0f, 0, 2.0f);
+    dl->AddRect(ImVec2(p_min.x - 5.0f, p_min.y - 5.0f), ImVec2(p_max.x + 5.0f, p_max.y + 5.0f), pal.bezel_outer, 6.0f, 0, 2.0f);
+    dl->AddRect(ImVec2(p_min.x - 2.0f, p_min.y - 2.0f), ImVec2(p_max.x + 2.0f, p_max.y + 2.0f), pal.bezel_inner, 4.0f, 0, 2.0f);
 
     // 表盘纯黑底面
-    dl->AddRectFilled(p_min, p_max, IM_COL32(7, 8, 10, 255));
+    dl->AddRectFilled(p_min, p_max, pal.meter_bg);
     dl->AddRect(p_min, p_max, IM_COL32(40, 36, 30, 255), 2.0f);
 
     // 2. 机械指针枢轴点 (位于表盘底部正中)
@@ -138,6 +280,12 @@ void AccuphaseMeterRenderer::drawSingleMeter(ImDrawList* dl, ImVec2 p_min, ImVec
         return pivot.x + (x_ref - pivot.x) * (y - pivot.y) / (y_top - pivot.y);
     };
 
+    // 表盘透光柔和背光微光晕
+    if ((pal.ribbon_glow & IM_COL32_A_MASK) != 0) {
+        ImVec2 glow_center(cx, y_top + 8.0f);
+        dl->AddCircleFilled(glow_center, span_l * 0.65f, pal.ribbon_glow);
+    }
+
     // 4. 精确物理刻度归一化位置 (对齐 Accuphase 原机照片)
     constexpr float u_minus  = 0.040f;
     constexpr float u_50     = 0.120f;
@@ -150,22 +298,14 @@ void AccuphaseMeterRenderer::drawSingleMeter(ImDrawList* dl, ImVec2 p_min, ImVec
     constexpr float u_5_peak = 0.885f; // +5 dB
     constexpr float u_plus   = 0.950f; // + 标度
 
-    // 经典原机配色彩色值
-    const ImU32 col_cyan = IM_COL32(212, 232, 252, 255);
-    const ImU32 col_red  = IM_COL32(235, 38, 24, 255);
-    const ImU32 col_txt  = IM_COL32(228, 240, 252, 255);
-    const ImU32 col_pct  = IM_COL32(215, 230, 245, 235);
-    const ImU32 col_sub  = IM_COL32(175, 192, 210, 220);
-    const ImU32 col_ch   = IM_COL32(145, 168, 192, 210);
-
-    // 5. 绘制上层梯形主色带 (Safe 冰青区 + Overload 警示红区)
-    // [左侧安全冰青色块]
+    // 5. 绘制上层梯形主色带 (Safe 强调色区 + Overload 警示红区)
+    // [左侧安全主色块]
     constexpr float u_rib_l = 0.030f;
     ImVec2 tl_cyan(get_ray_x(u_rib_l - 0.02f, y_top), y_top);
     ImVec2 tr_cyan(get_ray_x(u_0, y_top), y_top);
     ImVec2 br_cyan(get_ray_x(u_0, y_bot), y_bot);
     ImVec2 bl_cyan(get_ray_x(u_rib_l, y_bot), y_bot);
-    dl->AddQuadFilled(tl_cyan, tr_cyan, br_cyan, bl_cyan, col_cyan);
+    dl->AddQuadFilled(tl_cyan, tr_cyan, br_cyan, bl_cyan, pal.ribbon_safe);
 
     // [0dB ~ +5dB 警示红带底部连贯基座]
     const float y_red_mid = y_bot - 4.5f;
@@ -173,7 +313,7 @@ void AccuphaseMeterRenderer::drawSingleMeter(ImDrawList* dl, ImVec2 p_min, ImVec
     ImVec2 r_tr(get_ray_x(u_5_peak + 0.02f, y_red_mid), y_red_mid);
     ImVec2 r_br(get_ray_x(u_5_peak + 0.02f, y_bot), y_bot);
     ImVec2 r_bl(get_ray_x(u_0, y_bot), y_bot);
-    dl->AddQuadFilled(r_tl, r_tr, r_br, r_bl, col_red);
+    dl->AddQuadFilled(r_tl, r_tr, r_br, r_bl, pal.overload_red);
 
     // [0dB ~ +5dB 原机标志性 3 根倾斜红色梳齿]
     const float u_teeth[3] = {u_0, (u_0 + u_5_peak) * 0.5f, u_5_peak};
@@ -183,22 +323,22 @@ void AccuphaseMeterRenderer::drawSingleMeter(ImDrawList* dl, ImVec2 p_min, ImVec
         ImVec2 t_tr(get_ray_x(u_tooth, y_top) + tooth_w * 0.5f, y_top);
         ImVec2 t_br(get_ray_x(u_tooth, y_red_mid) + tooth_w * 0.5f, y_red_mid);
         ImVec2 t_bl(get_ray_x(u_tooth, y_red_mid) - tooth_w * 0.5f, y_red_mid);
-        dl->AddQuadFilled(t_tl, t_tr, t_br, t_bl, col_red);
+        dl->AddQuadFilled(t_tl, t_tr, t_br, t_bl, pal.overload_red);
     }
 
-    // [右侧延伸冰青色块]
+    // [右侧延伸主色块]
     ImVec2 tr2_tl(get_ray_x(u_5_peak + 0.02f, y_top), y_top);
     ImVec2 tr2_tr(get_ray_x(u_plus + 0.03f, y_top), y_top);
     ImVec2 tr2_br(get_ray_x(u_plus + 0.01f, y_bot), y_bot);
     ImVec2 tr2_bl(get_ray_x(u_5_peak + 0.02f, y_bot), y_bot);
-    dl->AddQuadFilled(tr2_tl, tr2_tr, tr2_br, tr2_bl, col_cyan);
+    dl->AddQuadFilled(tr2_tl, tr2_tr, tr2_br, tr2_bl, pal.ribbon_safe);
 
     // 6. 绘制下层细长梯形色带
     ImVec2 ll_tl(get_ray_x(u_rib_l + 0.02f, y_low_top), y_low_top);
     ImVec2 ll_tr(get_ray_x(u_plus + 0.01f, y_low_top), y_low_top);
     ImVec2 ll_br(get_ray_x(u_plus - 0.01f, y_low_bot), y_low_bot);
     ImVec2 ll_bl(get_ray_x(u_rib_l + 0.04f, y_low_bot), y_low_bot);
-    dl->AddQuadFilled(ll_tl, ll_tr, ll_br, ll_bl, col_cyan);
+    dl->AddQuadFilled(ll_tl, ll_tr, ll_br, ll_bl, pal.ribbon_safe);
 
     // 7. 绘制上方 dB 刻度线与读数
     struct DBMark {
@@ -228,7 +368,7 @@ void AccuphaseMeterRenderer::drawSingleMeter(ImDrawList* dl, ImVec2 p_min, ImVec
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
     for (const auto& m : db_marks) {
         bool is_red = (m.u >= u_0 - 0.005f && m.u <= u_5_peak + 0.005f);
-        ImU32 tick_col = is_red ? col_red : col_txt;
+        ImU32 tick_col = is_red ? pal.overload_red : pal.tick_safe;
         float tick_len = m.is_major ? 15.0f : 9.0f;
 
         float x_top = get_ray_x(m.u, y_top);
@@ -246,7 +386,7 @@ void AccuphaseMeterRenderer::drawSingleMeter(ImDrawList* dl, ImVec2 p_min, ImVec
             float tx = x_top + ux * (tick_len + 11.0f);
             float ty = y_top + uy * (tick_len + 11.0f);
             ImVec2 sz = ImGui::CalcTextSize(m.label);
-            dl->AddText(ImVec2(tx - sz.x * 0.5f, ty - sz.y * 0.5f), col_txt, m.label);
+            dl->AddText(ImVec2(tx - sz.x * 0.5f, ty - sz.y * 0.5f), pal.text_safe, m.label);
         }
     }
     if (Fonts::Small) ImGui::PopFont();
@@ -278,28 +418,28 @@ void AccuphaseMeterRenderer::drawSingleMeter(ImDrawList* dl, ImVec2 p_min, ImVec
 
         ImVec2 p0(x_low, y_low_bot);
         ImVec2 p1(x_low - ux * 5.0f, y_low_bot - uy * 5.0f); // 向下延伸
-        dl->AddLine(p0, p1, col_txt, 1.0f);
+        dl->AddLine(p0, p1, pal.tick_safe, 1.0f);
 
         float tx = x_low - ux * 15.0f;
         float ty = y_low_bot - uy * 15.0f;
         ImVec2 sz = ImGui::CalcTextSize(pm.label);
-        dl->AddText(ImVec2(tx - sz.x * 0.5f, ty - sz.y * 0.5f), col_pct, pm.label);
+        dl->AddText(ImVec2(tx - sz.x * 0.5f, ty - sz.y * 0.5f), pal.text_safe, pm.label);
     }
     if (Fonts::Small) ImGui::PopFont();
 
     // 9. 居中绘制标牌：dB 与 PEAK POWER LEVEL
     if (Fonts::Large) ImGui::PushFont(Fonts::Large);
     ImVec2 db_sz = ImGui::CalcTextSize("dB");
-    dl->AddText(ImVec2(cx - db_sz.x * 0.5f, p_max.y - 110.0f), col_txt, "dB");
+    dl->AddText(ImVec2(cx - db_sz.x * 0.5f, p_max.y - 110.0f), pal.text_safe, "dB");
     if (Fonts::Large) ImGui::PopFont();
 
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
     ImVec2 peak_sz = ImGui::CalcTextSize("PEAK POWER LEVEL");
-    dl->AddText(ImVec2(cx - peak_sz.x * 0.5f, p_max.y - 78.0f), col_sub, "PEAK POWER LEVEL");
+    dl->AddText(ImVec2(cx - peak_sz.x * 0.5f, p_max.y - 78.0f), pal.text_safe, "PEAK POWER LEVEL");
 
     // 声道指示
     ImVec2 ch_sz = ImGui::CalcTextSize(channel_label);
-    dl->AddText(ImVec2(cx - ch_sz.x * 0.5f, p_min.y + 16.0f), col_ch, channel_label);
+    dl->AddText(ImVec2(cx - ch_sz.x * 0.5f, p_min.y + 16.0f), pal.text_safe, channel_label);
     if (Fonts::Small) ImGui::PopFont();
 
     // 10. 动圈指针 (白金纤细细针，穿透色带直达刻度顶端)
@@ -309,10 +449,10 @@ void AccuphaseMeterRenderer::drawSingleMeter(ImDrawList* dl, ImVec2 p_min, ImVec
     float tip_x = get_ray_x(u_needle, tip_y);
     ImVec2 tip(tip_x, tip_y);
 
-    // 指针柔和白光发散微影
-    dl->AddLine(pivot, tip, IM_COL32(255, 255, 255, 45), 4.5f);
+    // 指针柔和强调色微辉光
+    dl->AddLine(pivot, tip, pal.needle_glow, 4.5f);
     // 纯白高精度实体指针
-    dl->AddLine(pivot, tip, IM_COL32(255, 255, 255, 255), 2.0f);
+    dl->AddLine(pivot, tip, pal.needle_color, 2.0f);
 
     // 11. 底部机械半球金属旋转轴心盖 (Dome Cap)
     constexpr float r_cap = 24.0f;

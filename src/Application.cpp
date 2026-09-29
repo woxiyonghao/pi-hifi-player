@@ -294,6 +294,8 @@ void Application::renderBackground(float screen_w, float screen_h) {
             l = std::clamp((levels12[0] + levels12[1] + levels12[2] + levels12[3] + levels12[4]) * 0.28f, 0.0f, 1.0f);
             r = std::clamp((levels12[2] + levels12[3] + levels12[4] + levels12[5] + levels12[6]) * 0.28f, 0.0f, 1.0f);
         }
+        accuphase_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
+        accuphase_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
         accuphase_renderer_.render(screen_w, screen_h, l, r);
         return;
     }
