@@ -48,10 +48,23 @@ public:
     bool isMuted() const;
     bool isBitPerfectDirect() const; // 当前是否处于 100% 源码直通状态
 
+    enum class DeviceTransportType {
+        Unknown,
+        BuiltIn,
+        USB,
+        Bluetooth,
+        HDMI,
+        Other
+    };
+
     // 硬件独占流与 Hog Mode (macOS CoreAudio 原生直通)
     void setExclusiveMode(bool exclusive);
     bool isExclusiveMode() const;
     bool isHogModeActive() const;
+    bool isRealHogActive() const;
+    DeviceTransportType getCurrentDeviceTransport() const;
+    bool isCurrentDeviceBluetooth() const;
+    void handleDefaultDeviceChanged();
     void applyHardwareSampleRate(uint32_t sample_rate);
     std::string getActiveHardwareDeviceName() const;
     uint32_t getActiveHardwareSampleRate() const;
@@ -145,7 +158,14 @@ private:
     // macOS CoreAudio 硬件独占与时钟同步状态
     std::atomic<bool> is_exclusive_mode_{false};
     std::atomic<bool> is_hog_active_{false};
+    uint32_t last_active_device_id_{0};
+    uint32_t hogged_device_id_{0};
+    std::recursive_mutex device_mutex_;
+
     void applyHogMode(bool enable);
+    void releaseHogMode();
+    void registerDeviceListener();
+    void unregisterDeviceListener();
 
     void decodeWorker(std::stop_token stop_token);
     void onSinkDataNeeded(float* output, size_t frame_count);

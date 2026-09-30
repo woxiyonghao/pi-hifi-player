@@ -16,6 +16,29 @@
 #include <CoreAudio/CoreAudio.h>
 #include <AudioToolbox/AudioToolbox.h>
 #include <unistd.h>
+
+static AudioDeviceID getDefaultOutputDeviceID() {
+    AudioDeviceID dev = kAudioObjectUnknown;
+    UInt32 size = sizeof(dev);
+    AudioObjectPropertyAddress addr = {
+        kAudioHardwarePropertyDefaultOutputDevice,
+        kAudioObjectPropertyScopeGlobal,
+        kAudioObjectPropertyElementMain
+    };
+    if (AudioObjectGetPropertyData(kAudioObjectSystemObject, &addr, 0, nullptr, &size, &dev) == noErr) {
+        return dev;
+    }
+    return kAudioObjectUnknown;
+}
+
+static OSStatus onDefaultDeviceChangedThunk(AudioObjectID /*inObjectID*/, UInt32 /*inNumberAddresses*/,
+                                           const AudioObjectPropertyAddress /*inAddresses*/[], void* inClientData) {
+    auto* self = static_cast<audio_engine::AudioEngine*>(inClientData);
+    if (self) {
+        self->handleDefaultDeviceChanged();
+    }
+    return noErr;
+}
 #endif
 
 namespace audio_engine {
@@ -28,12 +51,17 @@ AudioEngine& AudioEngine::getInstance() {
 AudioEngine::AudioEngine() : ring_buffer_(262144) {
     // 默认输出驱动：使用跨平台低延迟 SdlAudioSink
     sink_ = std::make_unique<SdlAudioSink>();
+#if defined(__APPLE__)
+    last_active_device_id_ = getDefaultOutputDeviceID();
+#endif
+    registerDeviceListener();
 }
 
 AudioEngine::~AudioEngine() {
     stop();
+    unregisterDeviceListener();
 #if defined(__APPLE__)
-    applyHogMode(false);
+    releaseHogMode();
 #endif
 }
 
@@ -59,6 +87,7 @@ std::unique_ptr<IAudioDecoder> AudioEngine::createDecoderForFile(const std::stri
 }
 
 bool AudioEngine::openAndPlay(const std::string& filepath) {
+    std::lock_guard lock_dev(device_mutex_);
     stop();
 
     std::unique_ptr<IAudioDecoder> new_decoder = createDecoderForFile(filepath);
@@ -84,7 +113,17 @@ bool AudioEngine::openAndPlay(const std::string& filepath) {
         is_eof_.store(false, std::memory_order_relaxed);
     }
 
-    // 打开硬件输出设备 (根据音频文件的真实采样率和声道动态协商)
+    // 1. 在打开音频设备前，如果是非蓝牙物理硬件且开启了独占，先同步硬件采样率
+#if defined(__APPLE__)
+    last_active_device_id_ = getDefaultOutputDeviceID();
+    if (is_exclusive_mode_.load(std::memory_order_acquire)) {
+        applyHardwareSampleRate(current_spec_.sample_rate);
+    }
+    // 确保打开前释放所有 Hog 独占锁，防止阻碍 SDL 打开设备 (SDL2 检查 HogMode != -1 会直接拒绝)
+    releaseHogMode();
+#endif
+
+    // 2. 打开硬件输出设备 (根据音频文件的真实采样率和声道动态协商)
     if (!sink_->isOpen() || sink_->getActualSpec().sample_rate != current_spec_.sample_rate) {
         sink_->close();
         if (!sink_->open(current_spec_, [this](float* output, size_t frame_count) {
@@ -95,9 +134,11 @@ bool AudioEngine::openAndPlay(const std::string& filepath) {
         }
     }
 
+    // 3. 打开流之后，如果是物理声卡且开启了独占模式，申请真正的 Hog Mode 硬件锁
 #if defined(__APPLE__)
+    last_active_device_id_ = getDefaultOutputDeviceID();
     if (is_exclusive_mode_.load(std::memory_order_acquire)) {
-        applyHardwareSampleRate(current_spec_.sample_rate);
+        applyHogMode(true);
     }
 #endif
 
@@ -165,6 +206,9 @@ void AudioEngine::stop() {
     if (sink_) {
         sink_->stop();
     }
+#if defined(__APPLE__)
+    releaseHogMode();
+#endif
 
     {
         std::lock_guard lock(decoder_mutex_);
@@ -224,11 +268,21 @@ bool AudioEngine::isBitPerfectDirect() const {
 
 void AudioEngine::setExclusiveMode(bool exclusive) {
     is_exclusive_mode_.store(exclusive, std::memory_order_release);
-    is_hog_active_.store(exclusive, std::memory_order_release);
 #if defined(__APPLE__)
-    applyHogMode(exclusive);
-    if (exclusive && current_spec_.sample_rate > 0) {
-        applyHardwareSampleRate(current_spec_.sample_rate);
+    if (isCurrentDeviceBluetooth()) {
+        releaseHogMode();
+        return;
+    }
+
+    if (exclusive) {
+        if (current_spec_.sample_rate > 0) {
+            applyHardwareSampleRate(current_spec_.sample_rate);
+        }
+        if (sink_ && sink_->isOpen() && is_playing_.load(std::memory_order_acquire)) {
+            applyHogMode(true);
+        }
+    } else {
+        releaseHogMode();
     }
 #endif
 }
@@ -238,21 +292,120 @@ bool AudioEngine::isExclusiveMode() const {
 }
 
 bool AudioEngine::isHogModeActive() const {
-    return is_exclusive_mode_.load(std::memory_order_acquire);
+    return isRealHogActive();
 }
 
-std::string AudioEngine::getActiveHardwareDeviceName() const {
+AudioEngine::DeviceTransportType AudioEngine::getCurrentDeviceTransport() const {
 #if defined(__APPLE__)
-    AudioDeviceID deviceID = kAudioObjectUnknown;
-    UInt32 size = sizeof(deviceID);
-    AudioObjectPropertyAddress address = {
+    AudioDeviceID dev = getDefaultOutputDeviceID();
+    if (dev == kAudioObjectUnknown) return DeviceTransportType::Unknown;
+
+    UInt32 transport = 0;
+    UInt32 size = sizeof(transport);
+    AudioObjectPropertyAddress addr = {
+        kAudioDevicePropertyTransportType,
+        kAudioObjectPropertyScopeGlobal,
+        kAudioObjectPropertyElementMain
+    };
+    if (AudioObjectGetPropertyData(dev, &addr, 0, nullptr, &size, &transport) == noErr) {
+        if (transport == kAudioDeviceTransportTypeBluetooth || transport == kAudioDeviceTransportTypeBluetoothLE) {
+            return DeviceTransportType::Bluetooth;
+        } else if (transport == kAudioDeviceTransportTypeUSB) {
+            return DeviceTransportType::USB;
+        } else if (transport == kAudioDeviceTransportTypeBuiltIn) {
+            return DeviceTransportType::BuiltIn;
+        } else if (transport == kAudioDeviceTransportTypeHDMI) {
+            return DeviceTransportType::HDMI;
+        }
+    }
+    return DeviceTransportType::Other;
+#else
+    return DeviceTransportType::Other;
+#endif
+}
+
+bool AudioEngine::isCurrentDeviceBluetooth() const {
+    return getCurrentDeviceTransport() == DeviceTransportType::Bluetooth;
+}
+
+bool AudioEngine::isRealHogActive() const {
+#if defined(__APPLE__)
+    if (isCurrentDeviceBluetooth()) return false;
+    return is_hog_active_.load(std::memory_order_acquire);
+#else
+    return false;
+#endif
+}
+
+void AudioEngine::registerDeviceListener() {
+#if defined(__APPLE__)
+    AudioObjectPropertyAddress addr = {
         kAudioHardwarePropertyDefaultOutputDevice,
         kAudioObjectPropertyScopeGlobal,
         kAudioObjectPropertyElementMain
     };
-    if (AudioObjectGetPropertyData(kAudioObjectSystemObject, &address, 0, nullptr, &size, &deviceID) == noErr && deviceID != kAudioObjectUnknown) {
+    OSStatus err = AudioObjectAddPropertyListener(kAudioObjectSystemObject, &addr, onDefaultDeviceChangedThunk, this);
+    if (err == noErr) {
+        std::cout << "[AudioEngine] 已注册 CoreAudio 默认输出设备热插拔监听器" << std::endl;
+    }
+#endif
+}
+
+void AudioEngine::unregisterDeviceListener() {
+#if defined(__APPLE__)
+    AudioObjectPropertyAddress addr = {
+        kAudioHardwarePropertyDefaultOutputDevice,
+        kAudioObjectPropertyScopeGlobal,
+        kAudioObjectPropertyElementMain
+    };
+    AudioObjectRemovePropertyListener(kAudioObjectSystemObject, &addr, onDefaultDeviceChangedThunk, this);
+#endif
+}
+
+void AudioEngine::handleDefaultDeviceChanged() {
+#if defined(__APPLE__)
+    std::lock_guard lock(device_mutex_);
+
+    AudioDeviceID current_dev = getDefaultOutputDeviceID();
+    if (current_dev == kAudioObjectUnknown) return;
+    if (current_dev == last_active_device_id_) {
+        return; // 设备 ID 没变，忽略瞬态重复通知
+    }
+    last_active_device_id_ = current_dev;
+
+    std::string dev_name = getActiveHardwareDeviceName();
+    bool is_bt = isCurrentDeviceBluetooth();
+    std::cout << "[AudioEngine] >>> 默认音频输出设备切换为: " << dev_name 
+              << (is_bt ? " [蓝牙无线设备]" : " [物理硬件设备]") << std::endl;
+
+    if (sink_ && sink_->isOpen()) {
+        bool was_playing = is_playing_.load(std::memory_order_acquire);
+        sink_->stop();
+        releaseHogMode();
+        sink_->close();
+        if (sink_->open(current_spec_, [this](float* output, size_t frame_count) {
+                onSinkDataNeeded(output, frame_count);
+            })) {
+            if (!is_bt && is_exclusive_mode_.load(std::memory_order_acquire)) {
+                applyHogMode(true);
+            }
+            if (was_playing) {
+                sink_->start();
+            }
+            std::cout << "[AudioEngine] 已重新将推流管道绑定至新设备: " << dev_name << std::endl;
+        }
+    } else {
+        releaseHogMode();
+    }
+#endif
+}
+
+std::string AudioEngine::getActiveHardwareDeviceName() const {
+#if defined(__APPLE__)
+    AudioDeviceID deviceID = getDefaultOutputDeviceID();
+    if (deviceID != kAudioObjectUnknown) {
         CFStringRef cfName = nullptr;
-        size = sizeof(cfName);
+        UInt32 size = sizeof(cfName);
         AudioObjectPropertyAddress nameAddr = {
             kAudioObjectPropertyName,
             kAudioObjectPropertyScopeGlobal,
@@ -262,7 +415,9 @@ std::string AudioEngine::getActiveHardwareDeviceName() const {
             char buf[256] = {0};
             CFStringGetCString(cfName, buf, sizeof(buf), kCFStringEncodingUTF8);
             CFRelease(cfName);
-            return std::string(buf);
+            if (buf[0] != '\0') {
+                return std::string(buf);
+            }
         }
     }
     return "系统默认音频输出";
@@ -273,14 +428,8 @@ std::string AudioEngine::getActiveHardwareDeviceName() const {
 
 uint32_t AudioEngine::getActiveHardwareSampleRate() const {
 #if defined(__APPLE__)
-    AudioDeviceID deviceID = kAudioObjectUnknown;
-    UInt32 size = sizeof(deviceID);
-    AudioObjectPropertyAddress address = {
-        kAudioHardwarePropertyDefaultOutputDevice,
-        kAudioObjectPropertyScopeGlobal,
-        kAudioObjectPropertyElementMain
-    };
-    if (AudioObjectGetPropertyData(kAudioObjectSystemObject, &address, 0, nullptr, &size, &deviceID) == noErr && deviceID != kAudioObjectUnknown) {
+    AudioDeviceID deviceID = getDefaultOutputDeviceID();
+    if (deviceID != kAudioObjectUnknown) {
         Float64 sr = 0;
         UInt32 srSize = sizeof(sr);
         AudioObjectPropertyAddress srAddr = {
@@ -288,7 +437,7 @@ uint32_t AudioEngine::getActiveHardwareSampleRate() const {
             kAudioObjectPropertyScopeGlobal,
             kAudioObjectPropertyElementMain
         };
-        if (AudioObjectGetPropertyData(deviceID, &srAddr, 0, nullptr, &srSize, &sr) == noErr) {
+        if (AudioObjectGetPropertyData(deviceID, &srAddr, 0, nullptr, &srSize, &sr) == noErr && sr > 0) {
             return static_cast<uint32_t>(sr);
         }
     }
@@ -296,32 +445,102 @@ uint32_t AudioEngine::getActiveHardwareSampleRate() const {
     return current_spec_.sample_rate > 0 ? current_spec_.sample_rate : 44100;
 }
 
+void AudioEngine::releaseHogMode() {
+#if defined(__APPLE__)
+    AudioObjectPropertyScope scopes[] = {
+        kAudioObjectPropertyScopeGlobal,
+        kAudioDevicePropertyScopeOutput
+    };
+
+    auto clearHog = [&](AudioDeviceID dev) {
+        if (dev == kAudioObjectUnknown) return;
+        for (auto sc : scopes) {
+            AudioObjectPropertyAddress hogAddr = {
+                kAudioDevicePropertyHogMode,
+                sc,
+                kAudioObjectPropertyElementMain
+            };
+            if (AudioObjectHasProperty(dev, &hogAddr)) {
+                pid_t reset_pid = -1;
+                AudioObjectSetPropertyData(dev, &hogAddr, 0, nullptr, sizeof(reset_pid), &reset_pid);
+            }
+        }
+    };
+
+    if (hogged_device_id_ != 0) {
+        clearHog(static_cast<AudioDeviceID>(hogged_device_id_));
+        hogged_device_id_ = 0;
+    }
+    clearHog(getDefaultOutputDeviceID());
+    is_hog_active_.store(false, std::memory_order_release);
+#endif
+}
+
 void AudioEngine::applyHogMode(bool enable) {
 #if defined(__APPLE__)
-    AudioDeviceID deviceID = kAudioObjectUnknown;
-    UInt32 size = sizeof(deviceID);
-    AudioObjectPropertyAddress address = {
-        kAudioHardwarePropertyDefaultOutputDevice,
+    if (!enable) {
+        releaseHogMode();
+        return;
+    }
+
+    // 蓝牙或 HDMI 绝不可申请物理 Hog Mode (否则会剔除 bluetoothd 导致蓝牙耳机掉线静音)
+    DeviceTransportType transport = getCurrentDeviceTransport();
+    if (transport == DeviceTransportType::Bluetooth || transport == DeviceTransportType::HDMI) {
+        releaseHogMode();
+        return;
+    }
+
+    AudioDeviceID deviceID = getDefaultOutputDeviceID();
+    if (deviceID == kAudioObjectUnknown) {
+        releaseHogMode();
+        return;
+    }
+
+    AudioObjectPropertyScope scopes[] = {
         kAudioObjectPropertyScopeGlobal,
-        kAudioObjectPropertyElementMain
+        kAudioDevicePropertyScopeOutput
     };
-    OSStatus err = AudioObjectGetPropertyData(kAudioObjectSystemObject, &address, 0, nullptr, &size, &deviceID);
-    if (err == noErr && deviceID != kAudioObjectUnknown) {
-        // 始终确保解除底层 process hog 占位锁，防止 SDL2 CoreAudio 抛出 "requested device is being hogged" 导致声卡静音无声
+
+    bool has_hog = false;
+    for (auto sc : scopes) {
         AudioObjectPropertyAddress hogAddr = {
             kAudioDevicePropertyHogMode,
-            kAudioObjectPropertyScopeGlobal,
+            sc,
             kAudioObjectPropertyElementMain
         };
         if (AudioObjectHasProperty(deviceID, &hogAddr)) {
-            pid_t reset_pid = -1;
-            AudioObjectSetPropertyData(deviceID, &hogAddr, 0, nullptr, sizeof(reset_pid), &reset_pid);
+            has_hog = true;
+            break;
+        }
+    }
+    if (!has_hog) {
+        releaseHogMode();
+        return;
+    }
+
+    pid_t pid = getpid();
+    bool set_success = false;
+    for (auto sc : scopes) {
+        AudioObjectPropertyAddress hogAddr = {
+            kAudioDevicePropertyHogMode,
+            sc,
+            kAudioObjectPropertyElementMain
+        };
+        if (AudioObjectHasProperty(deviceID, &hogAddr)) {
+            if (AudioObjectSetPropertyData(deviceID, &hogAddr, 0, nullptr, sizeof(pid), &pid) == noErr) {
+                set_success = true;
+            }
         }
     }
 
-    // 独占状态标记：让音频引擎进入 100% 0dB Bit-Perfect 原生直通状态
-    is_hog_active_.store(enable, std::memory_order_release);
-    std::cout << "[AudioEngine] " << (enable ? "【硬件独占直通】已开启 Bit-Perfect 0dB 源码直通模式" : "【硬件模式】恢复系统混音模式") << std::endl;
+    if (set_success) {
+        hogged_device_id_ = deviceID;
+        is_hog_active_.store(true, std::memory_order_release);
+        std::cout << "[AudioEngine] 【Hog Mode 真实硬件独占成功】已锁定声卡 (PID: " + std::to_string(pid) + ")" << std::endl;
+    } else {
+        std::cerr << "[AudioEngine] 设置 Hog Mode 失败" << std::endl;
+        releaseHogMode();
+    }
 #else
     (void)enable;
     is_hog_active_.store(enable, std::memory_order_release);
@@ -331,53 +550,79 @@ void AudioEngine::applyHogMode(bool enable) {
 void AudioEngine::applyHardwareSampleRate(uint32_t sample_rate) {
 #if defined(__APPLE__)
     if (sample_rate == 0) return;
-    AudioDeviceID deviceID = kAudioObjectUnknown;
-    UInt32 size = sizeof(deviceID);
-    AudioObjectPropertyAddress address = {
-        kAudioHardwarePropertyDefaultOutputDevice,
-        kAudioObjectPropertyScopeGlobal,
-        kAudioObjectPropertyElementMain
-    };
-    OSStatus err = AudioObjectGetPropertyData(kAudioObjectSystemObject, &address, 0, nullptr, &size, &deviceID);
-    if (err != noErr || deviceID == kAudioObjectUnknown) return;
 
-    // 检查声卡硬件支持的采样率范围 (防止强切蓝牙耳机不支持的高频导致破音或断流)
+    if (isCurrentDeviceBluetooth()) {
+        std::cout << "[AudioEngine] 当前为蓝牙无线设备，跳过硬件时钟切换，保持原生蓝牙协议最佳采样率" << std::endl;
+        return;
+    }
+
+    AudioDeviceID deviceID = getDefaultOutputDeviceID();
+    if (deviceID == kAudioObjectUnknown) return;
+
     AudioObjectPropertyAddress srRangeAddr = {
         kAudioDevicePropertyAvailableNominalSampleRates,
         kAudioObjectPropertyScopeGlobal,
         kAudioObjectPropertyElementMain
     };
-    if (AudioObjectHasProperty(deviceID, &srRangeAddr)) {
-        UInt32 rangeSize = 0;
-        AudioObjectGetPropertyDataSize(deviceID, &srRangeAddr, 0, nullptr, &rangeSize);
-        size_t rangeCount = rangeSize / sizeof(AudioValueRange);
-        if (rangeCount > 0) {
-            std::vector<AudioValueRange> ranges(rangeCount);
-            if (AudioObjectGetPropertyData(deviceID, &srRangeAddr, 0, nullptr, &rangeSize, ranges.data()) == noErr) {
-                bool supported = false;
-                Float64 target_sr = static_cast<Float64>(sample_rate);
-                for (const auto& r : ranges) {
-                    if (target_sr >= r.mMinimum && target_sr <= r.mMaximum) {
-                        supported = true;
-                        break;
-                    }
-                }
-                if (!supported) {
-                    std::cout << "[AudioEngine] 当前声卡不支持 " << target_sr << " Hz 硬件切换，保持设备原有最佳采样率" << std::endl;
-                    return;
-                }
+    if (!AudioObjectHasProperty(deviceID, &srRangeAddr)) return;
 
-                AudioObjectPropertyAddress srAddr = {
-                    kAudioDevicePropertyNominalSampleRate,
-                    kAudioObjectPropertyScopeGlobal,
-                    kAudioObjectPropertyElementMain
-                };
-                if (AudioObjectHasProperty(deviceID, &srAddr)) {
-                    OSStatus srErr = AudioObjectSetPropertyData(deviceID, &srAddr, 0, nullptr, sizeof(target_sr), &target_sr);
-                    if (srErr == noErr) {
-                        std::cout << "[AudioEngine] 成功将硬件 DAC 采样率点对点同步至: " << target_sr << " Hz (Bit-Perfect)" << std::endl;
-                    }
-                }
+    UInt32 rangeSize = 0;
+    AudioObjectGetPropertyDataSize(deviceID, &srRangeAddr, 0, nullptr, &rangeSize);
+    size_t rangeCount = rangeSize / sizeof(AudioValueRange);
+    if (rangeCount == 0) return;
+
+    std::vector<AudioValueRange> ranges(rangeCount);
+    if (AudioObjectGetPropertyData(deviceID, &srRangeAddr, 0, nullptr, &rangeSize, ranges.data()) != noErr) return;
+
+    bool supported = false;
+    Float64 target_sr = static_cast<Float64>(sample_rate);
+    for (const auto& r : ranges) {
+        if (target_sr >= r.mMinimum && target_sr <= r.mMaximum) {
+            supported = true;
+            break;
+        }
+    }
+    if (!supported) {
+        std::cout << "[AudioEngine] 当前声卡硬件不支持 " << target_sr << " Hz 硬件切换，保持设备原有最佳采样率" << std::endl;
+        return;
+    }
+
+    AudioObjectPropertyAddress srAddr = {
+        kAudioDevicePropertyNominalSampleRate,
+        kAudioObjectPropertyScopeGlobal,
+        kAudioObjectPropertyElementMain
+    };
+    Float64 cur_sr = 0;
+    UInt32 curSize = sizeof(cur_sr);
+    if (AudioObjectGetPropertyData(deviceID, &srAddr, 0, nullptr, &curSize, &cur_sr) == noErr) {
+        if (std::abs(cur_sr - target_sr) < 1.0) {
+            return;
+        }
+    }
+
+    bool was_open = sink_ && sink_->isOpen();
+    bool was_playing = is_playing_.load(std::memory_order_acquire);
+    if (was_open) {
+        releaseHogMode();
+        sink_->stop();
+        sink_->close();
+    }
+
+    OSStatus srErr = AudioObjectSetPropertyData(deviceID, &srAddr, 0, nullptr, sizeof(target_sr), &target_sr);
+    if (srErr == noErr) {
+        std::cout << "[AudioEngine] 成功将硬件 DAC 采样率点对点同步至: " << target_sr << " Hz (Bit-Perfect)" << std::endl;
+    }
+
+    if (was_open) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        if (sink_->open(current_spec_, [this](float* output, size_t frame_count) {
+                onSinkDataNeeded(output, frame_count);
+            })) {
+            if (is_exclusive_mode_.load(std::memory_order_acquire)) {
+                applyHogMode(true);
+            }
+            if (was_playing) {
+                sink_->start();
             }
         }
     }

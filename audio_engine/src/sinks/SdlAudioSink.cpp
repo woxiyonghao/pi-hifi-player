@@ -34,8 +34,10 @@ bool SdlAudioSink::open(const AudioFormatSpec& requested_spec, AudioCallback cal
     SDL_AudioSpec obtained;
     std::memset(&obtained, 0, sizeof(obtained));
 
-    device_id_ = SDL_OpenAudioDevice(nullptr, 0, &desired, &obtained,
-                                     SDL_AUDIO_ALLOW_FREQUENCY_CHANGE | SDL_AUDIO_ALLOW_CHANNELS_CHANGE);
+    // allowed_changes = 0: 确保 SDL 按照 requested_spec 提供回调数据流；
+    // 当声卡硬件采样率与母带不一致时 (如蓝牙耳机锁定 48kHz 但播放 44.1k/96k/192k)，
+    // SDL 底层透明进行高保真重采样，杜绝打开失败与无声静音
+    device_id_ = SDL_OpenAudioDevice(nullptr, 0, &desired, &obtained, 0);
 
     if (device_id_ == 0) {
         std::cerr << "[SdlAudioSink] 打开音频输出设备失败: " << SDL_GetError() << std::endl;

@@ -373,11 +373,13 @@ void DACSettingView::renderHardwareStatusBar(ImDrawList* dl, float x0, float& cu
     dl->AddRect(p0, p1, IM_COL32(255, 255, 255, 22), 8.0f, 0, 1.0f);
 
     std::string dev_name = audio_engine::AudioEngine::getInstance().getActiveHardwareDeviceName();
-    bool is_exclusive = (apple_exclusive_mode_ == 0);
+    bool is_bt = audio_engine::AudioEngine::getInstance().isCurrentDeviceBluetooth();
+    bool is_real_hog = audio_engine::AudioEngine::getInstance().isRealHogActive();
+    bool is_exclusive_pref = (apple_exclusive_mode_ == 0);
     uint32_t cur_sr = audio_engine::AudioEngine::getInstance().getActiveHardwareSampleRate();
 
-    // 右侧独占开关药丸按钮
-    float btn_w = 100.0f;
+    // 右侧独占开关药丸按钮 (支持随时切换，与全局各芯片设置严格双向同步)
+    float btn_w = 110.0f;
     float btn_h = 24.0f;
     float btn_x = p1.x - btn_w - 12.0f;
     float btn_y = p0.y + (h - btn_h) * 0.5f;
@@ -388,40 +390,61 @@ void DACSettingView::renderHardwareStatusBar(ImDrawList* dl, float x0, float& cu
     if (ImGui::InvisibleButton("##GlobalHogExclusiveToggle", ImVec2(btn_w, btn_h))) {
         apple_exclusive_mode_ = (apple_exclusive_mode_ == 0 ? 1 : 0);
         saveSettings();
-        is_exclusive = (apple_exclusive_mode_ == 0);
     }
+    bool btn_hov = ImGui::IsItemHovered();
 
-    // 状态呼吸指示灯 (独占绿点 / 共享灰点)
+    // 状态呼吸指示灯与颜色判定
     ImVec2 dot_center(p0.x + 16.0f, p0.y + h * 0.5f);
-    ImU32 dot_col = is_exclusive ? IM_COL32(40, 205, 120, 255) : IM_COL32(160, 160, 160, 200);
-    dl->AddCircleFilled(dot_center, 4.0f, dot_col);
-    if (is_exclusive) {
+    ImU32 dot_col = IM_COL32(160, 160, 160, 200);
+    std::string info_text;
+    ImU32 info_text_col = UIConfig::Color::TextNormal;
+
+    if (is_bt) {
+        // 蓝牙模式：天蓝色标识，明确告知用户走 0dB 源码直通
+        dot_col = IM_COL32(60, 195, 255, 255);
+        dl->AddCircle(dot_center, 6.5f, IM_COL32(60, 195, 255, 80), 0, 1.5f);
+        info_text = "声卡硬件: " + dev_name + "  |  " + (is_exclusive_pref ? "蓝牙 0dB 源码直通 (系统共享)" : "系统混音共享") + "  |  " + std::to_string(cur_sr / 1000) + " kHz";
+        info_text_col = is_exclusive_pref ? IM_COL32(60, 195, 255, 255) : UIConfig::Color::TextNormal;
+    } else if (is_real_hog) {
+        // 物理有线声卡 / USB DAC 且已成功占用 Hog 锁
+        dot_col = IM_COL32(40, 205, 120, 255);
         dl->AddCircle(dot_center, 6.5f, IM_COL32(40, 205, 120, 80), 0, 1.5f);
+        info_text = "声卡硬件: " + dev_name + "  |  Hog Mode 硬件已独占 (Bit-Perfect)  |  " + std::to_string(cur_sr / 1000) + " kHz";
+        info_text_col = UIConfig::Color::TextActive;
+    } else if (is_exclusive_pref) {
+        // 独占已开启，处于起播即独占待命状态
+        dot_col = IM_COL32(40, 205, 120, 200);
+        info_text = "声卡硬件: " + dev_name + "  |  独占模式就绪 (起播锁定)  |  " + std::to_string(cur_sr / 1000) + " kHz";
+        info_text_col = UIConfig::Color::TextActive;
+    } else {
+        // 共享混音模式
+        dot_col = IM_COL32(160, 160, 160, 200);
+        info_text = "声卡硬件: " + dev_name + "  |  系统混音共享模式  |  " + std::to_string(cur_sr / 1000) + " kHz";
+        info_text_col = UIConfig::Color::TextMuted;
     }
 
-    // 声卡与时钟文本
-    std::string info_text = "声卡硬件: " + dev_name + "  |  " +
-                            (is_exclusive ? "Bit-Perfect 硬件已独占" : "系统混音共享") +
-                            "  |  " + std::to_string(cur_sr / 1000) + " kHz";
+    dl->AddCircleFilled(dot_center, 4.0f, dot_col);
 
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
     dl->AddText(ImVec2(dot_center.x + 12.0f, p0.y + (h - 14.0f) * 0.5f),
-                is_exclusive ? UIConfig::Color::TextActive : UIConfig::Color::TextNormal,
-                info_text.c_str());
+                info_text_col, info_text.c_str());
     if (Fonts::Small) ImGui::PopFont();
 
-    bool hov = ImGui::IsItemHovered();
-    ImU32 btn_bg = is_exclusive ? IM_COL32(r, g, b, 70) : (hov ? IM_COL32(255, 255, 255, 25) : IM_COL32(255, 255, 255, 12));
-    ImU32 btn_border = is_exclusive ? accent : IM_COL32(255, 255, 255, 30);
+    // 绘制独占切换按钮
+    const char* btn_text = is_exclusive_pref ? "独占: 已开启" : "独占: 已关闭";
+    ImU32 btn_bg = is_exclusive_pref ? IM_COL32(r, g, b, 70) :
+                   (btn_hov ? IM_COL32(255, 255, 255, 25) : IM_COL32(255, 255, 255, 12));
+    ImU32 btn_border = is_exclusive_pref ? accent :
+                       (btn_hov ? IM_COL32(255, 255, 255, 60) : IM_COL32(255, 255, 255, 30));
+    ImU32 btn_text_col = is_exclusive_pref ? UIConfig::Color::TextActive : UIConfig::Color::TextMuted;
+
     dl->AddRectFilled(bp0, bp1, btn_bg, 5.0f);
     dl->AddRect(bp0, bp1, btn_border, 5.0f, 0, 1.0f);
 
-    const char* btn_text = is_exclusive ? "独占: 已开启" : "独占: 已关闭";
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
     ImVec2 bsz = ImGui::CalcTextSize(btn_text);
     dl->AddText(ImVec2(btn_x + (btn_w - bsz.x) * 0.5f, btn_y + (btn_h - bsz.y) * 0.5f),
-                is_exclusive ? UIConfig::Color::TextActive : UIConfig::Color::TextMuted,
-                btn_text);
+                btn_text_col, btn_text);
     if (Fonts::Small) ImGui::PopFont();
 
     cur_y += h + 10.0f;
@@ -431,7 +454,8 @@ void DACSettingView::renderHardwareStatusBar(ImDrawList* dl, float x0, float& cu
 // 0. Apple Direct (MacBook Pro M1 Pro 硬件直通)
 // ==============================================================================
 void DACSettingView::renderAppleDirectSettings(ImDrawList* dl, float x0, float& cur_y, float w) {
-    float h1 = 114.0f;
+    bool is_bt = audio_engine::AudioEngine::getInstance().isCurrentDeviceBluetooth();
+    float h1 = is_bt ? 134.0f : 114.0f;
     ImVec2 p0(x0, cur_y);
     ImVec2 p1(x0 + w, cur_y + h1);
 
@@ -449,6 +473,14 @@ void DACSettingView::renderAppleDirectSettings(ImDrawList* dl, float x0, float& 
 
     const char* rate_opts[] = { "原生跟随母带 (44.1k-192k)", "锁定 96kHz", "锁定 192kHz" };
     renderOptionRow(dl, x0, cur_y + 72.0f, w, "采样率追踪", rate_opts, 3, apple_sample_rate_, "AppleRate");
+
+    if (is_bt) {
+        if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+        dl->AddText(ImVec2(x0 + 16.0f, cur_y + 110.0f),
+                    IM_COL32(60, 195, 255, 230),
+                    "已连接蓝牙设备，音频走系统 AAC 无线协议，已自动回退至 0dB 共享直通，确保稳定发声。");
+        if (Fonts::Small) ImGui::PopFont();
+    }
 
     cur_y += h1 + 10.0f;
 
