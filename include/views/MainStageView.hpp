@@ -7,6 +7,7 @@
 #include "AllMusicPlaylistView.hpp"
 #include "CustomPlaylistView.hpp"
 #include "views/DACSettingView.hpp"
+#include "views/MagicTuningView.hpp"
 #include "imgui.h"
 #include "public/UIConfig.hpp"
 #include "types/MusicModel.hpp"
@@ -51,6 +52,7 @@ class MainStageView {
   private:
     ScanMusicWidget scan_widget_;
     EQConfigView eq_view_;
+    MagicTuningView magic_tuning_view_;
     DACSettingView dac_view_;
     SystemSettingsView settings_view_;
     ThemeSettingView theme_setting_view_;

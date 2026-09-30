@@ -6,6 +6,7 @@
 enum class SidebarTab : uint8_t {
     ScanMusic,      // 扫描音乐曲库
     Equalizer,      // 10段图形 EQ 调音台
+    MSEBTuning,     // 调音魔棒 (MSEB 听感调音)
     DACSettings,    // DAC 硬件滤波与时钟输出
     ThemeSettings,  // 调色盘与液态玻璃主题风格
     SystemSettings, // 树莓派底层硬件与系统配置
@@ -24,6 +25,7 @@ struct NavIndicatorTarget {
 enum class NavIcon : uint8_t {
     Search,         // 放大镜 (扫描音乐)
     Equalizer,      // 调音滑块 (EQ)
+    MagicWand,      // 调音魔棒 (MSEB 魔音八球)
     DAC,            // 芯片底座 (DAC)
     Theme,          // 调色板 (主题)
     System,         // 齿轮滑块 (系统)

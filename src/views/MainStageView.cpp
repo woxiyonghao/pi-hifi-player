@@ -104,6 +104,9 @@ void MainStageView::render(SidebarTab current_tab,
             case SidebarTab::Equalizer:
                 renderEqualizerView(stage_x, stage_y, stage_w, stage_h);
                 break;
+            case SidebarTab::MSEBTuning:
+                magic_tuning_view_.render(stage_x, stage_y, stage_w, stage_h);
+                break;
             case SidebarTab::DACSettings:
                 dac_view_.render(stage_x, stage_y, stage_w, stage_h);
                 break;

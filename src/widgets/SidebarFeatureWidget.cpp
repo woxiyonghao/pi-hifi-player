@@ -10,10 +10,11 @@ static void DrawLiquidGlass(ImDrawList* dl, ImVec2 p_min, ImVec2 p_max, float ro
 }
 
 SidebarFeatureWidget::SidebarFeatureWidget() {
-    // 预装 5 大核心功能项
+    // 预装核心功能项
     features_ = {
         { SidebarTab::ScanMusic,      "扫描音乐" },
         { SidebarTab::Equalizer,      "均衡器" },
+        { SidebarTab::MSEBTuning,     "调音魔棒" },
         { SidebarTab::DACSettings,    "DAC" },
         { SidebarTab::ThemeSettings,  "主题" },
         { SidebarTab::SystemSettings, "设置" }
@@ -37,6 +38,18 @@ void SidebarFeatureWidget::drawFeatureIcon(ImDrawList* dl, ImVec2 center, Sideba
                 dl->AddLine(ImVec2(xs[i], center.y - 6.0f), ImVec2(xs[i], center.y + 6.0f), color, 1.2f);
                 dl->AddCircleFilled(ImVec2(xs[i], knobs[i]), 2.2f, color);
             }
+            break;
+        }
+        case SidebarTab::MSEBTuning: {
+            // 调音魔棒：倾斜魔杖杖身 + 杖尖四角星芒
+            ImVec2 wand_b(center.x - 5.5f, center.y + 5.5f);
+            ImVec2 wand_t(center.x + 2.5f, center.y - 2.5f);
+            dl->AddLine(wand_b, wand_t, color, 1.8f);
+            // 杖尖星芒 (四向十字星芒 + 核心光点)
+            ImVec2 star_c(center.x + 4.5f, center.y - 4.5f);
+            dl->AddLine(ImVec2(star_c.x - 3.5f, star_c.y), ImVec2(star_c.x + 3.5f, star_c.y), color, 1.3f);
+            dl->AddLine(ImVec2(star_c.x, star_c.y - 3.5f), ImVec2(star_c.x, star_c.y + 3.5f), color, 1.3f);
+            dl->AddCircleFilled(star_c, 1.2f, color);
             break;
         }
         case SidebarTab::DACSettings: {
