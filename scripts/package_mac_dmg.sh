@@ -28,16 +28,11 @@ echo " 项目目录: ${PROJECT_ROOT}"
 echo " 输出目录: ${OUTPUT_DIR}"
 echo "=========================================================="
 
-# 1. 确保可执行程序已编译且最新
-echo "=== [1/6] 检查与编译项目 (Release 模式) ==="
-if [[ ! -f "${BUILD_DIR}/PiHifiPlayer" ]]; then
-    echo ">> 未检测到编译产物，开始使用 CMake 编译..."
-    cmake -B "${BUILD_DIR}" -DCMAKE_BUILD_TYPE=Release
-    cmake --build "${BUILD_DIR}" -j"$(sysctl -n hw.ncpu)"
-else
-    echo ">> 增量构建确保代码最新..."
-    cmake --build "${BUILD_DIR}" -j"$(sysctl -n hw.ncpu)"
-fi
+# 1. 确保可执行程序已编译且最新 (设定兼容目标为 macOS 26.0+，支持 macOS 26.6.2 等系统)
+echo "=== [1/6] 检查与编译项目 (Release 模式, 目标 macOS 26.0+) ==="
+cmake -B "${BUILD_DIR}" -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=26.0
+cmake --build "${BUILD_DIR}" -j"$(sysctl -n hw.ncpu)"
+
 
 # 2. 定位 SDL2 动态库
 echo "=== [2/6] 探测 SDL2 依赖库 ==="
@@ -151,7 +146,7 @@ cat << 'EOF' > "${APP_BUNDLE}/Contents/Info.plist"
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>LSMinimumSystemVersion</key>
-    <string>11.0</string>
+    <string>26.0</string>
     <key>NSHumanReadableCopyright</key>
     <string>Copyright © 2026 Pi Hifi Player. All rights reserved.</string>
 </dict>
