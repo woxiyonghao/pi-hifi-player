@@ -13,16 +13,16 @@
 
 const std::array<MagicTuningView::ParamDef, MagicTuningView::NUM_PARAMS>& MagicTuningView::getParamDefs() {
     static const std::array<ParamDef, NUM_PARAMS> kDefs = {{
-        { "声音冷暖", "Sound Temperature", "以 1kHz 为支点全局频谱倾斜微调，重塑整体音色通透感与温润肉感", "❄️ 偏冷通透", "☀️ 偏暖醇厚" },
-        { "低音下潜", "Bass Extension",    "极低频（20Hz~50Hz）低架滤波增强，塑造低音下沉胸膛的冲击与震撼", "紧致轻盈",   "深沉澎湃" },
-        { "低音质感", "Bass Texture",      "中低频（80Hz~120Hz）阻尼特性调谐，控制鼓点敲击的回收速度与饱满弹跳", "速度迅捷",   "蓬松弹性" },
-        { "音符厚度", "Note Thickness",    "基音区（250Hz~500Hz）结像体量调控，改善耳机单薄生硬与敲铁皮听感", "纤细轻盈",   "扎实饱满" },
-        { "人声位置", "Vocal Distance",    "人声核心频段（1kHz~2.5kHz）结像远近重塑，让歌者嗓音立体贴耳凸显", "舞台后缩",   "贴耳靠前" },
-        { "女声甜度", "Female Overtones",  "高频泛音区（3.5kHz~5kHz）华丽补偿，提升女声空灵毒性与细腻感染力", "自然平直",   "润泽甜美" },
-        { "齿音消除", "Sibilance Control", "唇齿音区（6kHz~9kHz）智能柔化去刺，彻底根除刺耳金属毛刺与口水爆音", "柔化去刺",   "原生锋芒" },
-        { "冲激响应", "Impulse Response",  "瞬态能量爆发速度调控，增强打击乐器清脆硬度与微动态敲击力量感", "柔和松弛",   "硬朗凌厉" },
-        { "空气感",   "Air & Treble",     "极高频（12kHz~20kHz）高架微弱反射与极高泛音，再现大音乐厅空气流动感", "凝聚内敛",   "空灵弥漫" },
-        { "声场重塑", "Soundstage Width",  "立体声相位与声场延展，营造大编制交响乐身临其境的全景环绕包围感", "紧凑聚焦",   "宏大宽广" }
+        { "声音冷暖", "Sound Temperature", "冷暖音色倾斜", "❄️ 偏冷通透", "☀️ 偏暖醇厚" },
+        { "低音下潜", "Bass Extension",    "极低频下潜深度", "紧致轻盈",   "深沉澎湃" },
+        { "低音质感", "Bass Texture",      "低频速度与弹性", "速度迅捷",   "蓬松弹性" },
+        { "音符厚度", "Note Thickness",    "基频饱满厚实度", "纤细轻盈",   "扎实饱满" },
+        { "人声位置", "Vocal Distance",    "人声结像远近感", "舞台后缩",   "贴耳靠前" },
+        { "女声甜度", "Female Overtones",  "高频泛音润泽度", "自然平直",   "润泽甜美" },
+        { "齿音消除", "Sibilance Control", "柔化唇齿毛刺音", "柔化去刺",   "原生锋芒" },
+        { "冲激响应", "Impulse Response",  "瞬态与打击力度", "柔和松弛",   "硬朗凌厉" },
+        { "空气感",   "Air & Treble",     "极高频空间泛音", "凝聚内敛",   "空灵弥漫" },
+        { "声场重塑", "Soundstage Width",  "现场全景环绕感", "紧凑聚焦",   "宏大宽广" }
     }};
     return kDefs;
 }
@@ -228,12 +228,6 @@ bool MagicTuningView::renderHorizontalSlider(ImDrawList* dl, ImVec2 track_min, I
     // 双击快速复位
     if (is_hovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
         val = 0.0f;
-        changed = true;
-    }
-
-    // 滚轮步进调微
-    if (is_hovered && ImGui::GetIO().MouseWheel != 0.0f) {
-        val = std::clamp(val + ImGui::GetIO().MouseWheel * 0.5f, min_val, max_val);
         changed = true;
     }
 
@@ -447,19 +441,17 @@ void MagicTuningView::render(float x, float y, float w, float h) {
     const uint32_t ag = (accent >> IM_COL32_G_SHIFT) & 0xFF;
     const uint32_t ab = (accent >> IM_COL32_B_SHIFT) & 0xFF;
 
-    // 2. 页面顶层标题与操作栏 (一键复位 & 总开关)
+    // 2. 页面顶层标题与操作栏 (一键复位 & 总开关，无副标题)
     ImVec2 title_pos(card_min.x + 20.0f, card_min.y + 14.0f);
     if (Fonts::Medium) ImGui::PushFont(Fonts::Medium);
     dl->AddText(title_pos, UIConfig::Color::TextActive, "调音魔棒");
     if (Fonts::Medium) ImGui::PopFont();
 
-    if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-    ImVec2 sub_pos(card_min.x + 20.0f, card_min.y + 38.0f);
-    dl->AddText(sub_pos, UIConfig::Color::TextMuted, "主观听感导向高阶音效微调 · 借鉴海贝 MSEB 心理声学调音算法重塑声音色彩");
-
     // 顶部右侧「调音总开关」与「一键复位」
     float top_btn_h = 24.0f;
-    float top_btn_y = card_min.y + 18.0f;
+    float top_btn_y = card_min.y + 14.0f;
+
+    if (Fonts::Small) ImGui::PushFont(Fonts::Small);
 
     // 按钮 1: 一键全部复位
     const char* reset_all_txt = "一键全复位";
@@ -500,25 +492,22 @@ void MagicTuningView::render(float x, float y, float w, float h) {
 
     if (Fonts::Small) ImGui::PopFont();
 
-    // 3. 独立平滑滚动区域：容纳 10 个独立调音卡片组 (一个调音一组)
-    float scroll_y0 = card_min.y + 60.0f;
-    float scroll_h = card_max.y - scroll_y0 - 12.0f;
-    float scroll_w = card_max.x - card_min.x - 24.0f;
+    // 3. 独立平滑滚动区域：去除右侧生硬滚动条 (NoScrollbar)，支持全屏鼠标滚轮自由滚动
+    float scroll_y0 = card_min.y + 48.0f;
+    float scroll_h = card_max.y - scroll_y0 - 10.0f;
+    float scroll_w = card_max.x - card_min.x - 32.0f;
 
-    ImGui::SetCursorScreenPos(ImVec2(card_min.x + 12.0f, scroll_y0));
+    ImGui::SetCursorScreenPos(ImVec2(card_min.x + 16.0f, scroll_y0));
     ImGui::PushStyleColor(ImGuiCol_ScrollbarBg, IM_COL32(0, 0, 0, 0));
-    ImGui::PushStyleColor(ImGuiCol_ScrollbarGrab, IM_COL32(255, 255, 255, 25));
-    ImGui::PushStyleColor(ImGuiCol_ScrollbarGrabHovered, IM_COL32(ar, ag, ab, 120));
-    ImGui::PushStyleColor(ImGuiCol_ScrollbarGrabActive, accent);
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarGrab, IM_COL32(0, 0, 0, 0));
 
     if (ImGui::BeginChild("##MagicTuningScroll", ImVec2(scroll_w, scroll_h), false,
-                          ImGuiWindowFlags_NoBackground)) {
+                          ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar)) {
         ImDrawList* cdl = ImGui::GetWindowDrawList();
         float cur_card_y = ImGui::GetCursorScreenPos().y;
-        float card_inner_w = scroll_w - 12.0f;
 
         for (size_t i = 0; i < NUM_PARAMS; ++i) {
-            float ch = renderTuningGroupCard(cdl, i, card_min.x + 16.0f, cur_card_y, card_inner_w);
+            float ch = renderTuningGroupCard(cdl, i, card_min.x + 16.0f, cur_card_y, scroll_w);
             cur_card_y += ch + 8.0f;
         }
 
@@ -526,5 +515,5 @@ void MagicTuningView::render(float x, float y, float w, float h) {
         ImGui::Dummy(ImVec2(0.0f, 10.0f));
     }
     ImGui::EndChild();
-    ImGui::PopStyleColor(4);
+    ImGui::PopStyleColor(2);
 }
