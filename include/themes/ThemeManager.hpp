@@ -31,7 +31,10 @@ enum class BackgroundVisualMode : int {
     SiriWaveform = 4,    // Siri 流光声波 (多层正弦流体交叠波浪)
     SiriOrb = 5,         // Siri 悬浮微光玻璃球 (外层主题色毛玻璃，里层原色光球)
     FloatingBubbles = 6, // 音乐微光气泡 (随低中高频共鸣膨胀升腾)
-    PureBlack = 7        // 极简纯黑纯音直通 (0 干扰纯音直通)
+    PureBlack = 7,       // 极简纯黑纯音直通 (0 干扰纯音直通)
+    NeonWaveform = 8,    // 电光霓虹声波 (高光霓虹脉冲与背景阴影光柱)
+    CyberGrid = 9,       // 赛博粒子网格 (3D 透视粒子地形流动起伏)
+    GlassClock = 10      // 液态玻璃时钟 (iOS StandBy 大字液态玻璃时钟)
 };
 
 // ==============================================================================

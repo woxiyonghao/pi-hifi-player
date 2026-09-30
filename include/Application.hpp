@@ -12,6 +12,9 @@
 #include "themes/SiriWaveformRenderer.hpp"
 #include "themes/SiriOrbRenderer.hpp"
 #include "themes/AudioBubblesRenderer.hpp"
+#include "themes/NeonWaveformRenderer.hpp"
+#include "themes/CyberGridRenderer.hpp"
+#include "themes/GlassClockRenderer.hpp"
 #include "tools/PlayerAdmin.hpp"
 
 // ==============================================================================
@@ -78,6 +81,9 @@ private:
     SiriWaveformRenderer siri_wave_renderer_;
     SiriOrbRenderer siri_orb_renderer_;
     AudioBubblesRenderer bubbles_renderer_;
+    NeonWaveformRenderer neon_wave_renderer_;
+    CyberGridRenderer cyber_grid_renderer_;
+    GlassClockRenderer glass_clock_renderer_;
 
     // 侧边栏持久化状态追踪
     SidebarTab last_saved_tab_ = SidebarTab::AllMusic;

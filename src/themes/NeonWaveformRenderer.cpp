@@ -1,0 +1,129 @@
+#include "themes/NeonWaveformRenderer.hpp"
+#include "public/UIConfig.hpp"
+#include "public/Font.hpp"
+#include <algorithm>
+#include <cmath>
+#include <vector>
+
+NeonWaveformRenderer::NeonWaveformRenderer() = default;
+
+void NeonWaveformRenderer::render(float screen_w, float screen_h, bool is_playing, const float* spectrum_levels, int num_levels) {
+    float current_time = static_cast<float>(ImGui::GetTime());
+    float dt = (last_time_ > 0.0f) ? std::clamp(current_time - last_time_, 0.001f, 0.05f) : 0.016f;
+    last_time_ = current_time;
+
+    // 平滑插值更新频段能量
+    int n_bands = std::min(num_levels, 16);
+    float total_energy = 0.0f;
+    for (int i = 0; i < n_bands; ++i) {
+        float target = (is_playing && spectrum_levels) ? spectrum_levels[i] : 0.0f;
+        smooth_levels_[i] += (target - smooth_levels_[i]) * (is_playing ? 14.0f : 5.0f) * dt;
+        total_energy += smooth_levels_[i];
+    }
+    float avg_energy = (n_bands > 0) ? (total_energy / n_bands) : 0.0f;
+
+    anim_time_ += (1.8f + avg_energy * 3.5f) * dt;
+
+    ImDrawList* dl = ImGui::GetBackgroundDrawList();
+
+    // 1. 深空黑底板
+    dl->AddRectFilled(ImVec2(0.0f, 0.0f), ImVec2(screen_w, screen_h), UIConfig::Color::MainStageBg);
+
+    const ImU32 accent = UIConfig::Color::Accent;
+    const uint32_t r = (accent >> IM_COL32_R_SHIFT) & 0xFF;
+    const uint32_t g = (accent >> IM_COL32_G_SHIFT) & 0xFF;
+    const uint32_t b = (accent >> IM_COL32_B_SHIFT) & 0xFF;
+
+    float center_y = screen_h * 0.48f;
+
+    // 2. 背景层：暗态垂直多频段漫射光柱阴影 (Radiant Spectrum Bars)
+    int num_bars = 48;
+    float bar_spacing = screen_w / static_cast<float>(num_bars);
+    float bar_w = bar_spacing * 0.65f;
+
+    for (int i = 0; i < num_bars; ++i) {
+        float norm_i = static_cast<float>(i) / static_cast<float>(num_bars - 1);
+        float band_pos = norm_i * static_cast<float>(std::max(1, n_bands - 1));
+        int idx0 = static_cast<int>(band_pos);
+        int idx1 = std::min(idx0 + 1, n_bands - 1);
+        float frac = band_pos - static_cast<float>(idx0);
+        float band_lvl = smooth_levels_[idx0] * (1.0f - frac) + smooth_levels_[idx1] * frac;
+
+        float bar_h = (15.0f + band_lvl * 180.0f);
+        float bx = i * bar_spacing + (bar_spacing - bar_w) * 0.5f;
+
+        // 上半段漫射阴影柱
+        int shadow_alpha = static_cast<int>(std::clamp(10.0f + band_lvl * 55.0f, 0.0f, 255.0f));
+        dl->AddRectFilledMultiColor(
+            ImVec2(bx, center_y - bar_h), ImVec2(bx + bar_w, center_y),
+            IM_COL32(r, g, b, 0), IM_COL32(r, g, b, 0),
+            IM_COL32(r, g, b, shadow_alpha), IM_COL32(r, g, b, shadow_alpha)
+        );
+
+        // 下半段漫射阴影柱
+        dl->AddRectFilledMultiColor(
+            ImVec2(bx, center_y), ImVec2(bx + bar_w, center_y + bar_h),
+            IM_COL32(r, g, b, shadow_alpha), IM_COL32(r, g, b, shadow_alpha),
+            IM_COL32(r, g, b, 0), IM_COL32(r, g, b, 0)
+        );
+    }
+
+    // 3. 中间层：水平全景霓虹氛围漫射微光带
+    int aura_alpha = static_cast<int>(std::clamp(18.0f + avg_energy * 50.0f, 0.0f, 255.0f));
+    dl->AddRectFilledMultiColor(
+        ImVec2(0.0f, center_y - 65.0f), ImVec2(screen_w, center_y),
+        IM_COL32(r, g, b, 0), IM_COL32(r, g, b, 0),
+        IM_COL32(r, g, b, aura_alpha), IM_COL32(r, g, b, aura_alpha)
+    );
+    dl->AddRectFilledMultiColor(
+        ImVec2(0.0f, center_y), ImVec2(screen_w, center_y + 65.0f),
+        IM_COL32(r, g, b, aura_alpha), IM_COL32(r, g, b, aura_alpha),
+        IM_COL32(r, g, b, 0), IM_COL32(r, g, b, 0)
+    );
+
+    // 4. 前景层：电光霓虹脉冲波浪核心 (高频密集抗锯齿多道光带)
+    constexpr int wave_pts = 320;
+    std::vector<ImVec2> pts(wave_pts);
+
+    for (int k = 0; k < wave_pts; ++k) {
+        float norm_x = static_cast<float>(k) / static_cast<float>(wave_pts - 1);
+        float x = norm_x * screen_w;
+
+        // 映射对应的频段能量
+        float band_pos = norm_x * static_cast<float>(std::max(1, n_bands - 1));
+        int b0 = static_cast<int>(band_pos);
+        int b1 = std::min(b0 + 1, n_bands - 1);
+        float f = band_pos - static_cast<float>(b0);
+        float energy = smooth_levels_[b0] * (1.0f - f) + smooth_levels_[b1] * f;
+
+        // 快速高频锐利音频震荡波
+        float high_pulse = std::sin(norm_x * 95.0f - anim_time_ * 3.5f) * 0.45f
+                         + std::sin(norm_x * 160.0f + anim_time_ * 5.0f) * 0.35f
+                         + std::sin(norm_x * 40.0f - anim_time_ * 1.8f) * 0.55f;
+
+        float amp = (3.0f + energy * 70.0f) * (0.35f + std::abs(high_pulse));
+        float y = center_y + high_pulse * amp;
+
+        pts[k] = ImVec2(x, y);
+    }
+
+    // 多通道抗锯齿发光波形 (由宽到窄，由浓至极亮)
+    // Pass 1: 外部宽广霓虹外光晕 (6.0px)
+    dl->AddPolyline(pts.data(), wave_pts, IM_COL32(r, g, b, 55), 0, 6.0f);
+
+    // Pass 2: 中层饱和电光色彩 (2.8px)
+    dl->AddPolyline(pts.data(), wave_pts, IM_COL32(r, g, b, 175), 0, 2.8f);
+
+    // Pass 3: 中央高亮白热核心线 (1.0px)
+    dl->AddPolyline(pts.data(), wave_pts, IM_COL32(255, 255, 255, 240), 0, 1.0f);
+
+    // 5. 底部铭牌
+    const char* footer_left = "Electric Neon Pulse Waveform · Real-Time Spectral Equalizer";
+    const char* footer_right = "HIGH-VOLTAGE RESONANCE & VOLUMETRIC AURA";
+
+    if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+    dl->AddText(ImVec2(24.0f, screen_h - 32.0f), accent, footer_left);
+    ImVec2 badge_sz = ImGui::CalcTextSize(footer_right);
+    dl->AddText(ImVec2(screen_w - badge_sz.x - 24.0f, screen_h - 32.0f), accent, footer_right);
+    if (Fonts::Small) ImGui::PopFont();
+}

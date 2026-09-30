@@ -396,6 +396,27 @@ void Application::renderBackground(float screen_w, float screen_h) {
         return;
     }
 
+    if (bg_mode == BackgroundVisualMode::NeonWaveform) {
+        neon_wave_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
+        neon_wave_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
+        neon_wave_renderer_.render(screen_w, screen_h, is_playing, levels12, 12);
+        return;
+    }
+
+    if (bg_mode == BackgroundVisualMode::CyberGrid) {
+        cyber_grid_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
+        cyber_grid_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
+        cyber_grid_renderer_.render(screen_w, screen_h, is_playing, levels12, 12);
+        return;
+    }
+
+    if (bg_mode == BackgroundVisualMode::GlassClock) {
+        glass_clock_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
+        glass_clock_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
+        glass_clock_renderer_.render(screen_w, screen_h, is_playing, l, r);
+        return;
+    }
+
     // 2. 如果未播放且为 LED 频谱模式，保持现在的颜色 (0 个方块，0 动效，完全纯净)
     if (!is_playing) {
         return;

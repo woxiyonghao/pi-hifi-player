@@ -43,6 +43,14 @@ void initialize(ImGuiIO& io) {
     Medium  = io.Fonts->AddFontFromFileTTF(matched_path, UIConfig::FontSize::Medium,  &cfg, glyph_ranges);
     Large   = io.Fonts->AddFontFromFileTTF(matched_path, UIConfig::FontSize::Large,   &cfg, glyph_ranges);
 
+    // 专属烘焙 iOS StandBy 液态玻璃超大时钟字模 (仅 0-9 与冒号，极速烘焙，零纹理压力)
+    static const ImWchar clock_ranges[] = {
+        '0', '9',
+        ':', ':',
+        0
+    };
+    GiantClock = io.Fonts->AddFontFromFileTTF(matched_path, 145.0f, &cfg, clock_ranges);
+
     // 设置默认全局字体
     io.FontDefault = Regular;
 }

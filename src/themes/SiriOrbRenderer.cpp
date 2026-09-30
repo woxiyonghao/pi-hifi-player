@@ -50,7 +50,8 @@ void SiriOrbRenderer::render(float screen_w, float screen_h, bool is_playing, fl
     dl->AddRectFilled(ImVec2(0.0f, 0.0f), ImVec2(screen_w, screen_h), UIConfig::Color::MainStageBg);
 
     ImVec2 center(screen_w * 0.5f, screen_h * 0.46f);
-    float orb_radius = std::min(screen_w * 0.17f, 130.0f) * (1.0f + smooth_energy_ * 0.12f);
+    // 半径增大 40px (基准 130px -> 170px)
+    float orb_radius = std::min(screen_w * 0.22f, 170.0f) * (1.0f + smooth_energy_ * 0.10f);
 
     // 获取当前用户设置的主题色 (外层玻璃材质使用主题色)
     const ImU32 accent = UIConfig::Color::Accent;
@@ -110,11 +111,11 @@ void SiriOrbRenderer::render(float screen_w, float screen_h, bool is_playing, fl
     // [外层玻璃材质使用主题色]: 菲涅尔折射轮廓、3D液态微棱光与高光倒角
     // ==============================================================================
     // 1. 主题色半透明磨砂玻璃罩 (Frosted Theme Glass Tint)
-    dl->AddCircleFilled(center, orb_radius, IM_COL32(r, g, b, 45), 64);
+    dl->AddCircleFilled(center, orb_radius, IM_COL32(r, g, b, 40), 64);
 
-    // 2. 主题色菲涅尔边缘微光圈 (Fresnel Rim Glow)
-    dl->AddCircle(center, orb_radius, IM_COL32(r, g, b, 190), 64, 2.0f);
-    dl->AddCircle(center, orb_radius - 2.0f, IM_COL32(r, g, b, 95), 64, 1.2f);
+    // 2. 主题色纤细菲涅尔边缘微光圈 (边框更细更通透，0.9px 边缘)
+    dl->AddCircle(center, orb_radius, IM_COL32(r, g, b, 140), 64, 0.9f);
+    dl->AddCircle(center, orb_radius - 1.0f, IM_COL32(255, 255, 255, 55), 64, 0.7f);
 
     // 3. 左上角 3D 玻璃镜面弧度高光 (Specular Glass Crescent Highlight)
     ImVec2 hl_center(center.x - orb_radius * 0.38f, center.y - orb_radius * 0.38f);

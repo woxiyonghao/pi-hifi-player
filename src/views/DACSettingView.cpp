@@ -370,8 +370,7 @@ void DACSettingView::renderAppleDirectSettings(ImDrawList* dl, float x0, float& 
     const char* depth_opts[] = { "32-bit Float 浮点直通", "24-bit 整数定点" };
     renderOptionRow(dl, x0, cur_y + 72.0f, w, "数据位深", depth_opts, 2, apple_bit_depth_, "AppleDepth");
 
-    const char* desc = "Apple Direct 说明: MacBook Pro (M1 Pro 及更高) 搭载发烧级 DAC 与阻抗探测器，"
-                       "Bit-Perfect 绕过 CoreAudio 系统重采样与混音器，提供 0 损耗原生直通输出。";
+    const char* desc = "Apple Direct 说明: MacBook Pro 硬件直通，Bit-Perfect 独占流绕过系统混音，原生 0 损耗输出。";
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
     dl->AddText(ImVec2(x0 + 16.0f, cur_y + 112.0f), UIConfig::Color::TextMuted, desc);
     if (Fonts::Small) ImGui::PopFont();
@@ -633,7 +632,7 @@ void DACSettingView::renderR2RSettings(ImDrawList* dl, float x0, float& cur_y, f
     const char* dsd_opts[] = { "独立 1-Bit 电阻网络转换", "转换为 24-bit 阶梯解码" };
     renderOptionRow(dl, x0, cur_y + 70.0f, w, "DSD 网络模式", dsd_opts, 2, r2r_dsd_mode_, "R2RDSD");
 
-    const char* desc = "R-2R 核心说明: NOS 纯无过采样零数字滤波，方波瞬态完美无预振铃，重现纯模拟黑胶听感。";
+    const char* desc = "R-2R 说明: NOS 纯无过采样零数字滤波，方波瞬态真实，还原纯模拟黑胶听感。";
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
     dl->AddText(ImVec2(x0 + 16.0f, cur_y + 112.0f), UIConfig::Color::TextMuted, desc);
     if (Fonts::Small) ImGui::PopFont();
@@ -686,7 +685,7 @@ void DACSettingView::renderROHMSettings(ImDrawList* dl, float x0, float& cur_y, 
     const char* clk_opts[] = { "智能倍频自适应", "锁定 64x fs", "锁定 128x fs" };
     renderOptionRow(dl, x0, cur_y + 70.0f, w, "调制器采样率", clk_opts, 3, rohm_modulator_clock_, "ROHMClk");
 
-    const char* desc = "ROHM 说明: 日本罗姆旗舰 MUS-IC BD34301EKV，力士 (Luxman) 旗舰 D-10X SACD 唱机核心，具备天然宽松的乐感。";
+    const char* desc = "ROHM 说明: 日本罗姆旗舰 MUS-IC，力士 D-10X 旗舰唱机核心，具备天然宽松乐感。";
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
     dl->AddText(ImVec2(x0 + 16.0f, cur_y + 112.0f), UIConfig::Color::TextMuted, desc);
     if (Fonts::Small) ImGui::PopFont();

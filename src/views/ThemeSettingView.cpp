@@ -225,7 +225,7 @@ void ThemeSettingView::render(float x, float y, float w, float h) {
         // ==============================================================================
         // 3. 板块二：背景律动 (标题改为「背景律动」，无 subtitle)
         // ==============================================================================
-        float sec2_h = 108.0f;
+        float sec2_h = 142.0f;
         ImVec2 p_sec2 = ImGui::GetCursorScreenPos();
         drawSectionFrostedCard(cdl, p_sec2, ImVec2(p_sec2.x + sec_w, p_sec2.y + sec2_h));
 
@@ -235,12 +235,12 @@ void ThemeSettingView::render(float x, float y, float w, float h) {
         cdl->AddText(ImVec2(p_sec2.x + 16.0f, s2_head_y), UIConfig::Color::TextActive, "背景律动");
         if (Fonts::Regular) ImGui::PopFont();
 
-        // [Options] 8 个动效风格按钮 (2 行 × 4 列)
+        // [Options] 11 个动效风格按钮 (第 1、2 行各 4 个，第 3 行 3 个)
         auto cur_bg_mode = tm.getBackgroundVisualMode();
         static const struct {
             BackgroundVisualMode mode;
             const char* label;
-        } bg_mode_items[8] = {
+        } bg_mode_items[11] = {
             {BackgroundVisualMode::LEDSpectrum,     "48列全景 LED 频谱"},
             {BackgroundVisualMode::VUMeter,         "名机动圈大表头"},
             {BackgroundVisualMode::Accuphase,       "金嗓子旗舰大表头"},
@@ -248,17 +248,23 @@ void ThemeSettingView::render(float x, float y, float w, float h) {
             {BackgroundVisualMode::SiriWaveform,    "Siri 流光声波"},
             {BackgroundVisualMode::SiriOrb,         "Siri 悬浮微光球"},
             {BackgroundVisualMode::FloatingBubbles, "音乐微光气泡"},
-            {BackgroundVisualMode::PureBlack,       "极简纯黑纯音直通"}
+            {BackgroundVisualMode::PureBlack,       "极简纯黑纯音直通"},
+            {BackgroundVisualMode::NeonWaveform,    "电光霓虹声波"},
+            {BackgroundVisualMode::CyberGrid,       "赛博粒子网格"},
+            {BackgroundVisualMode::GlassClock,      "液态玻璃时钟"}
         };
 
         float mode_btn_gap = 10.0f;
-        float mode_btn_w = (c_inner_w - mode_btn_gap * 3.0f) / 4.0f;
+        float mode_btn_w4 = (c_inner_w - mode_btn_gap * 3.0f) / 4.0f;
+        float mode_btn_w3 = (c_inner_w - mode_btn_gap * 2.0f) / 3.0f;
         float mode_btn_h = 28.0f;
 
-        for (int m = 0; m < 8; ++m) {
-            float btn_w = mode_btn_w;
-            int col_idx = (m < 4) ? m : (m - 4);
-            float my0 = (m < 4) ? (p_sec2.y + 34.0f) : (p_sec2.y + 68.0f);
+        for (int m = 0; m < 11; ++m) {
+            int row_idx = (m < 4) ? 0 : ((m < 8) ? 1 : 2);
+            int col_idx = (m < 4) ? m : ((m < 8) ? (m - 4) : (m - 8));
+            float btn_w = (row_idx < 2) ? mode_btn_w4 : mode_btn_w3;
+
+            float my0 = p_sec2.y + 34.0f + static_cast<float>(row_idx) * 34.0f;
             float mx0 = p_sec2.x + 16.0f + col_idx * (btn_w + mode_btn_gap);
 
             ImVec2 m_min(mx0, my0);
