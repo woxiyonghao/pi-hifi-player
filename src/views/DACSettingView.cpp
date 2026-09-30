@@ -25,11 +25,25 @@ std::string DACSettingView::getCurrentChipName() const {
     }
 }
 
+void DACSettingView::setSelectedChip(int index) {
+    int clamped = std::clamp(index, 0, 5);
+    if (selected_chip_ != clamped) {
+        selected_chip_ = clamped;
+        saveSettings();
+        if (on_dac_changed_) {
+            on_dac_changed_(getCurrentDacType(), getCurrentDacName());
+        }
+    }
+}
+
 void DACSettingView::loadSettings() {
     auto& db = MusicDatabase::getInstance();
 
-    // 0. 读取选中的芯片架构 (默认 0: Apple Direct 直通)
-    std::string s_chip = db.getSetting("setting_dac_selected_chip", "0");
+    // 0. 读取选中的芯片架构 (兼容 setting_dac_selected_chip 与 setting_dac_hardware_type)
+    std::string s_chip = db.getSetting("setting_dac_selected_chip", "");
+    if (s_chip.empty()) {
+        s_chip = db.getSetting("setting_dac_hardware_type", "0");
+    }
     try {
         selected_chip_ = std::clamp(std::stoi(s_chip), 0, 5);
     } catch (...) {
@@ -92,6 +106,7 @@ void DACSettingView::loadSettings() {
 void DACSettingView::saveSettings() {
     auto& db = MusicDatabase::getInstance();
     db.setSetting("setting_dac_selected_chip", std::to_string(selected_chip_));
+    db.setSetting("setting_dac_hardware_type", std::to_string(selected_chip_));
 
     // Apple
     db.setSetting("setting_dac_apple_exclusive", std::to_string(apple_exclusive_mode_));
@@ -247,8 +262,7 @@ void DACSettingView::render(float x, float y, float w, float h) {
 
         bool hov = ImGui::IsItemHovered();
         if (ImGui::IsItemClicked()) {
-            selected_chip_ = c;
-            saveSettings();
+            setSelectedChip(c);
         }
 
         ImU32 tab_bg = is_cur ? IM_COL32(r, g, b, 70) :

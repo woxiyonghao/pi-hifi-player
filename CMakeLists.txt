@@ -14,6 +14,10 @@ add_compile_options(-Wall -Wextra -Wpedantic)
 
 # 4. 平台差异化依赖与优化配置
 find_package(SQLite3 REQUIRED)
+if(NOT TARGET SQLite3::SQLite3 AND TARGET SQLite::SQLite3)
+    add_library(SQLite3::SQLite3 INTERFACE IMPORTED)
+    target_link_libraries(SQLite3::SQLite3 INTERFACE SQLite::SQLite3)
+endif()
 if(APPLE)
     message(STATUS ">> [HiFi Build] 当前检测为 macOS 开发调试平台")
     find_package(SDL2 REQUIRED)

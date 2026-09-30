@@ -1,6 +1,8 @@
 #pragma once
 
 #include "imgui.h"
+#include "types/DACProfile.hpp"
+#include <functional>
 #include <string>
 
 // ==============================================================================
@@ -11,13 +13,21 @@
 // ==============================================================================
 class DACSettingView {
 public:
+    using OnDacChangedCallback = std::function<void(DACType, const std::string&)>;
+
     DACSettingView();
     ~DACSettingView() = default;
 
     void render(float x, float y, float w, float h);
 
-    int getSelectedChip() const { return selected_chip_; }
-    std::string getCurrentChipName() const;
+    void setOnDacChanged(OnDacChangedCallback cb) { on_dac_changed_ = std::move(cb); }
+    [[nodiscard]] int getSelectedChip() const { return selected_chip_; }
+    [[nodiscard]] DACType getCurrentDacType() const { return static_cast<DACType>(selected_chip_); }
+    [[nodiscard]] std::string getCurrentChipName() const;
+    [[nodiscard]] std::string getCurrentDacName() const { return getCurrentChipName(); }
+
+    void setSelectedChip(int index);
+    void setCurrentDacType(DACType type) { setSelectedChip(static_cast<int>(type)); }
 
 private:
     void loadSettings();
@@ -45,6 +55,7 @@ private:
     // 4: R-2R 纯分立电阻网络 (NOS/OS)
     // 5: ROHM 罗姆 (MUS-IC BD34301EKV)
     int selected_chip_ = 0;
+    OnDacChangedCallback on_dac_changed_;
 
     // --------------------------------------------------------------------------
     // 0. Apple Direct (MacBook Pro M1 Pro / macOS CoreAudio 硬件直通)
