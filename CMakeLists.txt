@@ -84,6 +84,14 @@ if(APPLE)
         ${SDL2_LIBRARIES}
         OpenGL::GL
     )
+
+    # 9. macOS DMG 独立安装包一键打包 Target (cmake --build build --target dmg)
+    add_custom_target(dmg
+        COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/scripts/package_mac_dmg.sh
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMENT "打包生成独立 macOS DMG 安装镜像 (PiHifiPlayer.dmg)..."
+        USES_TERMINAL
+    )
 else()
     target_link_libraries(${PROJECT_NAME} PRIVATE
         audio_engine
@@ -93,4 +101,5 @@ else()
         ${GLESV2_LIBRARIES}
     )
 endif()
+
 

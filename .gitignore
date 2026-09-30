@@ -42,3 +42,7 @@ build.ninja
 .Spotlight-V100
 .Trashes
 
+# 打包发布产物
+dist/
+*.dmg
+
