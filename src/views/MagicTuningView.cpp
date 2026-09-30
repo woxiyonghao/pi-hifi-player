@@ -13,7 +13,7 @@
 
 const std::array<MagicTuningView::ParamDef, MagicTuningView::NUM_PARAMS>& MagicTuningView::getParamDefs() {
     static const std::array<ParamDef, NUM_PARAMS> kDefs = {{
-        { "声音冷暖", "Sound Temperature", "冷暖音色倾斜", "❄️ 偏冷通透", "☀️ 偏暖醇厚" },
+        { "声音冷暖", "Sound Temperature", "冷暖音色倾斜", "偏冷通透", "偏暖醇厚" },
         { "低音下潜", "Bass Extension",    "极低频下潜深度", "紧致轻盈",   "深沉澎湃" },
         { "低音质感", "Bass Texture",      "低频速度与弹性", "速度迅捷",   "蓬松弹性" },
         { "音符厚度", "Note Thickness",    "基频饱满厚实度", "纤细轻盈",   "扎实饱满" },
