@@ -4,6 +4,7 @@
 #include "widgets/GlassCardRenderer.hpp"
 #include "tools/MusicDatabase.hpp"
 #include "themes/ThemeManager.hpp"
+#include "audio_engine/AudioEngine.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -57,6 +58,7 @@ void DACSettingView::loadSettings() {
         apple_headphone_drive_ = std::clamp(std::stoi(db.getSetting("setting_dac_apple_drive", "0")), 0, 2);
         apple_bit_depth_ = std::clamp(std::stoi(db.getSetting("setting_dac_apple_bit_depth", "0")), 0, 1);
     } catch (...) {}
+    audio_engine::AudioEngine::getInstance().setExclusiveMode(apple_exclusive_mode_ == 0);
 
     // 2. ESS Sabre 设置
     try {
@@ -113,6 +115,7 @@ void DACSettingView::saveSettings() {
     db.setSetting("setting_dac_apple_sample_rate", std::to_string(apple_sample_rate_));
     db.setSetting("setting_dac_apple_drive", std::to_string(apple_headphone_drive_));
     db.setSetting("setting_dac_apple_bit_depth", std::to_string(apple_bit_depth_));
+    audio_engine::AudioEngine::getInstance().setExclusiveMode(apple_exclusive_mode_ == 0);
 
     // ESS
     db.setSetting("setting_dac_pcm_filter", std::to_string(pcm_filter_mode_));
@@ -361,6 +364,19 @@ void DACSettingView::renderAppleDirectSettings(ImDrawList* dl, float x0, float& 
 
     const char* rate_opts[] = { "原生跟随母带 (44.1k-192k)", "锁定 96kHz", "锁定 192kHz" };
     renderOptionRow(dl, x0, cur_y + 72.0f, w, "采样率追踪", rate_opts, 3, apple_sample_rate_, "AppleRate");
+
+    // 实时声卡硬件独占与时钟状态展示
+    std::string dev_name = audio_engine::AudioEngine::getInstance().getActiveHardwareDeviceName();
+    bool is_hog = audio_engine::AudioEngine::getInstance().isHogModeActive();
+    uint32_t cur_sr = audio_engine::AudioEngine::getInstance().getActiveHardwareSampleRate();
+    std::string status_txt = "当前声卡: " + dev_name + "  |  " +
+                             (is_hog ? "状态: [Hog Mode 硬件已独占 · 零杂音干扰]" : "状态: [系统混音共享]") +
+                             "  |  硬件时钟: " + std::to_string(cur_sr / 1000) + " kHz";
+    if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+    dl->AddText(ImVec2(x0 + 16.0f, cur_y + 114.0f),
+                is_hog ? UIConfig::Color::Accent : UIConfig::Color::TextMuted,
+                status_txt.c_str());
+    if (Fonts::Small) ImGui::PopFont();
 
     cur_y += h1 + 10.0f;
 

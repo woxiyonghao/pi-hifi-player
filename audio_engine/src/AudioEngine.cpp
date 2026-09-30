@@ -12,6 +12,12 @@
 #include <cmath>
 #include <random>
 
+#if defined(__APPLE__)
+#include <CoreAudio/CoreAudio.h>
+#include <AudioToolbox/AudioToolbox.h>
+#include <unistd.h>
+#endif
+
 namespace audio_engine {
 
 AudioEngine& AudioEngine::getInstance() {
@@ -26,6 +32,9 @@ AudioEngine::AudioEngine() : ring_buffer_(262144) {
 
 AudioEngine::~AudioEngine() {
     stop();
+#if defined(__APPLE__)
+    applyHogMode(false);
+#endif
 }
 
 bool AudioEngine::init() {
@@ -85,6 +94,12 @@ bool AudioEngine::openAndPlay(const std::string& filepath) {
             return false;
         }
     }
+
+#if defined(__APPLE__)
+    if (is_hog_active_.load(std::memory_order_acquire)) {
+        applyHardwareSampleRate(current_spec_.sample_rate);
+    }
+#endif
 
     is_playing_.store(true, std::memory_order_release);
     is_paused_.store(false, std::memory_order_release);
@@ -196,10 +211,162 @@ bool AudioEngine::isMuted() const {
 }
 
 bool AudioEngine::isBitPerfectDirect() const {
-    return !is_muted_.load(std::memory_order_acquire) && 
-           (volume_.load(std::memory_order_acquire) >= 0.9999f) &&
-           !is_eq_enabled_.load(std::memory_order_acquire);
+    bool soft_clean = !is_muted_.load(std::memory_order_acquire) && 
+                      (volume_.load(std::memory_order_acquire) >= 0.9999f) &&
+                      !is_eq_enabled_.load(std::memory_order_acquire);
+#if defined(__APPLE__)
+    if (is_exclusive_mode_.load(std::memory_order_acquire)) {
+        return soft_clean && is_hog_active_.load(std::memory_order_acquire);
+    }
+#endif
+    return soft_clean;
 }
+
+void AudioEngine::setExclusiveMode(bool exclusive) {
+    is_exclusive_mode_.store(exclusive, std::memory_order_release);
+#if defined(__APPLE__)
+    applyHogMode(exclusive);
+    if (exclusive && current_spec_.sample_rate > 0) {
+        applyHardwareSampleRate(current_spec_.sample_rate);
+    }
+#endif
+}
+
+bool AudioEngine::isExclusiveMode() const {
+    return is_exclusive_mode_.load(std::memory_order_acquire);
+}
+
+bool AudioEngine::isHogModeActive() const {
+    return is_hog_active_.load(std::memory_order_acquire);
+}
+
+std::string AudioEngine::getActiveHardwareDeviceName() const {
+#if defined(__APPLE__)
+    AudioDeviceID deviceID = kAudioObjectUnknown;
+    UInt32 size = sizeof(deviceID);
+    AudioObjectPropertyAddress address = {
+        kAudioHardwarePropertyDefaultOutputDevice,
+        kAudioObjectPropertyScopeGlobal,
+        kAudioObjectPropertyElementMain
+    };
+    if (AudioObjectGetPropertyData(kAudioObjectSystemObject, &address, 0, nullptr, &size, &deviceID) == noErr && deviceID != kAudioObjectUnknown) {
+        CFStringRef cfName = nullptr;
+        size = sizeof(cfName);
+        AudioObjectPropertyAddress nameAddr = {
+            kAudioObjectPropertyName,
+            kAudioObjectPropertyScopeGlobal,
+            kAudioObjectPropertyElementMain
+        };
+        if (AudioObjectGetPropertyData(deviceID, &nameAddr, 0, nullptr, &size, &cfName) == noErr && cfName) {
+            char buf[256] = {0};
+            CFStringGetCString(cfName, buf, sizeof(buf), kCFStringEncodingUTF8);
+            CFRelease(cfName);
+            return std::string(buf);
+        }
+    }
+    return "系统默认音频输出";
+#else
+    return "ALSA 硬件输出";
+#endif
+}
+
+uint32_t AudioEngine::getActiveHardwareSampleRate() const {
+#if defined(__APPLE__)
+    AudioDeviceID deviceID = kAudioObjectUnknown;
+    UInt32 size = sizeof(deviceID);
+    AudioObjectPropertyAddress address = {
+        kAudioHardwarePropertyDefaultOutputDevice,
+        kAudioObjectPropertyScopeGlobal,
+        kAudioObjectPropertyElementMain
+    };
+    if (AudioObjectGetPropertyData(kAudioObjectSystemObject, &address, 0, nullptr, &size, &deviceID) == noErr && deviceID != kAudioObjectUnknown) {
+        Float64 sr = 0;
+        UInt32 srSize = sizeof(sr);
+        AudioObjectPropertyAddress srAddr = {
+            kAudioDevicePropertyNominalSampleRate,
+            kAudioObjectPropertyScopeGlobal,
+            kAudioObjectPropertyElementMain
+        };
+        if (AudioObjectGetPropertyData(deviceID, &srAddr, 0, nullptr, &srSize, &sr) == noErr) {
+            return static_cast<uint32_t>(sr);
+        }
+    }
+#endif
+    return current_spec_.sample_rate;
+}
+
+void AudioEngine::applyHogMode(bool enable) {
+#if defined(__APPLE__)
+    AudioDeviceID deviceID = kAudioObjectUnknown;
+    UInt32 size = sizeof(deviceID);
+    AudioObjectPropertyAddress address = {
+        kAudioHardwarePropertyDefaultOutputDevice,
+        kAudioObjectPropertyScopeGlobal,
+        kAudioObjectPropertyElementMain
+    };
+    OSStatus err = AudioObjectGetPropertyData(kAudioObjectSystemObject, &address, 0, nullptr, &size, &deviceID);
+    if (err != noErr || deviceID == kAudioObjectUnknown) {
+        is_hog_active_.store(false, std::memory_order_release);
+        return;
+    }
+
+    AudioObjectPropertyAddress hogAddr = {
+        kAudioDevicePropertyHogMode,
+        kAudioObjectPropertyScopeGlobal,
+        kAudioObjectPropertyElementMain
+    };
+    if (!AudioObjectHasProperty(deviceID, &hogAddr)) {
+        std::cout << "[AudioEngine] 当前声卡不支持 Hog Mode 硬件独占" << std::endl;
+        is_hog_active_.store(false, std::memory_order_release);
+        return;
+    }
+
+    pid_t pid = enable ? getpid() : -1;
+    err = AudioObjectSetPropertyData(deviceID, &hogAddr, 0, nullptr, sizeof(pid), &pid);
+    if (err == noErr) {
+        is_hog_active_.store(enable, std::memory_order_release);
+        std::cout << "[AudioEngine] " << (enable ? "【Hog Mode 激活】已成功独占 macOS 声卡硬件 (PID: " + std::to_string(getpid()) + ")" : "【Hog Mode 释放】已释放声卡独占，恢复系统混音") << std::endl;
+    } else {
+        std::cerr << "[AudioEngine] 设置 Hog Mode 失败，错误代码: " << err << std::endl;
+        is_hog_active_.store(false, std::memory_order_release);
+    }
+#else
+    (void)enable;
+#endif
+}
+
+void AudioEngine::applyHardwareSampleRate(uint32_t sample_rate) {
+#if defined(__APPLE__)
+    if (sample_rate == 0) return;
+    AudioDeviceID deviceID = kAudioObjectUnknown;
+    UInt32 size = sizeof(deviceID);
+    AudioObjectPropertyAddress address = {
+        kAudioHardwarePropertyDefaultOutputDevice,
+        kAudioObjectPropertyScopeGlobal,
+        kAudioObjectPropertyElementMain
+    };
+    OSStatus err = AudioObjectGetPropertyData(kAudioObjectSystemObject, &address, 0, nullptr, &size, &deviceID);
+    if (err != noErr || deviceID == kAudioObjectUnknown) return;
+
+    AudioObjectPropertyAddress srAddr = {
+        kAudioDevicePropertyNominalSampleRate,
+        kAudioObjectPropertyScopeGlobal,
+        kAudioObjectPropertyElementMain
+    };
+    if (AudioObjectHasProperty(deviceID, &srAddr)) {
+        Float64 target_sr = static_cast<Float64>(sample_rate);
+        OSStatus srErr = AudioObjectSetPropertyData(deviceID, &srAddr, 0, nullptr, sizeof(target_sr), &target_sr);
+        if (srErr == noErr) {
+            std::cout << "[AudioEngine] 成功将硬件 DAC 采样率点对点同步至: " << target_sr << " Hz (Bit-Perfect)" << std::endl;
+        } else {
+            std::cerr << "[AudioEngine] 尝试切换硬件采样率失败，错误码: " << srErr << std::endl;
+        }
+    }
+#else
+    (void)sample_rate;
+#endif
+}
+
 
 void AudioEngine::setEqEnabled(bool enabled) {
     is_eq_enabled_.store(enabled, std::memory_order_release);

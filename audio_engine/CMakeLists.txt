@@ -30,6 +30,9 @@ target_include_directories(audio_engine
 if(APPLE)
     target_link_libraries(audio_engine PRIVATE
         ${SDL2_LIBRARIES}
+        "-framework CoreAudio"
+        "-framework AudioToolbox"
+        "-framework CoreFoundation"
     )
 else()
     target_link_libraries(audio_engine PRIVATE

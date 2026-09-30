@@ -60,6 +60,24 @@ if [[ -z "${SDL2_DYLIB}" || ! -f "${SDL2_DYLIB}" ]]; then
 fi
 echo ">> 定位到 SDL2: ${SDL2_DYLIB}"
 
+SDL3_DYLIB=""
+if command -v brew &>/dev/null; then
+    BREW_PREFIX="$(brew --prefix)"
+    for candidate in \
+        "${BREW_PREFIX}/lib/libSDL3.0.dylib" \
+        "${BREW_PREFIX}/lib/libSDL3.dylib" \
+        "${BREW_PREFIX}/opt/sdl3/lib/libSDL3.0.dylib" \
+        "${BREW_PREFIX}/opt/sdl3/lib/libSDL3.dylib"; do
+        if [[ -f "${candidate}" ]]; then
+            SDL3_DYLIB="${candidate}"
+            break
+        fi
+    done
+fi
+if [[ -n "${SDL3_DYLIB}" ]]; then
+    echo ">> 定位到 SDL3 (sdl2-compat 运行时底层核心): ${SDL3_DYLIB}"
+fi
+
 # 3. 制作 macOS 应用图标 (.icns)
 echo "=== [3/6] 生成应用高清图标 ==="
 ICNS_FILE="${BUILD_DIR}/AppIcon.icns"
@@ -164,8 +182,22 @@ if [[ -n "${LINKED_SDL2}" ]]; then
 fi
 install_name_tool -add_rpath @executable_path/../Frameworks "${APP_BUNDLE}/Contents/MacOS/PiHifiPlayer" 2>/dev/null || true
 
+# 拷贝 SDL3 (sdl2-compat 运行时通过 dlopen 加载 SDL3，必须嵌入同级 Frameworks 目录)
+if [[ -n "${SDL3_DYLIB}" && -f "${SDL3_DYLIB}" ]]; then
+    cp "${SDL3_DYLIB}" "${APP_BUNDLE}/Contents/Frameworks/libSDL3.dylib"
+    cp "${SDL3_DYLIB}" "${APP_BUNDLE}/Contents/Frameworks/libSDL3.0.dylib"
+    chmod 755 "${APP_BUNDLE}/Contents/Frameworks/libSDL3.dylib"
+    chmod 755 "${APP_BUNDLE}/Contents/Frameworks/libSDL3.0.dylib"
+    install_name_tool -id @rpath/libSDL3.dylib "${APP_BUNDLE}/Contents/Frameworks/libSDL3.dylib" 2>/dev/null || true
+    install_name_tool -id @rpath/libSDL3.0.dylib "${APP_BUNDLE}/Contents/Frameworks/libSDL3.0.dylib" 2>/dev/null || true
+fi
+
 # 对所有二进制进行 ad-hoc 签名
 echo "=== [5/6] 执行 Code Signing 签名 ==="
+if [[ -f "${APP_BUNDLE}/Contents/Frameworks/libSDL3.dylib" ]]; then
+    codesign -f -s - "${APP_BUNDLE}/Contents/Frameworks/libSDL3.dylib"
+    codesign -f -s - "${APP_BUNDLE}/Contents/Frameworks/libSDL3.0.dylib"
+fi
 codesign -f -s - "${APP_BUNDLE}/Contents/Frameworks/libSDL2-2.0.0.dylib"
 codesign -f -s - "${APP_BUNDLE}"
 codesign -vvv --deep --strict "${APP_BUNDLE}"

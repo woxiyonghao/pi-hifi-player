@@ -48,6 +48,13 @@ public:
     bool isMuted() const;
     bool isBitPerfectDirect() const; // 当前是否处于 100% 源码直通状态
 
+    // 硬件独占流与 Hog Mode (macOS CoreAudio 原生直通)
+    void setExclusiveMode(bool exclusive);
+    bool isExclusiveMode() const;
+    bool isHogModeActive() const;
+    std::string getActiveHardwareDeviceName() const;
+    uint32_t getActiveHardwareSampleRate() const;
+
     // 状态查询
     bool isPlaying() const;
     bool isPaused() const;
@@ -133,6 +140,12 @@ private:
     std::atomic<uint64_t> fade_total_frames_{0};
     std::atomic<uint64_t> fade_current_frame_{0};
     std::atomic<bool> fade_out_completed_{false};
+
+    // macOS CoreAudio 硬件独占与时钟同步状态
+    std::atomic<bool> is_exclusive_mode_{false};
+    std::atomic<bool> is_hog_active_{false};
+    void applyHogMode(bool enable);
+    void applyHardwareSampleRate(uint32_t sample_rate);
 
     void decodeWorker(std::stop_token stop_token);
     void onSinkDataNeeded(float* output, size_t frame_count);
