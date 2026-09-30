@@ -3,8 +3,17 @@
 #include "audio_engine/decoders/WavDecoder.hpp"
 #include "audio_engine/decoders/Mp3Decoder.hpp"
 #include "audio_engine/DsfParser.hpp"
+
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
+
+#if !defined(TARGET_OS_IPHONE) || !TARGET_OS_IPHONE
 #include "audio_engine/sinks/SdlAudioSink.hpp"
 #include "audio_engine/sinks/AlsaAudioSink.hpp"
+#else
+#include "audio_engine/sinks/AudioQueueSink.hpp"
+#endif
 
 #include <iostream>
 #include <filesystem>
@@ -13,10 +22,13 @@
 #include <random>
 
 #if defined(__APPLE__)
+#if TARGET_OS_OSX
 #include <CoreAudio/CoreAudio.h>
+#endif
 #include <AudioToolbox/AudioToolbox.h>
 #include <unistd.h>
 
+#if TARGET_OS_OSX
 static AudioDeviceID getDefaultOutputDeviceID() {
     AudioDeviceID dev = kAudioObjectUnknown;
     UInt32 size = sizeof(dev);
@@ -40,6 +52,7 @@ static OSStatus onDefaultDeviceChangedThunk(AudioObjectID /*inObjectID*/, UInt32
     return noErr;
 }
 #endif
+#endif
 
 namespace audio_engine {
 
@@ -49,10 +62,15 @@ AudioEngine& AudioEngine::getInstance() {
 }
 
 AudioEngine::AudioEngine() : ring_buffer_(262144) {
+#if !defined(TARGET_OS_IPHONE) || !TARGET_OS_IPHONE
     // 默认输出驱动：使用跨平台低延迟 SdlAudioSink
     sink_ = std::make_unique<SdlAudioSink>();
-#if defined(__APPLE__)
+#if defined(__APPLE__) && TARGET_OS_OSX
     last_active_device_id_ = getDefaultOutputDeviceID();
+#endif
+#else
+    // iOS / iPadOS 原生低延迟推流驱动
+    sink_ = std::make_unique<AudioQueueSink>();
 #endif
     registerDeviceListener();
 }
@@ -60,7 +78,7 @@ AudioEngine::AudioEngine() : ring_buffer_(262144) {
 AudioEngine::~AudioEngine() {
     stop();
     unregisterDeviceListener();
-#if defined(__APPLE__)
+#if defined(__APPLE__) && TARGET_OS_OSX
     releaseHogMode();
 #endif
 }
@@ -114,7 +132,7 @@ bool AudioEngine::openAndPlay(const std::string& filepath) {
     }
 
     // 1. 在打开音频设备前，如果是非蓝牙物理硬件且开启了独占，先同步硬件采样率
-#if defined(__APPLE__)
+#if defined(__APPLE__) && TARGET_OS_OSX
     last_active_device_id_ = getDefaultOutputDeviceID();
     if (is_exclusive_mode_.load(std::memory_order_acquire)) {
         applyHardwareSampleRate(current_spec_.sample_rate);
@@ -135,7 +153,7 @@ bool AudioEngine::openAndPlay(const std::string& filepath) {
     }
 
     // 3. 打开流之后，如果是物理声卡且开启了独占模式，申请真正的 Hog Mode 硬件锁
-#if defined(__APPLE__)
+#if defined(__APPLE__) && TARGET_OS_OSX
     last_active_device_id_ = getDefaultOutputDeviceID();
     if (is_exclusive_mode_.load(std::memory_order_acquire)) {
         applyHogMode(true);
@@ -206,7 +224,7 @@ void AudioEngine::stop() {
     if (sink_) {
         sink_->stop();
     }
-#if defined(__APPLE__)
+#if defined(__APPLE__) && TARGET_OS_OSX
     releaseHogMode();
 #endif
 
@@ -258,7 +276,7 @@ bool AudioEngine::isBitPerfectDirect() const {
     bool soft_clean = !is_muted_.load(std::memory_order_acquire) && 
                       (volume_.load(std::memory_order_acquire) >= 0.9999f) &&
                       !is_eq_enabled_.load(std::memory_order_acquire);
-#if defined(__APPLE__)
+#if defined(__APPLE__) && TARGET_OS_OSX
     if (is_exclusive_mode_.load(std::memory_order_acquire)) {
         return soft_clean;
     }
@@ -268,7 +286,7 @@ bool AudioEngine::isBitPerfectDirect() const {
 
 void AudioEngine::setExclusiveMode(bool exclusive) {
     is_exclusive_mode_.store(exclusive, std::memory_order_release);
-#if defined(__APPLE__)
+#if defined(__APPLE__) && TARGET_OS_OSX
     if (isCurrentDeviceBluetooth()) {
         releaseHogMode();
         return;
@@ -296,7 +314,7 @@ bool AudioEngine::isHogModeActive() const {
 }
 
 AudioEngine::DeviceTransportType AudioEngine::getCurrentDeviceTransport() const {
-#if defined(__APPLE__)
+#if defined(__APPLE__) && TARGET_OS_OSX
     AudioDeviceID dev = getDefaultOutputDeviceID();
     if (dev == kAudioObjectUnknown) return DeviceTransportType::Unknown;
 
@@ -319,6 +337,8 @@ AudioEngine::DeviceTransportType AudioEngine::getCurrentDeviceTransport() const 
         }
     }
     return DeviceTransportType::Other;
+#elif defined(__APPLE__) && TARGET_OS_IPHONE
+    return DeviceTransportType::BuiltIn;
 #else
     return DeviceTransportType::Other;
 #endif
@@ -329,7 +349,7 @@ bool AudioEngine::isCurrentDeviceBluetooth() const {
 }
 
 bool AudioEngine::isRealHogActive() const {
-#if defined(__APPLE__)
+#if defined(__APPLE__) && TARGET_OS_OSX
     if (isCurrentDeviceBluetooth()) return false;
     return is_hog_active_.load(std::memory_order_acquire);
 #else
@@ -338,7 +358,7 @@ bool AudioEngine::isRealHogActive() const {
 }
 
 void AudioEngine::registerDeviceListener() {
-#if defined(__APPLE__)
+#if defined(__APPLE__) && TARGET_OS_OSX
     AudioObjectPropertyAddress addr = {
         kAudioHardwarePropertyDefaultOutputDevice,
         kAudioObjectPropertyScopeGlobal,
@@ -352,7 +372,7 @@ void AudioEngine::registerDeviceListener() {
 }
 
 void AudioEngine::unregisterDeviceListener() {
-#if defined(__APPLE__)
+#if defined(__APPLE__) && TARGET_OS_OSX
     AudioObjectPropertyAddress addr = {
         kAudioHardwarePropertyDefaultOutputDevice,
         kAudioObjectPropertyScopeGlobal,
@@ -363,7 +383,7 @@ void AudioEngine::unregisterDeviceListener() {
 }
 
 void AudioEngine::handleDefaultDeviceChanged() {
-#if defined(__APPLE__)
+#if defined(__APPLE__) && TARGET_OS_OSX
     std::lock_guard lock(device_mutex_);
 
     AudioDeviceID current_dev = getDefaultOutputDeviceID();
@@ -401,7 +421,7 @@ void AudioEngine::handleDefaultDeviceChanged() {
 }
 
 std::string AudioEngine::getActiveHardwareDeviceName() const {
-#if defined(__APPLE__)
+#if defined(__APPLE__) && TARGET_OS_OSX
     AudioDeviceID deviceID = getDefaultOutputDeviceID();
     if (deviceID != kAudioObjectUnknown) {
         CFStringRef cfName = nullptr;
@@ -421,13 +441,15 @@ std::string AudioEngine::getActiveHardwareDeviceName() const {
         }
     }
     return "系统默认音频输出";
+#elif defined(__APPLE__) && TARGET_OS_IPHONE
+    return "iPad / iOS 原生音频输出";
 #else
     return "ALSA 硬件输出";
 #endif
 }
 
 uint32_t AudioEngine::getActiveHardwareSampleRate() const {
-#if defined(__APPLE__)
+#if defined(__APPLE__) && TARGET_OS_OSX
     AudioDeviceID deviceID = getDefaultOutputDeviceID();
     if (deviceID != kAudioObjectUnknown) {
         Float64 sr = 0;
@@ -446,7 +468,7 @@ uint32_t AudioEngine::getActiveHardwareSampleRate() const {
 }
 
 void AudioEngine::releaseHogMode() {
-#if defined(__APPLE__)
+#if defined(__APPLE__) && TARGET_OS_OSX
     AudioObjectPropertyScope scopes[] = {
         kAudioObjectPropertyScopeGlobal,
         kAudioDevicePropertyScopeOutput
@@ -477,7 +499,7 @@ void AudioEngine::releaseHogMode() {
 }
 
 void AudioEngine::applyHogMode(bool enable) {
-#if defined(__APPLE__)
+#if defined(__APPLE__) && TARGET_OS_OSX
     if (!enable) {
         releaseHogMode();
         return;
@@ -548,7 +570,7 @@ void AudioEngine::applyHogMode(bool enable) {
 }
 
 void AudioEngine::applyHardwareSampleRate(uint32_t sample_rate) {
-#if defined(__APPLE__)
+#if defined(__APPLE__) && TARGET_OS_OSX
     if (sample_rate == 0) return;
 
     if (isCurrentDeviceBluetooth()) {
