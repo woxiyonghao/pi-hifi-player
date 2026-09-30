@@ -16,7 +16,7 @@ DACSettingView::DACSettingView() {
 std::string DACSettingView::getCurrentChipName() const {
     switch (selected_chip_) {
         case 0: return "Apple Direct";
-        case 1: return "ES9038PRO Dual";
+        case 1: return "Dual ES9038PRO";
         case 2: return "AK4499EX Velvet";
         case 3: return "CS43198 Master";
         case 4: return "R-2R Discrete";
@@ -238,12 +238,12 @@ void DACSettingView::render(float x, float y, float w, float h) {
         const char* label;
         const char* subtitle;
     } chip_tabs[6] = {
-        { "Apple Direct", "MacBook 硬件直通" },
-        { "ESS Sabre", "ES9038PRO 并联" },
-        { "AKM 旭化成", "AK4499EX Velvet" },
-        { "Cirrus Logic", "CS43198 Master" },
+        { "Apple 直通", "MacBook 硬件直通" },
+        { "ES9038PRO", "ESS Sabre 旗舰并联" },
+        { "AK4499EX", "AKM 旭化成 Velvet" },
+        { "CS43198", "Cirrus Logic Master" },
         { "R-2R 纯电阻", "分立电阻 NOS/OS" },
-        { "ROHM 罗姆", "MUS-IC BD34301" }
+        { "ROHM 34301", "MUS-IC BD34301" }
     };
 
     float tab_gap = 6.0f;
@@ -407,7 +407,7 @@ void DACSettingView::renderESSSabreSettings(ImDrawList* dl, float x0, float& cur
 
     if (Fonts::Regular) ImGui::PushFont(Fonts::Regular);
     dl->AddText(ImVec2(x0 + 16.0f, cur_y + 10.0f), UIConfig::Color::TextActive,
-                "PCM 硬件数字滤波器滚降特性 (Hardware FIR Filter)");
+                "ESS Sabre ES9038PRO 硬件 FIR 滤波特性 (8通道双并联 HyperStream II)");
     if (Fonts::Regular) ImGui::PopFont();
 
     const char* fir_r1[] = { "快速最小 (推荐)", "慢速最小", "快速线性", "慢速线性" };
