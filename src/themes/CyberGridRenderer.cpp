@@ -34,23 +34,25 @@ void CyberGridRenderer::render(float screen_w, float screen_h, bool is_playing, 
     const uint32_t ag = (accent >> IM_COL32_G_SHIFT) & 0xFF;
     const uint32_t ab = (accent >> IM_COL32_B_SHIFT) & 0xFF;
 
-    // 2. 3D 透视参数配置
-    constexpr int cols = 36;
-    constexpr int rows = 22;
+    // 2. 3D 透视参数配置 (满屏全景，气势恢宏)
+    constexpr int cols = 54;
+    constexpr int rows = 28;
 
     float center_x = screen_w * 0.5f;
-    float horizon_y = screen_h * 0.38f;
-    float fov = 380.0f;
-    float cam_y = -190.0f; // 相机位于网格上方俯视
+    float horizon_y = screen_h * 0.30f;
+    float fov = 420.0f;
+    float cam_y = -180.0f; // 相机位于网格上方俯视
 
-    float z_near = 120.0f;
-    float z_far = 760.0f;
-    float x_span = 720.0f;
+    float z_near = 110.0f;
+    float z_far = 860.0f;
+    // 满屏超宽网格展开，在地平线与近景处完全填满视野
+    float x_span = std::max(screen_w * 2.8f, 2600.0f);
 
     // 顶点缓存 (cols × rows)
     struct GridVtx {
         ImVec2 pt;
         float depth_t; // 0.0 (最远) ~ 1.0 (最近)
+        float lateral_fade; // 边缘向外平滑渐隐入深空
         float wave_height;
         bool valid;
     };
@@ -66,6 +68,11 @@ void CyberGridRenderer::render(float screen_w, float screen_h, bool is_playing, 
             float norm_x = static_cast<float>(c) / static_cast<float>(cols - 1); // 0.0 ~ 1.0
             float centered_x = (norm_x - 0.5f) * 2.0f; // -1.0 ~ +1.0
             float world_x = centered_x * (x_span * 0.5f);
+
+            // 两端边缘平滑渐隐衰减 (平滑过渡消除硬截断)
+            float edge_dist = std::abs(centered_x);
+            float lat_fade = std::clamp((1.0f - edge_dist) / 0.30f, 0.0f, 1.0f);
+            lat_fade = lat_fade * lat_fade * (3.0f - 2.0f * lat_fade);
 
             // 对应频段能量映射
             float band_pos = norm_x * static_cast<float>(std::max(1, n_bands - 1));
@@ -91,6 +98,7 @@ void CyberGridRenderer::render(float screen_w, float screen_h, bool is_playing, 
             int idx = r * cols + c;
             grid[idx].pt = ImVec2(px, py);
             grid[idx].depth_t = depth_t;
+            grid[idx].lateral_fade = lat_fade;
             grid[idx].wave_height = wave_height;
             grid[idx].valid = (z > 10.0f);
         }
@@ -105,12 +113,13 @@ void CyberGridRenderer::render(float screen_w, float screen_h, bool is_playing, 
             if (!grid[i0].valid || !grid[i1].valid) continue;
 
             float avg_depth = (grid[i0].depth_t + grid[i1].depth_t) * 0.5f;
-            // 距离雾化透明度 (远处淡隐入黑色深空)
-            int alpha = static_cast<int>(std::clamp(avg_depth * avg_depth * 180.0f, 0.0f, 255.0f));
+            float avg_lat = (grid[i0].lateral_fade + grid[i1].lateral_fade) * 0.5f;
+            // 距离雾化透明度 + 两端平滑渐变
+            int alpha = static_cast<int>(std::clamp(avg_depth * avg_depth * 175.0f * avg_lat, 0.0f, 255.0f));
             if (alpha <= 2) continue;
 
             ImU32 col_line = IM_COL32(ar, ag, ab, alpha);
-            float line_w = 0.8f + avg_depth * 1.2f;
+            float line_w = 0.7f + avg_depth * 1.1f;
             dl->AddLine(grid[i0].pt, grid[i1].pt, col_line, line_w);
         }
     }
@@ -123,16 +132,17 @@ void CyberGridRenderer::render(float screen_w, float screen_h, bool is_playing, 
             if (!grid[i0].valid || !grid[i1].valid) continue;
 
             float avg_depth = grid[i0].depth_t;
-            int alpha = static_cast<int>(std::clamp(avg_depth * avg_depth * 140.0f, 0.0f, 255.0f));
+            float avg_lat = (grid[i0].lateral_fade + grid[i1].lateral_fade) * 0.5f;
+            int alpha = static_cast<int>(std::clamp(avg_depth * avg_depth * 135.0f * avg_lat, 0.0f, 255.0f));
             if (alpha <= 2) continue;
 
             ImU32 col_line = IM_COL32(ar, ag, ab, alpha);
-            float line_w = 0.7f + avg_depth * 1.0f;
+            float line_w = 0.6f + avg_depth * 0.9f;
             dl->AddLine(grid[i0].pt, grid[i1].pt, col_line, line_w);
         }
     }
 
-    // 4. 渲染发光粒子节点 (Glowing Particle Nodes)
+    // 4. 渲染发光粒子节点 (精细微粒星芒，满足“粒子再小一点，渐变无生硬色泽”)
     for (int r = 0; r < rows; ++r) {
         for (int c = 0; c < cols; ++c) {
             int idx = r * cols + c;
@@ -141,13 +151,17 @@ void CyberGridRenderer::render(float screen_w, float screen_h, bool is_playing, 
             float d = grid[idx].depth_t;
             if (d < 0.15f) continue; // 远处极小微粒子省略，保留空间纵深
 
-            float dot_radius = 1.0f + d * 2.5f;
-            int dot_alpha = static_cast<int>(std::clamp(d * 240.0f, 0.0f, 255.0f));
+            float lat = grid[idx].lateral_fade;
+            if (lat < 0.02f) continue;
+
+            // 粒子缩小为星尘微粒 (0.5px ~ 1.5px)
+            float dot_radius = 0.5f + d * 1.0f;
+            int dot_alpha = static_cast<int>(std::clamp(d * 220.0f * lat, 0.0f, 255.0f));
 
             // 山峰高点粒子聚核高亮白光
-            if (grid[idx].wave_height > 18.0f) {
-                dl->AddCircleFilled(grid[idx].pt, dot_radius * 1.4f, IM_COL32(255, 255, 255, dot_alpha), 8);
-                dl->AddCircle(grid[idx].pt, dot_radius * 2.2f, IM_COL32(ar, ag, ab, dot_alpha / 2), 8, 1.0f);
+            if (grid[idx].wave_height > 16.0f) {
+                dl->AddCircleFilled(grid[idx].pt, dot_radius * 1.15f, IM_COL32(255, 255, 255, dot_alpha), 8);
+                dl->AddCircle(grid[idx].pt, dot_radius * 1.6f, IM_COL32(ar, ag, ab, dot_alpha / 2), 8, 1.0f);
             } else {
                 dl->AddCircleFilled(grid[idx].pt, dot_radius, IM_COL32(ar, ag, ab, dot_alpha), 8);
             }

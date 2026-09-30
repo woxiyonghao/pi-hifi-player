@@ -255,14 +255,13 @@ void ThemeSettingView::render(float x, float y, float w, float h) {
         };
 
         float mode_btn_gap = 10.0f;
-        float mode_btn_w4 = (c_inner_w - mode_btn_gap * 3.0f) / 4.0f;
-        float mode_btn_w3 = (c_inner_w - mode_btn_gap * 2.0f) / 3.0f;
+        float mode_btn_w = (c_inner_w - mode_btn_gap * 3.0f) / 4.0f;
         float mode_btn_h = 28.0f;
 
         for (int m = 0; m < 11; ++m) {
-            int row_idx = (m < 4) ? 0 : ((m < 8) ? 1 : 2);
-            int col_idx = (m < 4) ? m : ((m < 8) ? (m - 4) : (m - 8));
-            float btn_w = (row_idx < 2) ? mode_btn_w4 : mode_btn_w3;
+            int row_idx = m / 4;
+            int col_idx = m % 4;
+            float btn_w = mode_btn_w;
 
             float my0 = p_sec2.y + 34.0f + static_cast<float>(row_idx) * 34.0f;
             float mx0 = p_sec2.x + 16.0f + col_idx * (btn_w + mode_btn_gap);

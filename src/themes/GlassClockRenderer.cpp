@@ -40,14 +40,14 @@ void GlassClockRenderer::render(float screen_w, float screen_h, bool is_playing,
     std::snprintf(min_buf, sizeof(min_buf), "%02d", now ? now->tm_min : 0);
 
     ImFont* clock_font = Fonts::GiantClock ? Fonts::GiantClock : (Fonts::Large ? Fonts::Large : Fonts::Regular);
-    float font_size = 145.0f;
+    float font_size = 169.0f; // 原 145px + 24px = 169px
 
     // 测量字符宽度与排版
     ImVec2 hour_sz = clock_font->CalcTextSizeA(font_size, FLT_MAX, 0.0f, hour_buf);
     ImVec2 colon_sz = clock_font->CalcTextSizeA(font_size, FLT_MAX, 0.0f, ":");
     ImVec2 min_sz = clock_font->CalcTextSizeA(font_size, FLT_MAX, 0.0f, min_buf);
 
-    float spacing = 18.0f;
+    float spacing = 20.0f;
     float total_w = hour_sz.x + spacing + colon_sz.x + spacing + min_sz.x;
     float start_x = (screen_w - total_w) * 0.5f;
     float start_y = (screen_h - hour_sz.y) * 0.44f;
@@ -56,40 +56,44 @@ void GlassClockRenderer::render(float screen_w, float screen_h, bool is_playing,
     ImVec2 colon_pos(start_x + hour_sz.x + spacing, start_y);
     ImVec2 min_pos(start_x + hour_sz.x + spacing + colon_sz.x + spacing, start_y);
 
-    // 3. 液态玻璃背后主题色漫射氛围辉光 (随音乐低频呼吸膨胀)
-    float glow_cx = screen_w * 0.5f;
-    float glow_cy = start_y + hour_sz.y * 0.5f;
-    float glow_radius = (total_w * 0.48f) * (1.0f + smooth_energy_ * 0.20f);
-    int glow_alpha = static_cast<int>(std::clamp(28.0f + smooth_energy_ * 55.0f, 0.0f, 255.0f));
-
-    dl->AddCircleFilled(ImVec2(glow_cx, glow_cy), glow_radius, IM_COL32(ar, ag, ab, glow_alpha), 64);
-    dl->AddCircleFilled(ImVec2(glow_cx, glow_cy), glow_radius * 1.45f, IM_COL32(ar, ag, ab, glow_alpha / 3), 64);
+    // 用户指定：时钟不需要背景，彻底保持暗黑舞台原汁原味
 
     // 冒号呼吸透光率 (平滑正弦闪烁)
     float colon_pulse = 0.55f + 0.45f * std::cos(anim_time_ * 3.14159265f);
     int colon_alpha = static_cast<int>(colon_pulse * 255.0f);
 
-    // 4. 辅助渲染多通道 3D 液态玻璃字模渲染函数
+    // 4. 辅助渲染多通道 3D 液态玻璃字模渲染函数 (加粗饱满，极度温润透光)
     auto drawLiquidGlassText = [&](const char* text, ImVec2 pos, int extra_alpha) {
         // Pass 1: 底部柔和立体投影 (Drop Shadow)
         dl->AddText(clock_font, font_size, ImVec2(pos.x + 3.0f, pos.y + 7.0f),
-                    IM_COL32(0, 0, 0, (90 * extra_alpha) / 255), text);
+                    IM_COL32(0, 0, 0, (110 * extra_alpha) / 255), text);
 
         // Pass 2: 右下方深度折射暗色边 (Refraction Shadow Bevel)
-        dl->AddText(clock_font, font_size, ImVec2(pos.x + 2.2f, pos.y + 2.4f),
+        dl->AddText(clock_font, font_size, ImVec2(pos.x + 2.5f, pos.y + 2.5f),
                     IM_COL32(ar / 3, ag / 3, ab / 3, (160 * extra_alpha) / 255), text);
 
-        // Pass 3: 主题色半透明磨砂液态玻璃本体 (Liquid Frosted Glass Body)
-        dl->AddText(clock_font, font_size, pos,
-                    IM_COL32(ar, ag, ab, (75 * extra_alpha) / 255), text);
+        // Pass 3: 四向微膨胀，构建饱满粗胖实体感 (Chunky Bold Dilation，满足“字体胖一点”)
+        const float dil = 1.0f;
+        dl->AddText(clock_font, font_size, ImVec2(pos.x - dil, pos.y),
+                    IM_COL32(ar, ag, ab, (90 * extra_alpha) / 255), text);
+        dl->AddText(clock_font, font_size, ImVec2(pos.x + dil, pos.y),
+                    IM_COL32(ar, ag, ab, (90 * extra_alpha) / 255), text);
+        dl->AddText(clock_font, font_size, ImVec2(pos.x, pos.y - dil),
+                    IM_COL32(ar, ag, ab, (90 * extra_alpha) / 255), text);
+        dl->AddText(clock_font, font_size, ImVec2(pos.x, pos.y + dil),
+                    IM_COL32(ar, ag, ab, (90 * extra_alpha) / 255), text);
 
-        // Pass 4: 左上方 3D 玻璃镜面弧度高光轮廓 (Specular Glass Crescent Highlight)
-        dl->AddText(clock_font, font_size, ImVec2(pos.x - 1.6f, pos.y - 1.6f),
-                    IM_COL32(255, 255, 255, (175 * extra_alpha) / 255), text);
-
-        // Pass 5: 表面透光清澈微光晕 (Glass Surface Sheen)
+        // Pass 4: 主题色半透明磨砂液态玻璃本体 (Liquid Frosted Glass Body)
         dl->AddText(clock_font, font_size, pos,
-                    IM_COL32(255, 255, 255, (50 * extra_alpha) / 255), text);
+                    IM_COL32(ar, ag, ab, (140 * extra_alpha) / 255), text);
+
+        // Pass 5: 左上方 3D 玻璃镜面弧度高光轮廓 (Specular Glass Crescent Highlight)
+        dl->AddText(clock_font, font_size, ImVec2(pos.x - 1.8f, pos.y - 1.8f),
+                    IM_COL32(255, 255, 255, (200 * extra_alpha) / 255), text);
+
+        // Pass 6: 表面透光清澈微光晕 (Glass Surface Sheen)
+        dl->AddText(clock_font, font_size, pos,
+                    IM_COL32(255, 255, 255, (70 * extra_alpha) / 255), text);
     };
 
     // 渲染小时与分钟

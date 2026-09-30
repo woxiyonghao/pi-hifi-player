@@ -20,7 +20,8 @@ public:
 private:
     void drawWaveRibbon(ImDrawList* dl, float center_x, float center_y, float width,
                         float amp, float freq, float phase, float speed_t,
-                        ImU32 col_top, ImU32 col_bot, float max_half_h);
+                        ImU32 col_top, ImU32 col_bot, float max_half_h,
+                        float gaussian_pow = 3.5f);
 
 private:
     float anim_time_ = 0.0f;

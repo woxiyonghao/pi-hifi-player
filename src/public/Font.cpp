@@ -44,12 +44,31 @@ void initialize(ImGuiIO& io) {
     Large   = io.Fonts->AddFontFromFileTTF(matched_path, UIConfig::FontSize::Large,   &cfg, glyph_ranges);
 
     // 专属烘焙 iOS StandBy 液态玻璃超大时钟字模 (仅 0-9 与冒号，极速烘焙，零纹理压力)
+    // 优先选用粗圆体 (Arial Rounded Bold / Bold)，完美对齐 Apple iOS StandBy 胖圆粗字风格
+    const std::vector<const char*> clock_font_candidates = {
+        "/System/Library/Fonts/Supplemental/Arial Rounded Bold.ttf", // macOS 原生圆角特粗体
+        "/System/Library/Fonts/SFNSDisplay-Bold.otf",
+        "/System/Library/Fonts/Supplemental/Futura.ttc",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf"
+    };
+    const char* clock_font_path = nullptr;
+    for (const auto& path : clock_font_candidates) {
+        if (FILE* f = fopen(path, "r")) {
+            fclose(f);
+            clock_font_path = path;
+            break;
+        }
+    }
+    if (!clock_font_path) clock_font_path = matched_path;
+
     static const ImWchar clock_ranges[] = {
         '0', '9',
         ':', ':',
         0
     };
-    GiantClock = io.Fonts->AddFontFromFileTTF(matched_path, 145.0f, &cfg, clock_ranges);
+    // 用户指定：字号再大 24px (原 145px + 24px = 169.0f)
+    GiantClock = io.Fonts->AddFontFromFileTTF(clock_font_path, 169.0f, &cfg, clock_ranges);
 
     // 设置默认全局字体
     io.FontDefault = Regular;
