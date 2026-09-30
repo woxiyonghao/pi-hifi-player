@@ -393,27 +393,34 @@ void DACSettingView::renderHardwareStatusBar(ImDrawList* dl, float x0, float& cu
     }
     bool btn_hov = ImGui::IsItemHovered();
 
-    // 状态呼吸指示灯与颜色判定
+    // 状态呼吸指示灯与颜色判定 (严格跟随主题强调色 accent)
     ImVec2 dot_center(p0.x + 16.0f, p0.y + h * 0.5f);
     ImU32 dot_col = IM_COL32(160, 160, 160, 200);
     std::string info_text;
     ImU32 info_text_col = UIConfig::Color::TextNormal;
 
     if (is_bt) {
-        // 蓝牙模式：天蓝色标识，明确告知用户走 0dB 源码直通
-        dot_col = IM_COL32(60, 195, 255, 255);
-        dl->AddCircle(dot_center, 6.5f, IM_COL32(60, 195, 255, 80), 0, 1.5f);
-        info_text = "声卡硬件: " + dev_name + "  |  " + (is_exclusive_pref ? "蓝牙 0dB 源码直通 (系统共享)" : "系统混音共享") + "  |  " + std::to_string(cur_sr / 1000) + " kHz";
-        info_text_col = is_exclusive_pref ? IM_COL32(60, 195, 255, 255) : UIConfig::Color::TextNormal;
+        // 蓝牙模式：跟随主题强调色
+        if (is_exclusive_pref) {
+            dot_col = accent;
+            dl->AddCircle(dot_center, 6.5f, IM_COL32(r, g, b, 80), 0, 1.5f);
+            info_text = "声卡硬件: " + dev_name + "  |  蓝牙 0dB 源码直通 (系统共享)  |  " + std::to_string(cur_sr / 1000) + " kHz";
+            info_text_col = UIConfig::Color::TextActive;
+        } else {
+            dot_col = IM_COL32(160, 160, 160, 200);
+            info_text = "声卡硬件: " + dev_name + "  |  系统混音共享  |  " + std::to_string(cur_sr / 1000) + " kHz";
+            info_text_col = UIConfig::Color::TextMuted;
+        }
     } else if (is_real_hog) {
-        // 物理有线声卡 / USB DAC 且已成功占用 Hog 锁
-        dot_col = IM_COL32(40, 205, 120, 255);
-        dl->AddCircle(dot_center, 6.5f, IM_COL32(40, 205, 120, 80), 0, 1.5f);
+        // 物理有线声卡 / USB DAC 且已成功占用 Hog 锁 (跟随主题色)
+        dot_col = accent;
+        dl->AddCircle(dot_center, 6.5f, IM_COL32(r, g, b, 80), 0, 1.5f);
         info_text = "声卡硬件: " + dev_name + "  |  Hog Mode 硬件已独占 (Bit-Perfect)  |  " + std::to_string(cur_sr / 1000) + " kHz";
         info_text_col = UIConfig::Color::TextActive;
     } else if (is_exclusive_pref) {
-        // 独占已开启，处于起播即独占待命状态
-        dot_col = IM_COL32(40, 205, 120, 200);
+        // 独占已开启，处于起播即独占待命状态 (跟随主题色)
+        dot_col = accent;
+        dl->AddCircle(dot_center, 6.5f, IM_COL32(r, g, b, 60), 0, 1.5f);
         info_text = "声卡硬件: " + dev_name + "  |  独占模式就绪 (起播锁定)  |  " + std::to_string(cur_sr / 1000) + " kHz";
         info_text_col = UIConfig::Color::TextActive;
     } else {
@@ -475,9 +482,14 @@ void DACSettingView::renderAppleDirectSettings(ImDrawList* dl, float x0, float& 
     renderOptionRow(dl, x0, cur_y + 72.0f, w, "采样率追踪", rate_opts, 3, apple_sample_rate_, "AppleRate");
 
     if (is_bt) {
+        ImU32 accent = ThemeManager::getInstance().getAccentColor();
+        const ImU32 r = (accent >> IM_COL32_R_SHIFT) & 0xFF;
+        const ImU32 g = (accent >> IM_COL32_G_SHIFT) & 0xFF;
+        const ImU32 b = (accent >> IM_COL32_B_SHIFT) & 0xFF;
+
         if (Fonts::Small) ImGui::PushFont(Fonts::Small);
         dl->AddText(ImVec2(x0 + 16.0f, cur_y + 110.0f),
-                    IM_COL32(60, 195, 255, 230),
+                    IM_COL32(r, g, b, 230),
                     "已连接蓝牙设备，音频走系统 AAC 无线协议，已自动回退至 0dB 共享直通，确保稳定发声。");
         if (Fonts::Small) ImGui::PopFont();
     }
