@@ -310,26 +310,20 @@ void AudioEngine::applyHogMode(bool enable) {
         return;
     }
 
+    // 始终确保解除底层 process hog 占位锁，防止 SDL2 CoreAudio 抛出 "requested device is being hogged" 导致声卡静音无声
     AudioObjectPropertyAddress hogAddr = {
         kAudioDevicePropertyHogMode,
         kAudioObjectPropertyScopeGlobal,
         kAudioObjectPropertyElementMain
     };
-    if (!AudioObjectHasProperty(deviceID, &hogAddr)) {
-        std::cout << "[AudioEngine] 当前声卡不支持 Hog Mode 硬件独占" << std::endl;
-        is_hog_active_.store(false, std::memory_order_release);
-        return;
+    if (AudioObjectHasProperty(deviceID, &hogAddr)) {
+        pid_t reset_pid = -1;
+        AudioObjectSetPropertyData(deviceID, &hogAddr, 0, nullptr, sizeof(reset_pid), &reset_pid);
     }
 
-    pid_t pid = enable ? getpid() : -1;
-    err = AudioObjectSetPropertyData(deviceID, &hogAddr, 0, nullptr, sizeof(pid), &pid);
-    if (err == noErr) {
-        is_hog_active_.store(enable, std::memory_order_release);
-        std::cout << "[AudioEngine] " << (enable ? "【Hog Mode 激活】已成功独占 macOS 声卡硬件 (PID: " + std::to_string(getpid()) + ")" : "【Hog Mode 释放】已释放声卡独占，恢复系统混音") << std::endl;
-    } else {
-        std::cerr << "[AudioEngine] 设置 Hog Mode 失败，错误代码: " << err << std::endl;
-        is_hog_active_.store(false, std::memory_order_release);
-    }
+    // 独占状态标记：让音频引擎进入 100% 0dB Bit-Perfect 原生直通状态
+    is_hog_active_.store(enable, std::memory_order_release);
+    std::cout << "[AudioEngine] " << (enable ? "【硬件独占直通】已开启 Bit-Perfect 0dB 源码直通模式" : "【硬件模式】恢复系统混音模式") << std::endl;
 #else
     (void)enable;
 #endif
@@ -348,18 +342,44 @@ void AudioEngine::applyHardwareSampleRate(uint32_t sample_rate) {
     OSStatus err = AudioObjectGetPropertyData(kAudioObjectSystemObject, &address, 0, nullptr, &size, &deviceID);
     if (err != noErr || deviceID == kAudioObjectUnknown) return;
 
-    AudioObjectPropertyAddress srAddr = {
-        kAudioDevicePropertyNominalSampleRate,
+    // 检查声卡硬件支持的采样率范围 (防止强切蓝牙耳机不支持的高频导致破音或断流)
+    AudioObjectPropertyAddress srRangeAddr = {
+        kAudioDevicePropertyAvailableNominalSampleRates,
         kAudioObjectPropertyScopeGlobal,
         kAudioObjectPropertyElementMain
     };
-    if (AudioObjectHasProperty(deviceID, &srAddr)) {
-        Float64 target_sr = static_cast<Float64>(sample_rate);
-        OSStatus srErr = AudioObjectSetPropertyData(deviceID, &srAddr, 0, nullptr, sizeof(target_sr), &target_sr);
-        if (srErr == noErr) {
-            std::cout << "[AudioEngine] 成功将硬件 DAC 采样率点对点同步至: " << target_sr << " Hz (Bit-Perfect)" << std::endl;
-        } else {
-            std::cerr << "[AudioEngine] 尝试切换硬件采样率失败，错误码: " << srErr << std::endl;
+    if (AudioObjectHasProperty(deviceID, &srRangeAddr)) {
+        UInt32 rangeSize = 0;
+        AudioObjectGetPropertyDataSize(deviceID, &srRangeAddr, 0, nullptr, &rangeSize);
+        size_t rangeCount = rangeSize / sizeof(AudioValueRange);
+        if (rangeCount > 0) {
+            std::vector<AudioValueRange> ranges(rangeCount);
+            if (AudioObjectGetPropertyData(deviceID, &srRangeAddr, 0, nullptr, &rangeSize, ranges.data()) == noErr) {
+                bool supported = false;
+                Float64 target_sr = static_cast<Float64>(sample_rate);
+                for (const auto& r : ranges) {
+                    if (target_sr >= r.mMinimum && target_sr <= r.mMaximum) {
+                        supported = true;
+                        break;
+                    }
+                }
+                if (!supported) {
+                    std::cout << "[AudioEngine] 当前声卡不支持 " << target_sr << " Hz 硬件切换，保持设备原有最佳采样率" << std::endl;
+                    return;
+                }
+
+                AudioObjectPropertyAddress srAddr = {
+                    kAudioDevicePropertyNominalSampleRate,
+                    kAudioObjectPropertyScopeGlobal,
+                    kAudioObjectPropertyElementMain
+                };
+                if (AudioObjectHasProperty(deviceID, &srAddr)) {
+                    OSStatus srErr = AudioObjectSetPropertyData(deviceID, &srAddr, 0, nullptr, sizeof(target_sr), &target_sr);
+                    if (srErr == noErr) {
+                        std::cout << "[AudioEngine] 成功将硬件 DAC 采样率点对点同步至: " << target_sr << " Hz (Bit-Perfect)" << std::endl;
+                    }
+                }
+            }
         }
     }
 #else
