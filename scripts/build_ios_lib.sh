@@ -158,12 +158,17 @@ xcodebuild -create-xcframework \
 cp "${OUT_DEVICE_DIR}/libPiHifiCore.a" "${BUILD_DIR}/libPiHifiCore.a"
 
 # 同步到 PiHiEndMusic Xcode 工程
-DEST_PROJECT_CXX="/Users/mk10/Desktop/PiHiEndMusic/PiHiEndMusic/cxx"
-if [ -d "${DEST_PROJECT_CXX}" ]; then
-    echo "=== [5/5] 自动同步至 Xcode 项目 (${DEST_PROJECT_CXX}) ==="
-    mkdir -p "${DEST_PROJECT_CXX}/lib/iphoneos" "${DEST_PROJECT_CXX}/lib/iphonesimulator"
-    cp "${OUT_DEVICE_DIR}/libPiHifiCore.a" "${DEST_PROJECT_CXX}/lib/iphoneos/"
-    cp "${OUT_SIM_DIR}/libPiHifiCore.a" "${DEST_PROJECT_CXX}/lib/iphonesimulator/"
+DEST_PROJECT="/Users/mk10/Desktop/PiHiEndMusic/PiHiEndMusic"
+if [ -d "${DEST_PROJECT}" ]; then
+    echo "=== [5/5] 自动同步至 Xcode 项目 (${DEST_PROJECT}) ==="
+    mkdir -p "${DEST_PROJECT}/cxx/lib/iphoneos" "${DEST_PROJECT}/cxx/lib/iphonesimulator"
+    cp "${OUT_DEVICE_DIR}/libPiHifiCore.a" "${DEST_PROJECT}/cxx/lib/iphoneos/"
+    cp "${OUT_SIM_DIR}/libPiHifiCore.a" "${DEST_PROJECT}/cxx/lib/iphonesimulator/"
+    if [ -d "${DEST_PROJECT}/Frameworks" ]; then
+        rm -rf "${DEST_PROJECT}/Frameworks/PiHifiCore.xcframework"
+        cp -R "${OUT_XCFRAMEWORK}" "${DEST_PROJECT}/Frameworks/"
+    fi
+    cp -R "${HEADERS_DIR}/"* "${DEST_PROJECT}/cxx/include/"
 fi
 
 echo "=========================================================="
