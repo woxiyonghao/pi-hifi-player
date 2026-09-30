@@ -235,28 +235,28 @@ void ThemeSettingView::render(float x, float y, float w, float h) {
         cdl->AddText(ImVec2(p_sec2.x + 16.0f, s2_head_y), UIConfig::Color::TextActive, "背景律动");
         if (Fonts::Regular) ImGui::PopFont();
 
-        // [Options] 7 个动效风格按钮 (第 1 行 4 个，第 2 行 3 个)
+        // [Options] 8 个动效风格按钮 (2 行 × 4 列)
         auto cur_bg_mode = tm.getBackgroundVisualMode();
         static const struct {
             BackgroundVisualMode mode;
             const char* label;
-        } bg_mode_items[7] = {
+        } bg_mode_items[8] = {
             {BackgroundVisualMode::LEDSpectrum,     "48列全景 LED 频谱"},
             {BackgroundVisualMode::VUMeter,         "名机动圈大表头"},
             {BackgroundVisualMode::Accuphase,       "金嗓子旗舰大表头"},
             {BackgroundVisualMode::TapeReel,        "复古开盘磁带机"},
-            {BackgroundVisualMode::VectorScope,     "立体声相位示波器"},
+            {BackgroundVisualMode::SiriWaveform,    "Siri 流光声波"},
+            {BackgroundVisualMode::SiriOrb,         "Siri 悬浮微光球"},
             {BackgroundVisualMode::FloatingBubbles, "音乐微光气泡"},
             {BackgroundVisualMode::PureBlack,       "极简纯黑纯音直通"}
         };
 
         float mode_btn_gap = 10.0f;
-        float mode_btn_w1 = (c_inner_w - mode_btn_gap * 3.0f) / 4.0f;
-        float mode_btn_w2 = (c_inner_w - mode_btn_gap * 2.0f) / 3.0f;
+        float mode_btn_w = (c_inner_w - mode_btn_gap * 3.0f) / 4.0f;
         float mode_btn_h = 28.0f;
 
-        for (int m = 0; m < 7; ++m) {
-            float btn_w = (m < 4) ? mode_btn_w1 : mode_btn_w2;
+        for (int m = 0; m < 8; ++m) {
+            float btn_w = mode_btn_w;
             int col_idx = (m < 4) ? m : (m - 4);
             float my0 = (m < 4) ? (p_sec2.y + 34.0f) : (p_sec2.y + 68.0f);
             float mx0 = p_sec2.x + 16.0f + col_idx * (btn_w + mode_btn_gap);

@@ -175,7 +175,7 @@ void ThemeManager::init() {
     if (!saved_bg_str.empty()) {
         try {
             int bg_val = std::stoi(saved_bg_str);
-            if (bg_val >= 0 && bg_val <= 6) {
+            if (bg_val >= 0 && bg_val <= 7) {
                 bg_mode_ = static_cast<BackgroundVisualMode>(bg_val);
             }
         } catch (...) {
@@ -196,6 +196,15 @@ void ThemeManager::init() {
         } catch (...) {}
     }
 
+    // 如果是预设主题，将 custom_color_ 同步为该预设的标志强调色
+    if (current_theme_ != ThemeId::Custom) {
+        const auto& preset = getCurrentPreset();
+        float r = static_cast<float>((preset.accent_color >> IM_COL32_R_SHIFT) & 0xFF) / 255.0f;
+        float g = static_cast<float>((preset.accent_color >> IM_COL32_G_SHIFT) & 0xFF) / 255.0f;
+        float b = static_cast<float>((preset.accent_color >> IM_COL32_B_SHIFT) & 0xFF) / 255.0f;
+        custom_color_ = ImVec4(r, g, b, 1.0f);
+    }
+
     // 应用配置到全局视觉系统
     applyCurrentTheme();
     std::cout << "[ThemeManager] 视觉主题中枢初始化就绪，当前主题: " << static_cast<int>(current_theme_)
@@ -204,11 +213,17 @@ void ThemeManager::init() {
 
 void ThemeManager::setTheme(ThemeId id, bool save) {
     current_theme_ = id;
-    applyCurrentTheme();
 
     if (id != ThemeId::Custom) {
-        setBackgroundVisualMode(getCurrentPreset().default_bg_mode, save);
+        const auto& preset = getCurrentPreset();
+        float r = static_cast<float>((preset.accent_color >> IM_COL32_R_SHIFT) & 0xFF) / 255.0f;
+        float g = static_cast<float>((preset.accent_color >> IM_COL32_G_SHIFT) & 0xFF) / 255.0f;
+        float b = static_cast<float>((preset.accent_color >> IM_COL32_B_SHIFT) & 0xFF) / 255.0f;
+        custom_color_ = ImVec4(r, g, b, 1.0f);
+        setBackgroundVisualMode(preset.default_bg_mode, save);
     }
+
+    applyCurrentTheme();
 
     if (save) {
         MusicDatabase::getInstance().setSetting("theme_id", std::to_string(static_cast<int>(id)));

@@ -28,9 +28,10 @@ enum class BackgroundVisualMode : int {
     VUMeter = 1,         // 名机动圈双大表头 (随主题名机联动)
     Accuphase = 2,       // 金嗓子旗舰大表头 (Accuphase Precision Power Meter)
     TapeReel = 3,        // 复古开盘磁带机 (Studer/Revox 双金属盘动态走带)
-    VectorScope = 4,     // 立体声相位示波器 (Lissajous 极坐标立体声场图)
-    FloatingBubbles = 5, // 音乐微光气泡 (随低中高频共鸣膨胀升腾)
-    PureBlack = 6        // 极简纯黑纯音直通 (0 干扰纯音直通)
+    SiriWaveform = 4,    // Siri 流光声波 (多层正弦流体交叠波浪)
+    SiriOrb = 5,         // Siri 悬浮微光玻璃球 (外层主题色毛玻璃，里层原色光球)
+    FloatingBubbles = 6, // 音乐微光气泡 (随低中高频共鸣膨胀升腾)
+    PureBlack = 7        // 极简纯黑纯音直通 (0 干扰纯音直通)
 };
 
 // ==============================================================================

@@ -33,6 +33,8 @@ class MainStageView {
         settings_view_.setOnIdleFullscreenChanged(std::move(cb));
     }
     float getIdleFullscreenSeconds() const { return settings_view_.getIdleFullscreenSeconds(); }
+    const DACSettingView& getDacView() const { return dac_view_; }
+    DACSettingView& getDacView() { return dac_view_; }
 
     // 渲染主舞台视图
     void render(SidebarTab current_tab, uint64_t selected_playlist_id, std::vector<Playlist>& playlists,

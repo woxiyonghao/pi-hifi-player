@@ -56,6 +56,9 @@ class SidebarView {
     bool isDacConnected() const {
         return dac_widget_.isConnected();
     }
+    void setOnDacClick(SidebarDacWidget::ClickCallback cb) {
+        dac_widget_.setOnClick(std::move(cb));
+    }
 
   private:
     // 上部分菜单与歌单独立滚动视图

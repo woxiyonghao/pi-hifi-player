@@ -229,6 +229,16 @@ void Application::initData() {
     main_stage_.setOnIdleFullscreenChanged([this](float /*secs*/) {
         resetIdle();
     });
+
+    // 绑定底部 DAC 卡片交互：点击直达 DAC 设置视图
+    sidebar_.setOnDacClick([this]() {
+        sidebar_.setCurrentTab(SidebarTab::DACSettings);
+        MusicDatabase::getInstance().setSetting("sidebar_tab", std::to_string(static_cast<int>(SidebarTab::DACSettings)));
+        MusicDatabase::getInstance().setSetting("sidebar_playlist_id", "0");
+    });
+
+    // 初始化同步 DAC 硬件连接状态与当前芯片名
+    sidebar_.setDacConnected(true, main_stage_.getDacView().getCurrentChipName());
 }
 
 void Application::resetIdle() {
@@ -365,10 +375,17 @@ void Application::renderBackground(float screen_w, float screen_h) {
         return;
     }
 
-    if (bg_mode == BackgroundVisualMode::VectorScope) {
-        scope_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
-        scope_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
-        scope_renderer_.render(screen_w, screen_h, is_playing, l, r);
+    if (bg_mode == BackgroundVisualMode::SiriWaveform) {
+        siri_wave_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
+        siri_wave_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
+        siri_wave_renderer_.render(screen_w, screen_h, is_playing, l, r);
+        return;
+    }
+
+    if (bg_mode == BackgroundVisualMode::SiriOrb) {
+        siri_orb_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
+        siri_orb_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
+        siri_orb_renderer_.render(screen_w, screen_h, is_playing, l, r);
         return;
     }
 
@@ -497,6 +514,9 @@ void Application::render() {
         float bottom_dy = 120.0f * ease_t;
 
         // 2. 调度发烧 UI 三驾马车布局渲染
+        // 动态同步当前选中的 DAC 芯片状态与显示名称
+        sidebar_.setDacConnected(true, main_stage_.getDacView().getCurrentChipName());
+
         // [左侧] 导航与歌单侧边栏 (向左上方移出) & DAC 卡片 (向左下方移出)
         sidebar_.render(playlists_, 230.0f, screen_h, top_nav_dx, top_nav_dy, dac_dx, dac_dy);
 

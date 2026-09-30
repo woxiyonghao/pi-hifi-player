@@ -9,7 +9,8 @@
 #include "themes/VUMeterRenderer.hpp"
 #include "themes/AccuphaseMeterRenderer.hpp"
 #include "themes/TapeReelRenderer.hpp"
-#include "themes/VectorScopeRenderer.hpp"
+#include "themes/SiriWaveformRenderer.hpp"
+#include "themes/SiriOrbRenderer.hpp"
 #include "themes/AudioBubblesRenderer.hpp"
 #include "tools/PlayerAdmin.hpp"
 
@@ -74,7 +75,8 @@ private:
     VUMeterRenderer vu_renderer_;
     AccuphaseMeterRenderer accuphase_renderer_;
     TapeReelRenderer tape_renderer_;
-    VectorScopeRenderer scope_renderer_;
+    SiriWaveformRenderer siri_wave_renderer_;
+    SiriOrbRenderer siri_orb_renderer_;
     AudioBubblesRenderer bubbles_renderer_;
 
     // 侧边栏持久化状态追踪
