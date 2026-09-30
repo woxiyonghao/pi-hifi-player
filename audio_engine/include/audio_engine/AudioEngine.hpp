@@ -52,6 +52,7 @@ public:
     void setExclusiveMode(bool exclusive);
     bool isExclusiveMode() const;
     bool isHogModeActive() const;
+    void applyHardwareSampleRate(uint32_t sample_rate);
     std::string getActiveHardwareDeviceName() const;
     uint32_t getActiveHardwareSampleRate() const;
 
@@ -145,7 +146,6 @@ private:
     std::atomic<bool> is_exclusive_mode_{false};
     std::atomic<bool> is_hog_active_{false};
     void applyHogMode(bool enable);
-    void applyHardwareSampleRate(uint32_t sample_rate);
 
     void decodeWorker(std::stop_token stop_token);
     void onSinkDataNeeded(float* output, size_t frame_count);

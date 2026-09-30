@@ -115,7 +115,18 @@ void DACSettingView::saveSettings() {
     db.setSetting("setting_dac_apple_sample_rate", std::to_string(apple_sample_rate_));
     db.setSetting("setting_dac_apple_drive", std::to_string(apple_headphone_drive_));
     db.setSetting("setting_dac_apple_bit_depth", std::to_string(apple_bit_depth_));
-    audio_engine::AudioEngine::getInstance().setExclusiveMode(apple_exclusive_mode_ == 0);
+    
+    bool exclusive = (apple_exclusive_mode_ == 0);
+    audio_engine::AudioEngine::getInstance().setExclusiveMode(exclusive);
+    if (exclusive) {
+        uint32_t target_sr = 0;
+        if (apple_sample_rate_ == 1) target_sr = 96000;
+        else if (apple_sample_rate_ == 2) target_sr = 192000;
+        else target_sr = audio_engine::AudioEngine::getInstance().getCurrentSpec().sample_rate;
+        if (target_sr > 0) {
+            audio_engine::AudioEngine::getInstance().applyHardwareSampleRate(target_sr);
+        }
+    }
 
     // ESS
     db.setSetting("setting_dac_pcm_filter", std::to_string(pcm_filter_mode_));
@@ -362,27 +373,8 @@ void DACSettingView::renderHardwareStatusBar(ImDrawList* dl, float x0, float& cu
     dl->AddRect(p0, p1, IM_COL32(255, 255, 255, 22), 8.0f, 0, 1.0f);
 
     std::string dev_name = audio_engine::AudioEngine::getInstance().getActiveHardwareDeviceName();
-    bool is_hog = audio_engine::AudioEngine::getInstance().isHogModeActive();
+    bool is_exclusive = (apple_exclusive_mode_ == 0);
     uint32_t cur_sr = audio_engine::AudioEngine::getInstance().getActiveHardwareSampleRate();
-
-    // 状态呼吸指示灯 (独占绿点 / 共享灰点)
-    ImVec2 dot_center(p0.x + 16.0f, p0.y + h * 0.5f);
-    ImU32 dot_col = is_hog ? IM_COL32(40, 205, 120, 255) : IM_COL32(160, 160, 160, 200);
-    dl->AddCircleFilled(dot_center, 4.0f, dot_col);
-    if (is_hog) {
-        dl->AddCircle(dot_center, 6.5f, IM_COL32(40, 205, 120, 80), 0, 1.5f);
-    }
-
-    // 声卡与时钟文本
-    std::string info_text = "声卡硬件: " + dev_name + "  |  " +
-                            (is_hog ? "Hog Mode 硬件已独占" : "系统混音共享") +
-                            "  |  " + std::to_string(cur_sr / 1000) + " kHz";
-
-    if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-    dl->AddText(ImVec2(dot_center.x + 12.0f, p0.y + (h - 14.0f) * 0.5f),
-                is_hog ? UIConfig::Color::TextActive : UIConfig::Color::TextNormal,
-                info_text.c_str());
-    if (Fonts::Small) ImGui::PopFont();
 
     // 右侧独占开关药丸按钮
     float btn_w = 100.0f;
@@ -396,20 +388,39 @@ void DACSettingView::renderHardwareStatusBar(ImDrawList* dl, float x0, float& cu
     if (ImGui::InvisibleButton("##GlobalHogExclusiveToggle", ImVec2(btn_w, btn_h))) {
         apple_exclusive_mode_ = (apple_exclusive_mode_ == 0 ? 1 : 0);
         saveSettings();
-        audio_engine::AudioEngine::getInstance().setExclusiveMode(apple_exclusive_mode_ == 0);
+        is_exclusive = (apple_exclusive_mode_ == 0);
     }
 
+    // 状态呼吸指示灯 (独占绿点 / 共享灰点)
+    ImVec2 dot_center(p0.x + 16.0f, p0.y + h * 0.5f);
+    ImU32 dot_col = is_exclusive ? IM_COL32(40, 205, 120, 255) : IM_COL32(160, 160, 160, 200);
+    dl->AddCircleFilled(dot_center, 4.0f, dot_col);
+    if (is_exclusive) {
+        dl->AddCircle(dot_center, 6.5f, IM_COL32(40, 205, 120, 80), 0, 1.5f);
+    }
+
+    // 声卡与时钟文本
+    std::string info_text = "声卡硬件: " + dev_name + "  |  " +
+                            (is_exclusive ? "Bit-Perfect 硬件已独占" : "系统混音共享") +
+                            "  |  " + std::to_string(cur_sr / 1000) + " kHz";
+
+    if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+    dl->AddText(ImVec2(dot_center.x + 12.0f, p0.y + (h - 14.0f) * 0.5f),
+                is_exclusive ? UIConfig::Color::TextActive : UIConfig::Color::TextNormal,
+                info_text.c_str());
+    if (Fonts::Small) ImGui::PopFont();
+
     bool hov = ImGui::IsItemHovered();
-    ImU32 btn_bg = is_hog ? IM_COL32(r, g, b, 70) : (hov ? IM_COL32(255, 255, 255, 25) : IM_COL32(255, 255, 255, 12));
-    ImU32 btn_border = is_hog ? accent : IM_COL32(255, 255, 255, 30);
+    ImU32 btn_bg = is_exclusive ? IM_COL32(r, g, b, 70) : (hov ? IM_COL32(255, 255, 255, 25) : IM_COL32(255, 255, 255, 12));
+    ImU32 btn_border = is_exclusive ? accent : IM_COL32(255, 255, 255, 30);
     dl->AddRectFilled(bp0, bp1, btn_bg, 5.0f);
     dl->AddRect(bp0, bp1, btn_border, 5.0f, 0, 1.0f);
 
-    const char* btn_text = is_hog ? "独占: 已开启" : "独占: 已关闭";
+    const char* btn_text = is_exclusive ? "独占: 已开启" : "独占: 已关闭";
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
     ImVec2 bsz = ImGui::CalcTextSize(btn_text);
     dl->AddText(ImVec2(btn_x + (btn_w - bsz.x) * 0.5f, btn_y + (btn_h - bsz.y) * 0.5f),
-                is_hog ? UIConfig::Color::TextActive : UIConfig::Color::TextMuted,
+                is_exclusive ? UIConfig::Color::TextActive : UIConfig::Color::TextMuted,
                 btn_text);
     if (Fonts::Small) ImGui::PopFont();
 

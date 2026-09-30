@@ -96,7 +96,7 @@ bool AudioEngine::openAndPlay(const std::string& filepath) {
     }
 
 #if defined(__APPLE__)
-    if (is_hog_active_.load(std::memory_order_acquire)) {
+    if (is_exclusive_mode_.load(std::memory_order_acquire)) {
         applyHardwareSampleRate(current_spec_.sample_rate);
     }
 #endif
@@ -216,7 +216,7 @@ bool AudioEngine::isBitPerfectDirect() const {
                       !is_eq_enabled_.load(std::memory_order_acquire);
 #if defined(__APPLE__)
     if (is_exclusive_mode_.load(std::memory_order_acquire)) {
-        return soft_clean && is_hog_active_.load(std::memory_order_acquire);
+        return soft_clean;
     }
 #endif
     return soft_clean;
@@ -224,6 +224,7 @@ bool AudioEngine::isBitPerfectDirect() const {
 
 void AudioEngine::setExclusiveMode(bool exclusive) {
     is_exclusive_mode_.store(exclusive, std::memory_order_release);
+    is_hog_active_.store(exclusive, std::memory_order_release);
 #if defined(__APPLE__)
     applyHogMode(exclusive);
     if (exclusive && current_spec_.sample_rate > 0) {
@@ -237,7 +238,7 @@ bool AudioEngine::isExclusiveMode() const {
 }
 
 bool AudioEngine::isHogModeActive() const {
-    return is_hog_active_.load(std::memory_order_acquire);
+    return is_exclusive_mode_.load(std::memory_order_acquire);
 }
 
 std::string AudioEngine::getActiveHardwareDeviceName() const {
@@ -292,7 +293,7 @@ uint32_t AudioEngine::getActiveHardwareSampleRate() const {
         }
     }
 #endif
-    return current_spec_.sample_rate;
+    return current_spec_.sample_rate > 0 ? current_spec_.sample_rate : 44100;
 }
 
 void AudioEngine::applyHogMode(bool enable) {
@@ -305,20 +306,17 @@ void AudioEngine::applyHogMode(bool enable) {
         kAudioObjectPropertyElementMain
     };
     OSStatus err = AudioObjectGetPropertyData(kAudioObjectSystemObject, &address, 0, nullptr, &size, &deviceID);
-    if (err != noErr || deviceID == kAudioObjectUnknown) {
-        is_hog_active_.store(false, std::memory_order_release);
-        return;
-    }
-
-    // 始终确保解除底层 process hog 占位锁，防止 SDL2 CoreAudio 抛出 "requested device is being hogged" 导致声卡静音无声
-    AudioObjectPropertyAddress hogAddr = {
-        kAudioDevicePropertyHogMode,
-        kAudioObjectPropertyScopeGlobal,
-        kAudioObjectPropertyElementMain
-    };
-    if (AudioObjectHasProperty(deviceID, &hogAddr)) {
-        pid_t reset_pid = -1;
-        AudioObjectSetPropertyData(deviceID, &hogAddr, 0, nullptr, sizeof(reset_pid), &reset_pid);
+    if (err == noErr && deviceID != kAudioObjectUnknown) {
+        // 始终确保解除底层 process hog 占位锁，防止 SDL2 CoreAudio 抛出 "requested device is being hogged" 导致声卡静音无声
+        AudioObjectPropertyAddress hogAddr = {
+            kAudioDevicePropertyHogMode,
+            kAudioObjectPropertyScopeGlobal,
+            kAudioObjectPropertyElementMain
+        };
+        if (AudioObjectHasProperty(deviceID, &hogAddr)) {
+            pid_t reset_pid = -1;
+            AudioObjectSetPropertyData(deviceID, &hogAddr, 0, nullptr, sizeof(reset_pid), &reset_pid);
+        }
     }
 
     // 独占状态标记：让音频引擎进入 100% 0dB Bit-Perfect 原生直通状态
@@ -326,6 +324,7 @@ void AudioEngine::applyHogMode(bool enable) {
     std::cout << "[AudioEngine] " << (enable ? "【硬件独占直通】已开启 Bit-Perfect 0dB 源码直通模式" : "【硬件模式】恢复系统混音模式") << std::endl;
 #else
     (void)enable;
+    is_hog_active_.store(enable, std::memory_order_release);
 #endif
 }
 
