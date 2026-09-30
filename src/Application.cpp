@@ -71,7 +71,11 @@ bool Application::init() {
     initData();
 
     running_ = true;
+#if defined(__linux__) && !defined(HIFI_PLATFORM_MAC)
+    std::cout << "[Application] 纯音数播图形与事件中枢初始化完毕，树莓派锁定 30fps 发烧控温低功耗模式。" << std::endl;
+#else
     std::cout << "[Application] 纯音数播图形与事件中枢初始化完毕，锁定 60fps 原生垂直同步。" << std::endl;
+#endif
     return true;
 }
 
@@ -128,7 +132,12 @@ bool Application::initWindow() {
     }
 
     SDL_GL_MakeCurrent(window_, gl_context_);
+#if defined(__linux__) && !defined(HIFI_PLATFORM_MAC)
+    // 树莓派 KMSDRM 下解除硬件垂直同步锁等待，配合上层精确 30 FPS 限制器休眠让出 CPU 算力
+    SDL_GL_SetSwapInterval(0);
+#else
     SDL_GL_SetSwapInterval(1); // 锁定 V-Sync
+#endif
     return true;
 }
 
@@ -251,11 +260,17 @@ void Application::pollEvents() {
     while (SDL_PollEvent(&event)) {
         ImGui_ImplSDL2_ProcessEvent(&event);
 
-        // 原生多点触摸 (TouchScreen) 转 ImGui 鼠标交互事件 (针对微雪触控屏)
+        // 原生多点触摸 (TouchScreen) 转 ImGui 交互与平滑手势拖拽滚动 (针对微雪 7 寸触控屏)
         ImGuiIO& io = ImGui::GetIO();
         if (event.type == SDL_FINGERDOWN) {
             float x = event.tfinger.x * 1024.0f;
             float y = event.tfinger.y * 600.0f;
+            touch_start_y_ = y;
+            touch_last_y_ = y;
+            touch_accum_dy_ = 0.0f;
+            is_touch_scrolling_ = false;
+            touch_scroll_velocity_ = 0.0f;
+
             io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
             io.AddMousePosEvent(x, y);
             io.AddMouseButtonEvent(0, true);
@@ -266,12 +281,32 @@ void Application::pollEvents() {
             io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
             io.AddMousePosEvent(x, y);
             io.AddMouseButtonEvent(0, false);
+            is_touch_scrolling_ = false;
             resetIdle();
         } else if (event.type == SDL_FINGERMOTION) {
             float x = event.tfinger.x * 1024.0f;
             float y = event.tfinger.y * 600.0f;
+            float dy = y - touch_last_y_;
+            touch_accum_dy_ += std::abs(dy);
+            touch_last_y_ = y;
+
             io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
             io.AddMousePosEvent(x, y);
+
+            // 当手指单次拖拽垂直位移累积超过 6px 时，智能判定为列表滚动操作，而非误点击曲目
+            if (!is_touch_scrolling_ && touch_accum_dy_ > 6.0f) {
+                is_touch_scrolling_ = true;
+                // 立即释放鼠标按下状态，取消对下方列表项的按下高亮或误触
+                io.AddMouseButtonEvent(0, false);
+            }
+
+            if (is_touch_scrolling_) {
+                // 将手指滑动距离映射为标准平滑鼠标滚轮事件 (dy > 0 手指向下滑，内容向下移动)
+                float wheel_delta = dy / 24.0f;
+                io.AddMouseWheelEvent(0.0f, wheel_delta);
+                // 记录手指滑动的动量速度
+                touch_scroll_velocity_ = dy * 0.45f;
+            }
             resetIdle();
         } else if (event.type == SDL_MOUSEMOTION || event.type == SDL_MOUSEBUTTONDOWN ||
                    event.type == SDL_MOUSEBUTTONUP || event.type == SDL_MOUSEWHEEL) {
@@ -290,11 +325,22 @@ void Application::pollEvents() {
 }
 
 void Application::update(float dt) {
+    // 触控手势离屏动量平滑惯性滚动 (基于真实 dt 进行阻尼衰减，30fps 与 60fps 下手感完全一致)
+    if (!is_touch_scrolling_ && std::abs(touch_scroll_velocity_) > 0.4f) {
+        ImGuiIO& io = ImGui::GetIO();
+        io.AddMouseWheelEvent(0.0f, touch_scroll_velocity_ / 24.0f);
+        float damping = std::pow(0.88f, dt * 60.0f);
+        touch_scroll_velocity_ *= damping;
+        if (std::abs(touch_scroll_velocity_) < 0.4f) {
+            touch_scroll_velocity_ = 0.0f;
+        }
+    }
+
     // 推进播放器时间轴心跳
     PlayerAdmin::getInstance().update(dt);
 
-    // 动圈表头节拍激励步进
-    sim_time_ += 0.035f;
+    // 动圈表头节拍激励步进 (真实时间驱动，30fps/60fps 摆动频率恒定)
+    sim_time_ += dt * 2.1f;
 
     // 空余时间全屏检测与四角动画插值
     float idle_timeout = main_stage_.getIdleFullscreenSeconds();
@@ -417,12 +463,6 @@ void Application::renderBackground(float screen_w, float screen_h) {
         return;
     }
 
-    // 2. 如果未播放且为 LED 频谱模式，保持现在的颜色 (0 个方块，0 动效，完全纯净)
-    if (!is_playing) {
-        return;
-    }
-
-    // 3. 如果播放且为 LED 频谱模式，在整个 App 的底，渲染音乐动效 (48列 LED 矩阵频谱律动)
     // 几何排版参数：左右对齐发烧容器外边距 (16px ~ 1008px)
     const float margin_x = UIConfig::Layout::ContainerMarginX; // 16.0f
     const float total_w = screen_w - margin_x * 2.0f;          // 992.0f
@@ -433,8 +473,26 @@ void Application::renderBackground(float screen_w, float screen_h) {
     const int num_rows = 69;                                   // 69 行分段 LED (全屏满屏高度贯通)
     const float seg_h = 6.0f;                                  // 每个方块高度
     const float gap_y = 2.5f;                                  // 方块纵向间距
-    const float seg_round = 1.2f;                              // 圆角微弧度
+    const float seg_round = 0.0f;                              // 0.0f 纯净直角点阵 (大幅降低 GLES 顶点负载，呈现硬朗经典机皇发烧质感)
     const float bot_y = screen_h - 8.0f;                       // 距底部屏幕边缘 8px 起振 (最高行达 y = 8px)
+
+    const ImU32 unlit_color = ThemeManager::getInstance().getSpectrumUnlitColor();
+
+    // 2. 如果未播放且为 LED 频谱模式，渲染优雅纯净的熄灭态微光矩阵底板 (让用户知道 48 列点阵已就绪，保持通透深空)
+    if (!is_playing) {
+        if ((unlit_color & IM_COL32_A_MASK) != 0) {
+            for (int c = 0; c < num_cols; ++c) {
+                float x0 = margin_x + c * (col_w + gap_x);
+                float x1 = x0 + col_w;
+                for (int r_idx = 0; r_idx < num_rows; ++r_idx) {
+                    float y1 = bot_y - r_idx * (seg_h + gap_y);
+                    float y0 = y1 - seg_h;
+                    bg_dl->AddRectFilled(ImVec2(x0, y0), ImVec2(x1, y1), unlit_color, 0.0f);
+                }
+            }
+        }
+        return;
+    }
 
     const ImU32 accent = UIConfig::Color::Accent;
     const ImU32 cr = (accent >> IM_COL32_R_SHIFT) & 0xFF;
@@ -444,7 +502,6 @@ void Application::renderBackground(float screen_w, float screen_h) {
     // 常规点亮方块色与顶峰指示色 (完全随主题联动)
     const ImU32 lit_color = ThemeManager::getInstance().getSpectrumLitColor();
     const ImU32 peak_color = ThemeManager::getInstance().getSpectrumPeakColor();
-    const ImU32 unlit_color = ThemeManager::getInstance().getSpectrumUnlitColor();
 
     // 全屏全景氛围微辉光 (随着整体低频能量呼吸涌动)
     float bass_energy = (levels12[0] + levels12[1] + levels12[2]) / 3.0f;
@@ -743,14 +800,32 @@ int Application::run() {
     Uint64 last_time = SDL_GetPerformanceCounter();
     const double freq = static_cast<double>(SDL_GetPerformanceFrequency());
 
+#if defined(__linux__) && !defined(HIFI_PLATFORM_MAC)
+    // 树莓派 Linux 平台锁定 30 FPS：降低 CPU/GPU 负载与发热，为发烧级音频解码提供充裕算力裕量
+    constexpr double TARGET_FRAME_TIME = 1.0 / 30.0; // ~33.33ms
+#else
+    constexpr double TARGET_FRAME_TIME = 1.0 / 60.0; // Mac 平台 60 FPS
+#endif
+
     while (running_) {
-        Uint64 now = SDL_GetPerformanceCounter();
-        float dt = static_cast<float>((now - last_time) / freq);
-        last_time = now;
+        Uint64 frame_start = SDL_GetPerformanceCounter();
+        float dt = static_cast<float>((frame_start - last_time) / freq);
+        if (dt > 0.1f) dt = 0.1f; // 限制 dt 最大步长，防止长时间系统卡顿导致的物理插值突变
+        last_time = frame_start;
 
         pollEvents();
         update(dt);
         render();
+
+        // 精确帧率限制器：休眠多余时间，彻底解放 CPU 占用与降低发热
+        Uint64 frame_end = SDL_GetPerformanceCounter();
+        double elapsed_sec = static_cast<double>(frame_end - frame_start) / freq;
+        if (elapsed_sec < TARGET_FRAME_TIME) {
+            double sleep_ms = (TARGET_FRAME_TIME - elapsed_sec) * 1000.0;
+            if (sleep_ms >= 1.0) {
+                SDL_Delay(static_cast<Uint32>(sleep_ms));
+            }
+        }
     }
 
     // 退出前确保持久化最后的侧边栏选中项

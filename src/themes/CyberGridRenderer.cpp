@@ -3,6 +3,7 @@
 #include "public/Font.hpp"
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <vector>
 
 CyberGridRenderer::CyberGridRenderer() = default;

@@ -2,6 +2,7 @@
 #include "Font.hpp"
 #include "UIConfig.hpp"
 #include <string>
+#include <cmath>
 
 // 通透平滑的液态玻璃材质 (半透明底板 + 1px 折射微光边框)
 static void DrawLiquidGlass(ImDrawList* dl, ImVec2 p_min, ImVec2 p_max, float rounding, ImU32 fill_color) {

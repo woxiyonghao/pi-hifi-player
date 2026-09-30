@@ -13,8 +13,22 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 add_compile_options(-Wall -Wextra -Wpedantic)
 
 # 4. 平台差异化依赖与优化配置
-find_package(SQLite3 REQUIRED)
-if(NOT TARGET SQLite3::SQLite3 AND TARGET SQLite::SQLite3)
+find_package(SQLite3 QUIET)
+if(NOT SQLite3_FOUND)
+    # 在 Linux/树莓派 等环境下若未安装 libsqlite3-dev，自动使用系统已有的 libsqlite3.so.0 动态库 + 内置头文件
+    find_library(SQLITE3_LIB NAMES sqlite3 sqlite3.so.0 libsqlite3.so.0 libsqlite3.so PATHS /usr/lib /usr/lib/aarch64-linux-gnu /usr/local/lib)
+    if(SQLITE3_LIB)
+        add_library(SQLite3::SQLite3 UNKNOWN IMPORTED)
+        set_target_properties(SQLite3::SQLite3 PROPERTIES
+            IMPORTED_LOCATION "${SQLITE3_LIB}"
+            INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/third_party/sqlite3/include"
+        )
+        set(SQLite3_FOUND TRUE)
+        message(STATUS ">> [SQLite3] 成功定位系统运行时动态库: ${SQLITE3_LIB} (使用内置头文件)")
+    else()
+        message(FATAL_ERROR "Could NOT find SQLite3 library")
+    endif()
+elseif(NOT TARGET SQLite3::SQLite3 AND TARGET SQLite::SQLite3)
     add_library(SQLite3::SQLite3 INTERFACE IMPORTED)
     target_link_libraries(SQLite3::SQLite3 INTERFACE SQLite::SQLite3)
 endif()
@@ -93,6 +107,14 @@ if(APPLE)
         COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/scripts/package_mac_dmg.sh
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
         COMMENT "打包生成独立 macOS DMG 安装镜像 (PiHifiPlayer.dmg)..."
+        USES_TERMINAL
+    )
+
+    # 10. 树莓派 5 一键部署与运行 Target (可在 CLion 中直接点击 ▶️ 运行)
+    add_custom_target(deploy_pi
+        COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/scripts/deploy_pi.sh
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMENT "🚀 [HiFi Deploy] 正在一键同步、编译并启动到树莓派 5..."
         USES_TERMINAL
     )
 else()
