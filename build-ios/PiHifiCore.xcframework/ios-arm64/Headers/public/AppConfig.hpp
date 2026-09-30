@@ -4,10 +4,6 @@
 #include <cstdlib>
 #include <filesystem>
 
-#if defined(__APPLE__)
-#include <TargetConditionals.h>
-#endif
-
 // ==============================================================================
 // 全局应用系统配置中心 (Single Source of Truth)
 // 集中管理系统路径、曲库默认目录、硬件设备标识等全局设置
@@ -24,11 +20,7 @@ namespace AppConfig {
             static std::string s_music_dir = []() {
                 const char* home = std::getenv("HOME");
                 if (home && home[0] != '\0') {
-#if defined(__APPLE__) && TARGET_OS_IPHONE
-                    return std::string(home) + "/Documents";
-#else
                     return std::string(home) + DefaultMusicSubDir;
-#endif
                 }
 #if defined(HIFI_PLATFORM_RPI)
                 return std::string("/home/pi") + DefaultMusicSubDir;
@@ -45,34 +37,19 @@ namespace AppConfig {
         }
 
         // 获取用户配置文件存储目录 (全局唯一事实来源)
-        inline std::string& getConfigDirRef() {
-            static std::string s_config_dir = []() {
-                const char* home = std::getenv("HOME");
-                std::string dir;
-                if (home && home[0] != '\0') {
-#if defined(__APPLE__) && TARGET_OS_IPHONE
-                    dir = std::string(home) + "/Documents/hifi_player";
-#else
-                    dir = std::string(home) + "/.config/hifi_player";
-#endif
-                } else {
-#if defined(HIFI_PLATFORM_RPI)
-                    dir = "/home/pi/.config/hifi_player";
-#else
-                    dir = "./config";
-#endif
-                }
-                return dir;
-            }();
-            return s_config_dir;
-        }
-
         inline std::string getConfigDir() {
-            return getConfigDirRef();
-        }
-
-        inline void setConfigDir(const std::string& dir) {
-            getConfigDirRef() = dir;
+            const char* home = std::getenv("HOME");
+            std::string dir;
+            if (home && home[0] != '\0') {
+                dir = std::string(home) + "/.config/hifi_player";
+            } else {
+#if defined(HIFI_PLATFORM_RPI)
+                dir = "/home/pi/.config/hifi_player";
+#else
+                dir = "./config";
+#endif
+            }
+            return dir;
         }
     } // namespace Path
 
