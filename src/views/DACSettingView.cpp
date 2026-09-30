@@ -313,6 +313,9 @@ void DACSettingView::render(float x, float y, float w, float h) {
         float cur_y = ImGui::GetCursorScreenPos().y;
         float x0 = ImGui::GetCursorScreenPos().x;
 
+        // 渲染通用声卡硬件输出与独占流状态条 (所有芯片架构均共享底层声卡硬件控制)
+        renderHardwareStatusBar(child_dl, x0, cur_y, section_w);
+
         // 根据顶部选中的芯片架构，渲染专属的发烧设置面板
         switch (selected_chip_) {
             case 0:
@@ -340,6 +343,77 @@ void DACSettingView::render(float x, float y, float w, float h) {
     ImGui::EndChild();
     ImGui::PopStyleColor(4);
     ImGui::PopStyleVar(2);
+}
+
+// ==============================================================================
+// 全局声卡硬件输出与独占流状态条 (所有芯片架构通用共享)
+// ==============================================================================
+void DACSettingView::renderHardwareStatusBar(ImDrawList* dl, float x0, float& cur_y, float w) {
+    float h = 42.0f;
+    ImVec2 p0(x0, cur_y);
+    ImVec2 p1(x0 + w, cur_y + h);
+
+    ImU32 accent = ThemeManager::getInstance().getAccentColor();
+    const ImU32 r = (accent >> IM_COL32_R_SHIFT) & 0xFF;
+    const ImU32 g = (accent >> IM_COL32_G_SHIFT) & 0xFF;
+    const ImU32 b = (accent >> IM_COL32_B_SHIFT) & 0xFF;
+
+    dl->AddRectFilled(p0, p1, IM_COL32(18, 24, 34, 190), 8.0f);
+    dl->AddRect(p0, p1, IM_COL32(255, 255, 255, 22), 8.0f, 0, 1.0f);
+
+    std::string dev_name = audio_engine::AudioEngine::getInstance().getActiveHardwareDeviceName();
+    bool is_hog = audio_engine::AudioEngine::getInstance().isHogModeActive();
+    uint32_t cur_sr = audio_engine::AudioEngine::getInstance().getActiveHardwareSampleRate();
+
+    // 状态呼吸指示灯 (独占绿点 / 共享灰点)
+    ImVec2 dot_center(p0.x + 16.0f, p0.y + h * 0.5f);
+    ImU32 dot_col = is_hog ? IM_COL32(40, 205, 120, 255) : IM_COL32(160, 160, 160, 200);
+    dl->AddCircleFilled(dot_center, 4.0f, dot_col);
+    if (is_hog) {
+        dl->AddCircle(dot_center, 6.5f, IM_COL32(40, 205, 120, 80), 0, 1.5f);
+    }
+
+    // 声卡与时钟文本
+    std::string info_text = "声卡硬件: " + dev_name + "  |  " +
+                            (is_hog ? "Hog Mode 硬件已独占" : "系统混音共享") +
+                            "  |  " + std::to_string(cur_sr / 1000) + " kHz";
+
+    if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+    dl->AddText(ImVec2(dot_center.x + 12.0f, p0.y + (h - 14.0f) * 0.5f),
+                is_hog ? UIConfig::Color::TextActive : UIConfig::Color::TextNormal,
+                info_text.c_str());
+    if (Fonts::Small) ImGui::PopFont();
+
+    // 右侧独占开关药丸按钮
+    float btn_w = 100.0f;
+    float btn_h = 24.0f;
+    float btn_x = p1.x - btn_w - 12.0f;
+    float btn_y = p0.y + (h - btn_h) * 0.5f;
+    ImVec2 bp0(btn_x, btn_y);
+    ImVec2 bp1(btn_x + btn_w, btn_y + btn_h);
+
+    ImGui::SetCursorScreenPos(bp0);
+    if (ImGui::InvisibleButton("##GlobalHogExclusiveToggle", ImVec2(btn_w, btn_h))) {
+        apple_exclusive_mode_ = (apple_exclusive_mode_ == 0 ? 1 : 0);
+        saveSettings();
+        audio_engine::AudioEngine::getInstance().setExclusiveMode(apple_exclusive_mode_ == 0);
+    }
+
+    bool hov = ImGui::IsItemHovered();
+    ImU32 btn_bg = is_hog ? IM_COL32(r, g, b, 70) : (hov ? IM_COL32(255, 255, 255, 25) : IM_COL32(255, 255, 255, 12));
+    ImU32 btn_border = is_hog ? accent : IM_COL32(255, 255, 255, 30);
+    dl->AddRectFilled(bp0, bp1, btn_bg, 5.0f);
+    dl->AddRect(bp0, bp1, btn_border, 5.0f, 0, 1.0f);
+
+    const char* btn_text = is_hog ? "独占: 已开启" : "独占: 已关闭";
+    if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+    ImVec2 bsz = ImGui::CalcTextSize(btn_text);
+    dl->AddText(ImVec2(btn_x + (btn_w - bsz.x) * 0.5f, btn_y + (btn_h - bsz.y) * 0.5f),
+                is_hog ? UIConfig::Color::TextActive : UIConfig::Color::TextMuted,
+                btn_text);
+    if (Fonts::Small) ImGui::PopFont();
+
+    cur_y += h + 10.0f;
 }
 
 // ==============================================================================

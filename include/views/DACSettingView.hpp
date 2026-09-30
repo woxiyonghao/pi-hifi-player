@@ -38,6 +38,9 @@ private:
                          const char* label, const char* const options[], int count,
                          int& current_val, const char* id_prefix);
 
+    // 全局硬件输出与独占流状态条 (所有芯片共享)
+    void renderHardwareStatusBar(ImDrawList* dl, float x0, float& cur_y, float w);
+
     // 芯片专属发烧设置子页面
     void renderAppleDirectSettings(ImDrawList* dl, float x0, float& cur_y, float w);
     void renderESSSabreSettings(ImDrawList* dl, float x0, float& cur_y, float w);
