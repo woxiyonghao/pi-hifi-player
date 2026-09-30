@@ -8,6 +8,9 @@
 #include "views/BottomBarView.hpp"
 #include "themes/VUMeterRenderer.hpp"
 #include "themes/AccuphaseMeterRenderer.hpp"
+#include "themes/TapeReelRenderer.hpp"
+#include "themes/VectorScopeRenderer.hpp"
+#include "themes/AudioBubblesRenderer.hpp"
 #include "tools/PlayerAdmin.hpp"
 
 // ==============================================================================
@@ -70,6 +73,9 @@ private:
     BottomBarView bottom_bar_;
     VUMeterRenderer vu_renderer_;
     AccuphaseMeterRenderer accuphase_renderer_;
+    TapeReelRenderer tape_renderer_;
+    VectorScopeRenderer scope_renderer_;
+    AudioBubblesRenderer bubbles_renderer_;
 
     // 侧边栏持久化状态追踪
     SidebarTab last_saved_tab_ = SidebarTab::AllMusic;

@@ -175,7 +175,7 @@ void ThemeManager::init() {
     if (!saved_bg_str.empty()) {
         try {
             int bg_val = std::stoi(saved_bg_str);
-            if (bg_val >= 0 && bg_val <= 3) {
+            if (bg_val >= 0 && bg_val <= 6) {
                 bg_mode_ = static_cast<BackgroundVisualMode>(bg_val);
             }
         } catch (...) {

@@ -24,10 +24,13 @@ enum class ThemeId : int {
 // 全屏全景底层背景律动视觉模式
 // ==============================================================================
 enum class BackgroundVisualMode : int {
-    LEDSpectrum = 0, // 48 列全屏分段 LED 律动矩阵 (全屏贯通)
-    VUMeter = 1,     // 发烧双通道机械动圈大表头 (全景对称)
-    Accuphase = 2,   // 金嗓子动圈大表头 (Accuphase Precision Power Meter)
-    PureBlack = 3    // 极简纯净发烧机架 (0 干扰纯音直通)
+    LEDSpectrum = 0,     // 48 列全景 LED 频谱 (全屏贯通)
+    VUMeter = 1,         // 名机动圈双大表头 (随主题名机联动)
+    Accuphase = 2,       // 金嗓子旗舰大表头 (Accuphase Precision Power Meter)
+    TapeReel = 3,        // 复古开盘磁带机 (Studer/Revox 双金属盘动态走带)
+    VectorScope = 4,     // 立体声相位示波器 (Lissajous 极坐标立体声场图)
+    FloatingBubbles = 5, // 音乐微光气泡 (随低中高频共鸣膨胀升腾)
+    PureBlack = 6        // 极简纯黑纯音直通 (0 干扰纯音直通)
 };
 
 // ==============================================================================

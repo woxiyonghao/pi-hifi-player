@@ -334,16 +334,17 @@ void Application::renderBackground(float screen_w, float screen_h) {
     }
 
     auto& player = PlayerAdmin::getInstance();
+    bool is_playing = player.isPlaying();
+    float levels12[12] = {0.0f};
+    float l = 0.0f;
+    float r = 0.0f;
+    if (is_playing) {
+        player.getSpectrumLevels(levels12, 12);
+        l = std::clamp((levels12[0] + levels12[1] + levels12[2] + levels12[3] + levels12[4]) * 0.28f, 0.0f, 1.0f);
+        r = std::clamp((levels12[2] + levels12[3] + levels12[4] + levels12[5] + levels12[6]) * 0.28f, 0.0f, 1.0f);
+    }
 
     if (bg_mode == BackgroundVisualMode::Accuphase) {
-        float l = 0.0f;
-        float r = 0.0f;
-        if (player.isPlaying()) {
-            float levels12[12] = {0.0f};
-            player.getSpectrumLevels(levels12, 12);
-            l = std::clamp((levels12[0] + levels12[1] + levels12[2] + levels12[3] + levels12[4]) * 0.28f, 0.0f, 1.0f);
-            r = std::clamp((levels12[2] + levels12[3] + levels12[4] + levels12[5] + levels12[6]) * 0.28f, 0.0f, 1.0f);
-        }
         accuphase_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
         accuphase_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
         accuphase_renderer_.render(screen_w, screen_h, l, r);
@@ -351,31 +352,39 @@ void Application::renderBackground(float screen_w, float screen_h) {
     }
 
     if (bg_mode == BackgroundVisualMode::VUMeter) {
-        float l = 0.0f;
-        float r = 0.0f;
-        if (player.isPlaying()) {
-            float levels12[12] = {0.0f};
-            player.getSpectrumLevels(levels12, 12);
-            // 低频/中高频能量估算左右声道电平
-            l = std::clamp((levels12[0] + levels12[1] + levels12[2] + levels12[3] + levels12[4]) * 0.28f, 0.0f, 1.0f);
-            r = std::clamp((levels12[2] + levels12[3] + levels12[4] + levels12[5] + levels12[6]) * 0.28f, 0.0f, 1.0f);
-        }
         vu_renderer_.setTheme(ThemeManager::getInstance().getMeterTheme());
         vu_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
         vu_renderer_.render(screen_w, screen_h, l, r);
         return;
     }
 
+    if (bg_mode == BackgroundVisualMode::TapeReel) {
+        tape_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
+        tape_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
+        tape_renderer_.render(screen_w, screen_h, is_playing, player.getProgress());
+        return;
+    }
+
+    if (bg_mode == BackgroundVisualMode::VectorScope) {
+        scope_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
+        scope_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
+        scope_renderer_.render(screen_w, screen_h, is_playing, l, r);
+        return;
+    }
+
+    if (bg_mode == BackgroundVisualMode::FloatingBubbles) {
+        bubbles_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
+        bubbles_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
+        bubbles_renderer_.render(screen_w, screen_h, is_playing, levels12);
+        return;
+    }
+
     // 2. 如果未播放且为 LED 频谱模式，保持现在的颜色 (0 个方块，0 动效，完全纯净)
-    if (!player.isPlaying()) {
+    if (!is_playing) {
         return;
     }
 
     // 3. 如果播放且为 LED 频谱模式，在整个 App 的底，渲染音乐动效 (48列 LED 矩阵频谱律动)
-    // 获取 12 频段实时音频幅度
-    float levels12[12] = {0.0f};
-    player.getSpectrumLevels(levels12, 12);
-
     // 几何排版参数：左右对齐发烧容器外边距 (16px ~ 1008px)
     const float margin_x = UIConfig::Layout::ContainerMarginX; // 16.0f
     const float total_w = screen_w - margin_x * 2.0f;          // 992.0f
@@ -390,9 +399,9 @@ void Application::renderBackground(float screen_w, float screen_h) {
     const float bot_y = screen_h - 8.0f;                       // 距底部屏幕边缘 8px 起振 (最高行达 y = 8px)
 
     const ImU32 accent = UIConfig::Color::Accent;
-    const ImU32 r = (accent >> IM_COL32_R_SHIFT) & 0xFF;
-    const ImU32 g = (accent >> IM_COL32_G_SHIFT) & 0xFF;
-    const ImU32 b = (accent >> IM_COL32_B_SHIFT) & 0xFF;
+    const ImU32 cr = (accent >> IM_COL32_R_SHIFT) & 0xFF;
+    const ImU32 cg = (accent >> IM_COL32_G_SHIFT) & 0xFF;
+    const ImU32 cb = (accent >> IM_COL32_B_SHIFT) & 0xFF;
 
     // 常规点亮方块色与顶峰指示色 (完全随主题联动)
     const ImU32 lit_color = ThemeManager::getInstance().getSpectrumLitColor();
@@ -406,10 +415,10 @@ void Application::renderBackground(float screen_w, float screen_h) {
         bg_dl->AddRectFilledMultiColor(
             ImVec2(margin_x, 0.0f),
             ImVec2(screen_w - margin_x, screen_h),
-            IM_COL32(r, g, b, 0),
-            IM_COL32(r, g, b, 0),
-            IM_COL32(r, g, b, glow_alpha),
-            IM_COL32(r, g, b, glow_alpha)
+            IM_COL32(cr, cg, cb, 0),
+            IM_COL32(cr, cg, cb, 0),
+            IM_COL32(cr, cg, cb, glow_alpha),
+            IM_COL32(cr, cg, cb, glow_alpha)
         );
     }
 
