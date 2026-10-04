@@ -46,7 +46,73 @@ nc -zvw 2 <PI_IP> 22
 
 ---
 
-## 二、Git 认证与专属 SSH 密钥配置 (打通 GitHub 免密 OTA 自更)
+## 二、日常 SSH 连接与电源管理（登录、关机与安全断电）
+
+### 1. 从 Mac 连接树莓派 (SSH 远程登录)
+```bash
+# 方式 A：通过 mDNS 主机名登录（推荐，无需每次确认 IP 地址）
+ssh <PI_USER>@winheo-pi.local
+
+# 方式 B：通过局域网 IP 登录
+ssh <PI_USER>@<PI_IP>
+
+# 进阶技巧：Mac 端免输用户名和 IP (一次配置，后续只需输入 ssh pi)
+# 在 Mac 终端运行配置：
+cat << 'EOF' >> ~/.ssh/config
+Host pi
+    HostName winheo-pi.local
+    User <PI_USER>
+EOF
+# 之后在 Mac 任意终端只需运行：
+ssh pi
+```
+
+### 2. 树莓派安全关机与重启命令 (防磁盘损坏)
+> [!WARNING]
+> **切勿直接拔除电源线！**  
+> 树莓派操作系统后台随时可能在向 SD 卡或 NVMe SSD 写入曲库缓存与日志，直接断电可能导致 SQLite 数据库损坏或 Linux 文件系统只读崩溃。请务必使用以下关机命令：
+
+#### 在树莓派终端中操作：
+```bash
+# 立即安全关机并切断芯片供电
+sudo poweroff
+# 或者使用 shutdown 命令：
+sudo shutdown -h now
+
+# 立即安全重启系统
+sudo reboot
+
+# 定时关机（例如 30 分钟后听歌入睡自动关机）
+sudo shutdown -h +30
+
+# 取消已设定的定时关机计划
+sudo shutdown -c
+```
+
+#### 在 Mac 终端中远程一条命令关机/重启 (无需先 SSH 登录)：
+```bash
+# 从 Mac 远程命令树莓派立即关机
+ssh <PI_USER>@winheo-pi.local "sudo poweroff"
+
+# 从 Mac 远程命令树莓派立即重启
+ssh <PI_USER>@winheo-pi.local "sudo reboot"
+```
+
+### 3. 硬件安全断电判断与物理电源键说明
+- **安全断电指示灯状态**：  
+  执行 `sudo poweroff` 后，请观察树莓派板载 LED：
+  1. 绿色活动指示灯（`ACT LED`）会规律闪烁数次以完成磁盘缓存刷盘；
+  2. 随后绿色指示灯**彻底熄灭**（或保持微弱固定亮度，不再闪烁）；
+  3. 红色电源指示灯（`PWR LED`）保持常亮。  
+  **此时系统已完全卸载所有磁盘分区并安全停机，方可放心拔掉 Type-C 供电线。**
+- **树莓派 5 物理电源按键功能**：
+  - **开机**：插入电源后若处于待机状态，轻按一下板载侧边电源键即可开机。
+  - **安全关机**：在系统正常运行中，轻按一下电源键，系统会触发 ACPI 安全关机流程。
+  - **强制断电**：长按电源键 5 秒以上可强制关机（仅在系统完全死机无响应时应急使用）。
+
+---
+
+## 三、Git 认证与专属 SSH 密钥配置 (打通 GitHub 免密 OTA 自更)
 
 > [!IMPORTANT]
 > **安全与密钥保护规范**：  
@@ -100,7 +166,7 @@ git config --global --add safe.directory /home/<PI_USER>/pi-hifi-music
 
 ---
 
-## 三、Mac 端一键增量部署与控制命令
+## 四、Mac 端一键增量部署与控制命令
 
 在 Mac 开发机的主工程目录下运行：
 
@@ -126,7 +192,7 @@ git config --global --add safe.directory /home/<PI_USER>/pi-hifi-music
 
 ---
 
-## 四、Mac 向树莓派传输音乐文件的三大方法
+## 五、Mac 向树莓派传输音乐文件的三大方法
 
 音乐文件统一存放在树莓派的 `~/Music` 目录下，支持 MP3、FLAC、WAV、DSD(DSF/DFF) 等全格式：
 
@@ -152,7 +218,7 @@ rsync -avP ~/Music/ <PI_USER>@<PI_IP>:~/Music/
 
 ---
 
-## 五、树莓派本地原生编译与运行命令
+## 六、树莓派本地原生编译与运行命令
 
 若直接登录在树莓派终端中操作：
 
@@ -177,7 +243,7 @@ env SDL_VIDEODRIVER=kmsdrm SDL_RENDER_VSYNC=1 ./build/PiHifiPlayer
 
 ---
 
-## 六、开机自启 systemd 服务管理命令
+## 七、开机自启 systemd 服务管理命令
 
 播放器作为系统服务（Kiosk Mode）运行时的日常管理命令：
 
@@ -201,7 +267,7 @@ sudo journalctl -u pi-hifi.service -f -n 50
 
 ---
 
-## 七、声学与视觉优化说明
+## 八、声学与视觉优化说明
 
 1. **三次对数电位器音量曲线 (Cubic Audio Taper: vol³)**：
    * 人耳感知声音强度是对数分贝（dB）特性。纯线性乘法在 11% 音量下仅衰减 19dB（听感接近 50% 响度，震耳欲聋）。
