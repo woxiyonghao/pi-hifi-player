@@ -89,31 +89,35 @@ void TerminalView::executeCommand(const std::string& cmd) {
 }
 
 void TerminalView::render(float x, float y, float w, float h) {
+    float margin_x = UIConfig::Layout::ContainerMarginX; // 16.0f
+    float margin_y = UIConfig::Layout::ContainerMarginY; // 16.0f
+    ImVec2 card_min(x + margin_x, y + margin_y);
+    ImVec2 card_max(x + w - margin_x, y + h - 86.0f); // 避开底部播放控制栏 86px
+
     ImDrawList* dl = ImGui::GetWindowDrawList();
 
     // 1. 外部发烧级液态玻璃底板
-    GlassCardRenderer::drawCard(dl, ImVec2(x, y), ImVec2(x + w, y + h), 16.0f, "terminal_main");
+    GlassCardRenderer::drawCard(dl, card_min, card_max, UIConfig::Layout::ContainerRounding, "terminal_main");
 
-    float pad_x = 16.0f;
-    float pad_y = 14.0f;
-    float content_x = x + pad_x;
-    float content_w = w - pad_x * 2.0f;
+    float content_x = card_min.x + 16.0f;
+    float content_w = card_max.x - card_min.x - 32.0f;
+    float cur_y = card_min.y + 14.0f;
 
-    // 2. 顶部标题栏与实时网络徽章 (约 34px)
-    renderHeader(dl, content_x, y + pad_y, content_w);
+    // 2. 顶部标题栏与实时网络徽章 (约 26px)
+    renderHeader(dl, content_x, cur_y, content_w);
+    cur_y += 32.0f;
 
-    // 3. 快捷触控指令栏 (约 32px)
-    renderQuickCommands(content_x, y + pad_y + 36.0f, content_w);
+    // 3. 快捷触控指令栏 (高度 26px)
+    renderQuickCommands(content_x, cur_y, content_w);
+    cur_y += 32.0f;
 
-    // 4. 底部命令输入框 (固定高 36px，位于底部上方)
-    float input_h = 34.0f;
-    float input_y = y + h - pad_y - input_h;
-    renderInputBar(content_x, input_y, content_w);
+    // 4. 命令输入框栏 (置于上方，清晰醒目，避免被底部播放栏遮挡)
+    renderInputBar(content_x, cur_y, content_w);
+    cur_y += 38.0f;
 
-    // 5. 中间黑客终端视窗 (自适应高度)
-    float console_y = y + pad_y + 36.0f + 36.0f;
-    float console_h = input_y - console_y - 10.0f;
-    renderConsoleWindow(content_x, console_y, content_w, console_h);
+    // 5. 中间黑客终端视窗 (自适应填满剩余空间)
+    float console_h = std::max(60.0f, card_max.y - cur_y - 12.0f);
+    renderConsoleWindow(content_x, cur_y, content_w, console_h);
 }
 
 void TerminalView::renderHeader(ImDrawList* dl, float x0, float y0, float w) {

@@ -56,6 +56,8 @@ private:
 
     void serverLoop();
     void handleClient(int client_fd);
+    void registerClient(int fd);
+    void unregisterClient(int fd);
     static std::string urlDecode(const std::string& in);
     static std::string sanitizeFilename(const std::string& in);
 
@@ -63,6 +65,9 @@ private:
     int port_ = 8080;
     int server_fd_ = -1;
     std::string target_music_dir_;
+
+    std::mutex clients_mutex_;
+    std::vector<int> active_clients_;
 
     std::thread worker_thread_;
     std::mutex mutex_;

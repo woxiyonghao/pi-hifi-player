@@ -240,7 +240,7 @@ function renderQueue() {
       statusText = '已入库 ✓';
       statusClass = 'file-status status-success';
     } else if (item.status === 'error') {
-      statusText = '上传失败 ✗';
+      statusText = item.errorMsg ? `失败: ${item.errorMsg} ✗` : '上传失败 ✗';
       statusClass = 'file-status status-error';
     }
 
@@ -286,15 +286,22 @@ btnUpload.addEventListener('click', async () => {
       item.loaded = item.total;
     } catch (err) {
       item.status = 'error';
+      item.errorMsg = err.message || '传输中断';
     }
     renderQueue();
   }
 
   isUploading = false;
-  overallSpeed.textContent = '传输完成';
+  let failed = fileQueue.filter(i => i.status === 'error').length;
+  if (failed > 0) {
+    overallSpeed.textContent = `传输结束: ${failed} 个文件失败`;
+    btnUpload.textContent = `重试失败项目 (${failed})`;
+  } else {
+    overallSpeed.textContent = '全部传输完成';
+    btnUpload.textContent = '传输已完成';
+  }
   btnUpload.disabled = false;
   btnClear.disabled = false;
-  btnUpload.textContent = '传输已完成';
 });
 
 function uploadSingleFile(item) {
@@ -302,6 +309,7 @@ function uploadSingleFile(item) {
     const xhr = new XMLHttpRequest();
     const encodedName = encodeURIComponent(item.file.name);
     xhr.open('POST', `/upload?filename=${encodedName}`);
+    xhr.timeout = 300000; // 5分钟超时
 
     let startTime = Date.now();
     let lastLoaded = 0;
@@ -313,10 +321,10 @@ function uploadSingleFile(item) {
 
         let now = Date.now();
         let elapsed = (now - startTime) / 1000;
-        if (elapsed > 0.4) {
+        if (elapsed > 0.3) {
           let speedVal = ((e.loaded - lastLoaded) / elapsed / 1024 / 1024).toFixed(1);
           item.speed = `${speedVal} MB/s`;
-          overallSpeed.textContent = `当前速率: ${item.speed}`;
+          overallSpeed.textContent = `正在传输: ${item.file.name} · ${item.speed}`;
           startTime = now;
           lastLoaded = e.loaded;
           renderQueue();
@@ -328,10 +336,16 @@ function uploadSingleFile(item) {
       if (xhr.status === 200) {
         resolve();
       } else {
-        reject(new Error(xhr.responseText || '上传失败'));
+        let msg = '上传失败';
+        try {
+          let resp = JSON.parse(xhr.responseText);
+          if (resp && resp.message) msg = resp.message;
+        } catch (_) {}
+        reject(new Error(msg));
       }
     };
-    xhr.onerror = () => reject(new Error('网络传输中断'));
+    xhr.onerror = () => reject(new Error('网络断开或跨域受阻'));
+    xhr.ontimeout = () => reject(new Error('传输超时'));
     xhr.send(item.file);
   });
 }
@@ -430,6 +444,19 @@ bool WifiTransferServer::start(int port, const std::string& music_dir) {
     return true;
 }
 
+void WifiTransferServer::registerClient(int fd) {
+    std::lock_guard<std::mutex> lock(clients_mutex_);
+    active_clients_.push_back(fd);
+}
+
+void WifiTransferServer::unregisterClient(int fd) {
+    std::lock_guard<std::mutex> lock(clients_mutex_);
+    auto it = std::find(active_clients_.begin(), active_clients_.end(), fd);
+    if (it != active_clients_.end()) {
+        active_clients_.erase(it);
+    }
+}
+
 void WifiTransferServer::stop() {
     if (!is_running_.load()) {
         return;
@@ -437,15 +464,34 @@ void WifiTransferServer::stop() {
 
     is_running_.store(false);
 
+    // 1. 关闭监听套接字
     if (server_fd_ >= 0) {
 #if defined(_WIN32)
+        shutdown(server_fd_, SD_BOTH);
         closesocket(server_fd_);
 #else
+        shutdown(server_fd_, SHUT_RDWR);
         close(server_fd_);
 #endif
         server_fd_ = -1;
     }
 
+    // 2. 立即打断并关闭所有活跃的传输客户端连接，瞬间唤醒 recv 阻塞，防止卡死 UI
+    {
+        std::lock_guard<std::mutex> lock(clients_mutex_);
+        for (int fd : active_clients_) {
+#if defined(_WIN32)
+            shutdown(fd, SD_BOTH);
+            closesocket(fd);
+#else
+            shutdown(fd, SHUT_RDWR);
+            close(fd);
+#endif
+        }
+        active_clients_.clear();
+    }
+
+    // 3. 安全退出主监听线程
     if (worker_thread_.joinable()) {
         worker_thread_.join();
     }
@@ -453,7 +499,7 @@ void WifiTransferServer::stop() {
     std::lock_guard<std::mutex> lock(mutex_);
     progress_.is_running = false;
     progress_.is_uploading = false;
-    std::cout << "[WifiTransferServer] WiFi 传歌服务已停止" << std::endl;
+    std::cout << "[WifiTransferServer] WiFi 传歌服务已安全平稳停止" << std::endl;
 }
 
 TransferProgress WifiTransferServer::getProgress() {
@@ -466,8 +512,8 @@ std::string WifiTransferServer::urlDecode(const std::string& in) {
     out.reserve(in.size());
     for (size_t i = 0; i < in.size(); ++i) {
         if (in[i] == '%' && i + 2 < in.size()) {
-            int h1 = std::tolower(in[i + 1]);
-            int h2 = std::tolower(in[i + 2]);
+            int h1 = std::tolower(static_cast<unsigned char>(in[i + 1]));
+            int h2 = std::tolower(static_cast<unsigned char>(in[i + 2]));
             int v1 = (h1 >= '0' && h1 <= '9') ? (h1 - '0') : (h1 - 'a' + 10);
             int v2 = (h2 >= '0' && h2 <= '9') ? (h2 - '0') : (h2 - 'a' + 10);
             out.push_back(static_cast<char>((v1 << 4) | v2));
@@ -493,53 +539,71 @@ std::string WifiTransferServer::sanitizeFilename(const std::string& in) {
 void WifiTransferServer::serverLoop() {
     while (is_running_.load()) {
         struct pollfd pfd = { server_fd_, POLLIN, 0 };
-        int ret = poll(&pfd, 1, 200);
+        int ret = poll(&pfd, 1, 100);
+        if (!is_running_.load()) break;
         if (ret > 0 && (pfd.revents & POLLIN)) {
             sockaddr_in client_addr{};
             socklen_t client_len = sizeof(client_addr);
             int client_fd = accept(server_fd_, (sockaddr*)&client_addr, &client_len);
             if (client_fd >= 0) {
-                handleClient(client_fd);
+                if (!is_running_.load()) {
 #if defined(_WIN32)
-                closesocket(client_fd);
+                    closesocket(client_fd);
 #else
-                close(client_fd);
+                    close(client_fd);
 #endif
+                    break;
+                }
+
+                registerClient(client_fd);
+
+                // 异步分发至独立线程处理客户端请求，绝不阻塞服务端监听循环
+                std::thread([this, client_fd]() {
+                    handleClient(client_fd);
+                    unregisterClient(client_fd);
+#if defined(_WIN32)
+                    closesocket(client_fd);
+#else
+                    close(client_fd);
+#endif
+                }).detach();
             }
         }
     }
 }
 
 void WifiTransferServer::handleClient(int client_fd) {
-    // 设置 15 秒套接字读写超时，防止异常断开死锁
+    // 设置 30 秒套接字读写超时，防止死挂
     struct timeval tv;
-    tv.tv_sec = 15;
+    tv.tv_sec = 30;
     tv.tv_usec = 0;
     setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof(tv));
     setsockopt(client_fd, SOL_SOCKET, SO_SNDTIMEO, (const char*)&tv, sizeof(tv));
 
-    std::vector<char> header_buf;
-    header_buf.resize(8192);
+    std::vector<char> header_buf(8192);
     size_t total_header_read = 0;
     int header_end_pos = -1;
 
     // 读取 HTTP 头部直到 \r\n\r\n
-    while (total_header_read < header_buf.size() - 1) {
-        ssize_t n = recv(client_fd, header_buf.data() + total_header_read, 1, 0);
+    while (total_header_read < header_buf.size() - 1 && is_running_.load()) {
+        size_t space_left = header_buf.size() - 1 - total_header_read;
+        ssize_t n = recv(client_fd, header_buf.data() + total_header_read, space_left, 0);
         if (n <= 0) break;
         total_header_read += n;
         header_buf[total_header_read] = '\0';
 
-        if (total_header_read >= 4) {
-            const char* p = header_buf.data() + total_header_read - 4;
-            if (std::memcmp(p, "\r\n\r\n", 4) == 0) {
-                header_end_pos = static_cast<int>(total_header_read);
+        // 查找 \r\n\r\n
+        const char* p = header_buf.data();
+        for (size_t i = 0; i + 3 < total_header_read; ++i) {
+            if (p[i] == '\r' && p[i+1] == '\n' && p[i+2] == '\r' && p[i+3] == '\n') {
+                header_end_pos = static_cast<int>(i + 4);
                 break;
             }
         }
+        if (header_end_pos >= 0) break;
     }
 
-    if (header_end_pos < 0) {
+    if (header_end_pos < 0 || !is_running_.load()) {
         return;
     }
 
@@ -548,12 +612,28 @@ void WifiTransferServer::handleClient(int client_fd) {
     std::string method, uri, version;
     hstream >> method >> uri >> version;
 
+    // 0. OPTIONS 跨域预检处理 (现代浏览器发送 POST /upload 前必查)
+    if (method == "OPTIONS") {
+        std::ostringstream resp;
+        resp << "HTTP/1.1 204 No Content\r\n"
+             << "Access-Control-Allow-Origin: *\r\n"
+             << "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n"
+             << "Access-Control-Allow-Headers: *\r\n"
+             << "Access-Control-Max-Age: 86400\r\n"
+             << "Content-Length: 0\r\n"
+             << "Connection: close\r\n\r\n";
+        std::string resp_str = resp.str();
+        send(client_fd, resp_str.data(), resp_str.size(), 0);
+        return;
+    }
+
     // 1. GET / 或 /index.html: 返回 H5 网页
     if (method == "GET" && (uri == "/" || uri == "/index.html")) {
         std::string body = INDEX_HTML;
         std::ostringstream resp;
         resp << "HTTP/1.1 200 OK\r\n"
              << "Content-Type: text/html; charset=utf-8\r\n"
+             << "Access-Control-Allow-Origin: *\r\n"
              << "Content-Length: " << body.size() << "\r\n"
              << "Connection: close\r\n\r\n"
              << body;
@@ -586,12 +666,11 @@ void WifiTransferServer::handleClient(int client_fd) {
 
     // 3. POST /upload: 接收音频二进制数据流
     if (method == "POST" && uri.rfind("/upload", 0) == 0) {
-        // 解析 Content-Length
+        // 解析 Content-Length (大小写不敏感匹配)
         uint64_t content_length = 0;
-        size_t cl_pos = header_str.find("Content-Length:");
-        if (cl_pos == std::string::npos) {
-            cl_pos = header_str.find("content-length:");
-        }
+        std::string lower_hdr = header_str;
+        std::transform(lower_hdr.begin(), lower_hdr.end(), lower_hdr.begin(), [](unsigned char c){ return std::tolower(c); });
+        size_t cl_pos = lower_hdr.find("content-length:");
         if (cl_pos != std::string::npos) {
             content_length = std::strtoull(header_str.c_str() + cl_pos + 15, nullptr, 10);
         }
@@ -608,14 +687,21 @@ void WifiTransferServer::handleClient(int client_fd) {
             filename = sanitizeFilename(urlDecode(raw_fn));
         }
 
-        std::filesystem::path out_path = std::filesystem::path(target_music_dir_) / filename;
-        std::ofstream outfile(out_path, std::ios::binary);
+        // 确保目标目录存在
+        try {
+            std::filesystem::create_directories(target_music_dir_);
+        } catch (...) {}
+
+        std::filesystem::path final_path = std::filesystem::path(target_music_dir_) / filename;
+        std::filesystem::path temp_path = std::filesystem::path(target_music_dir_) / (filename + ".part");
+        std::ofstream outfile(temp_path, std::ios::binary);
 
         if (!outfile.is_open()) {
-            std::string err_body = "{\"status\":\"error\",\"message\":\"无法创建文件\"}";
+            std::string err_body = "{\"status\":\"error\",\"message\":\"无法创建写入文件\"}";
             std::ostringstream resp;
             resp << "HTTP/1.1 500 Internal Server Error\r\n"
                  << "Content-Type: application/json\r\n"
+                 << "Access-Control-Allow-Origin: *\r\n"
                  << "Content-Length: " << err_body.size() << "\r\n"
                  << "Connection: close\r\n\r\n"
                  << err_body;
@@ -633,17 +719,31 @@ void WifiTransferServer::handleClient(int client_fd) {
             progress_.speed_mbps = 0.0f;
         }
 
-        std::vector<char> chunk_buf(65536); // 64KB 高性能接收缓冲
         uint64_t total_received = 0;
+
+        // 如果头部缓冲区内已经读取了部分 body 数据，先写入文件！
+        size_t initial_body_bytes = total_header_read - header_end_pos;
+        if (initial_body_bytes > 0) {
+            size_t to_write = (content_length > 0) ? std::min<size_t>(initial_body_bytes, content_length) : initial_body_bytes;
+            outfile.write(header_buf.data() + header_end_pos, to_write);
+            total_received += to_write;
+        }
+
+        std::vector<char> chunk_buf(65536); // 64KB 高性能接收缓冲
         auto start_time = std::chrono::steady_clock::now();
         auto last_calc_time = start_time;
-        uint64_t last_calc_bytes = 0;
+        uint64_t last_calc_bytes = total_received;
 
-        while (total_received < content_length) {
-            size_t to_read = static_cast<size_t>(std::min<uint64_t>(chunk_buf.size(), content_length - total_received));
+        while (is_running_.load() && (content_length == 0 || total_received < content_length)) {
+            size_t to_read = chunk_buf.size();
+            if (content_length > 0) {
+                to_read = static_cast<size_t>(std::min<uint64_t>(chunk_buf.size(), content_length - total_received));
+            }
+            if (to_read == 0) break;
+
             ssize_t n = recv(client_fd, chunk_buf.data(), to_read, 0);
             if (n <= 0) {
-                break; // 对端关闭或出错
+                break; // 对端关闭或网络异常中断
             }
 
             outfile.write(chunk_buf.data(), n);
@@ -651,7 +751,7 @@ void WifiTransferServer::handleClient(int client_fd) {
 
             auto now = std::chrono::steady_clock::now();
             double elapsed_sec = std::chrono::duration<double>(now - last_calc_time).count();
-            if (elapsed_sec >= 0.3) {
+            if (elapsed_sec >= 0.25) {
                 float mb = static_cast<float>(total_received - last_calc_bytes) / (1024.0f * 1024.0f);
                 float speed = (elapsed_sec > 0.0) ? (mb / static_cast<float>(elapsed_sec)) : 0.0f;
 
@@ -666,7 +766,21 @@ void WifiTransferServer::handleClient(int client_fd) {
 
         outfile.close();
 
-        bool success = (total_received == content_length && content_length > 0);
+        bool success = is_running_.load() && (content_length > 0 && total_received == content_length);
+
+        if (success) {
+            std::error_code ec;
+            std::filesystem::rename(temp_path, final_path, ec);
+            if (ec) {
+                std::filesystem::copy_file(temp_path, final_path, std::filesystem::copy_options::overwrite_existing, ec);
+                std::filesystem::remove(temp_path, ec);
+            }
+        } else {
+            // 失败或被中断，彻底清理临时残缺文件
+            std::error_code ec;
+            std::filesystem::remove(temp_path, ec);
+        }
+
         {
             std::lock_guard<std::mutex> lock(mutex_);
             progress_.is_uploading = false;
@@ -682,7 +796,7 @@ void WifiTransferServer::handleClient(int client_fd) {
 
             // 触发曲库自动索引与通知
             if (on_file_received_) {
-                on_file_received_(out_path.string());
+                on_file_received_(final_path.string());
             } else {
                 MusicScanManager::getInstance().startScan(target_music_dir_);
             }
@@ -698,10 +812,11 @@ void WifiTransferServer::handleClient(int client_fd) {
             std::string resp_str = resp.str();
             send(client_fd, resp_str.data(), resp_str.size(), 0);
         } else {
-            std::string err_body = "{\"status\":\"error\",\"message\":\"文件传输不完整\"}";
+            std::string err_body = "{\"status\":\"error\",\"message\":\"文件传输不完整或服务已停止\"}";
             std::ostringstream resp;
             resp << "HTTP/1.1 400 Bad Request\r\n"
                  << "Content-Type: application/json\r\n"
+                 << "Access-Control-Allow-Origin: *\r\n"
                  << "Content-Length: " << err_body.size() << "\r\n"
                  << "Connection: close\r\n\r\n"
                  << err_body;
@@ -712,6 +827,6 @@ void WifiTransferServer::handleClient(int client_fd) {
     }
 
     // 默认返回 404
-    std::string not_found = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+    std::string not_found = "HTTP/1.1 404 Not Found\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
     send(client_fd, not_found.data(), not_found.size(), 0);
 }

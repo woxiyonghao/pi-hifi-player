@@ -54,56 +54,26 @@ void WifiTransferView::render(float x, float y, float w, float h) {
 
     anim_pulse_ += ImGui::GetIO().DeltaTime * 3.0f;
 
-    // 开启独立滚动子区域
     float content_x = card_min.x + 16.0f;
-    float content_y = card_min.y + 50.0f;
+    float content_y = card_min.y + 46.0f;
     float content_w = card_max.x - card_min.x - 32.0f;
-    float content_h = card_max.y - content_y - 10.0f;
+    float cur_y = content_y;
 
-    ImGui::SetCursorScreenPos(ImVec2(content_x, content_y));
+    // 板块一：服务端状态与启停控制卡片 (紧凑高 96px)
+    renderServerCard(dl, content_x, cur_y, content_w);
+    cur_y += 96.0f + 10.0f;
 
-    if (ImGui::BeginChild("##WifiTransferScroll", ImVec2(content_w, content_h), false,
-                          ImGuiWindowFlags_NoBackground)) {
+    // 板块二：实时传输进度看板 (紧凑高 84px)
+    renderLiveProgressCard(dl, content_x, cur_y, content_w);
+    cur_y += 84.0f + 10.0f;
 
-        // 触控拖拽平滑滚动
-        if (ImGui::IsWindowHovered() && !ImGui::IsAnyItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 4.0f)) {
-            float drag_dy = std::clamp(ImGui::GetIO().MouseDelta.y, -40.0f, 40.0f);
-            if (drag_dy != 0.0f) {
-                ImGui::SetScrollY(ImGui::GetScrollY() - drag_dy);
-            }
-        }
-
-        ImDrawList* child_dl = ImGui::GetWindowDrawList();
-        float cur_y = ImGui::GetCursorScreenPos().y;
-
-        // 板块一：服务端状态与启停控制卡片
-        renderServerCard(child_dl, content_x, cur_y, content_w);
-        cur_y += 128.0f;
-
-        ImGui::SetCursorScreenPos(ImVec2(content_x, cur_y));
-        ImGui::Dummy(ImVec2(0.0f, 10.0f));
-        cur_y += 10.0f;
-
-        // 板块二：实时传输进度看板 (正在传输 / 空闲就绪)
-        renderLiveProgressCard(child_dl, content_x, cur_y, content_w);
-        cur_y += 114.0f;
-
-        ImGui::SetCursorScreenPos(ImVec2(content_x, cur_y));
-        ImGui::Dummy(ImVec2(0.0f, 10.0f));
-        cur_y += 10.0f;
-
-        // 板块三：已接收曲目历史清单看板 (自适应剩余高度)
-        float history_h = std::max(120.0f, content_h - (cur_y - content_y) - 8.0f);
-        renderHistoryCard(child_dl, content_x, cur_y, content_w, history_h);
-
-        ImGui::SetCursorScreenPos(ImVec2(content_x, cur_y + history_h));
-        ImGui::Dummy(ImVec2(0.0f, 12.0f));
-    }
-    ImGui::EndChild();
+    // 板块三：已接收曲目历史清单看板 (自适应填满剩余高度，无外层滚动条)
+    float history_h = std::max(60.0f, card_max.y - cur_y - 12.0f);
+    renderHistoryCard(dl, content_x, cur_y, content_w, history_h);
 }
 
 void WifiTransferView::renderServerCard(ImDrawList* dl, float x0, float y0, float w) {
-    float h = 128.0f;
+    float h = 96.0f;
     ImVec2 p0(x0, y0);
     ImVec2 p1(x0 + w, y0 + h);
 
@@ -131,26 +101,23 @@ void WifiTransferView::renderServerCard(ImDrawList* dl, float x0, float y0, floa
     dl->AddText(ImVec2(state_x + 18.0f, state_y), running ? UIConfig::Color::TextActive : UIConfig::Color::TextMuted, status_title);
     if (Fonts::Regular) ImGui::PopFont();
 
-    // URL 访问高亮展示
+    // URL 访问展示
     std::string url_str = net.is_connected ? ("http://" + net.ip + ":" + std::to_string(port)) : "网络未连接";
     if (Fonts::Regular) ImGui::PushFont(Fonts::Regular);
-    dl->AddText(ImVec2(x0 + 16.0f, y0 + 40.0f), UIConfig::Color::TextMuted, "传歌网址：");
-    dl->AddText(ImVec2(x0 + 92.0f, y0 + 40.0f), running ? IM_COL32(52, 211, 153, 255) : UIConfig::Color::TextMuted, url_str.c_str());
+    dl->AddText(ImVec2(x0 + 16.0f, y0 + 38.0f), UIConfig::Color::TextMuted, "传歌网址：");
+    dl->AddText(ImVec2(x0 + 92.0f, y0 + 38.0f), running ? IM_COL32(52, 211, 153, 255) : UIConfig::Color::TextMuted, url_str.c_str());
     if (Fonts::Regular) ImGui::PopFont();
 
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-    std::string tip_str = running ? "请在同一 Wi-Fi 下的电脑或手机浏览器中打开上方网址，即可拖拽传歌" : "点击右侧「开始传歌」按钮，开启局域网无线极速传输";
-    dl->AddText(ImVec2(x0 + 16.0f, y0 + 68.0f), UIConfig::Color::TextMuted, tip_str.c_str());
-
-    std::string env_str = "Wi-Fi: " + net.wifi_ssid + " · 存储位置: " + WifiTransferServer::getInstance().getTargetDir();
-    dl->AddText(ImVec2(x0 + 16.0f, y0 + 92.0f), UIConfig::Color::TextMuted, env_str.c_str());
+    std::string env_str = "Wi-Fi: " + net.wifi_ssid + " · 存储: " + WifiTransferServer::getInstance().getTargetDir();
+    dl->AddText(ImVec2(x0 + 16.0f, y0 + 68.0f), UIConfig::Color::TextMuted, env_str.c_str());
     if (Fonts::Small) ImGui::PopFont();
 
     // 右侧核心启停控制大按键
     float btn_w = 120.0f;
     float btn_h = 36.0f;
     float btn_x = x0 + w - btn_w - 18.0f;
-    float btn_y = y0 + 46.0f;
+    float btn_y = y0 + 30.0f;
 
     ImGui::SetCursorScreenPos(ImVec2(btn_x, btn_y));
     ImGui::InvisibleButton("##WifiTransferToggleBtn", ImVec2(btn_w, btn_h));
@@ -181,7 +148,7 @@ void WifiTransferView::renderServerCard(ImDrawList* dl, float x0, float y0, floa
 }
 
 void WifiTransferView::renderLiveProgressCard(ImDrawList* dl, float x0, float y0, float w) {
-    float h = 114.0f;
+    float h = 84.0f;
     ImVec2 p0(x0, y0);
     ImVec2 p1(x0 + w, y0 + h);
 
@@ -199,49 +166,47 @@ void WifiTransferView::renderLiveProgressCard(ImDrawList* dl, float x0, float y0
 
     if (prog.is_uploading) {
         // 正在流式接收文件
-        if (Fonts::Regular) ImGui::PushFont(Fonts::Regular);
+        if (Fonts::Small) ImGui::PushFont(Fonts::Small);
         std::string fn_str = "[正在接收] " + prog.current_filename;
-        dl->AddText(ImVec2(x0 + 16.0f, y0 + 36.0f), IM_COL32(52, 211, 153, 255), fn_str.c_str());
-        if (Fonts::Regular) ImGui::PopFont();
+        dl->AddText(ImVec2(x0 + 16.0f, y0 + 34.0f), IM_COL32(52, 211, 153, 255), fn_str.c_str());
 
         // 进度条渲染
         float bar_x = x0 + 16.0f;
-        float bar_y = y0 + 64.0f;
+        float bar_y = y0 + 54.0f;
         float bar_w = w - 32.0f;
-        float bar_h = 10.0f;
+        float bar_h = 8.0f;
 
         float ratio = (prog.total_bytes > 0) ? (static_cast<float>(prog.bytes_received) / static_cast<float>(prog.total_bytes)) : 0.0f;
         ratio = std::clamp(ratio, 0.0f, 1.0f);
 
-        dl->AddRectFilled(ImVec2(bar_x, bar_y), ImVec2(bar_x + bar_w, bar_y + bar_h), IM_COL32(15, 23, 42, 255), 5.0f);
+        dl->AddRectFilled(ImVec2(bar_x, bar_y), ImVec2(bar_x + bar_w, bar_y + bar_h), IM_COL32(15, 23, 42, 255), 4.0f);
         if (ratio > 0.001f) {
-            dl->AddRectFilled(ImVec2(bar_x, bar_y), ImVec2(bar_x + bar_w * ratio, bar_y + bar_h), IM_COL32(16, 185, 129, 255), 5.0f);
+            dl->AddRectFilled(ImVec2(bar_x, bar_y), ImVec2(bar_x + bar_w * ratio, bar_y + bar_h), IM_COL32(16, 185, 129, 255), 4.0f);
         }
 
         // 详细指标描述
-        if (Fonts::Small) ImGui::PushFont(Fonts::Small);
         char stats_buf[128];
         int pct = static_cast<int>(ratio * 100.0f);
-        std::snprintf(stats_buf, sizeof(stats_buf), "进度: %d%% · 已接收: %s / %s · 传输速率: %.1f MB/s",
+        std::snprintf(stats_buf, sizeof(stats_buf), "进度: %d%% · 已接收: %s / %s · 速率: %.1f MB/s",
                       pct,
                       formatFileSize(prog.bytes_received).c_str(),
                       formatFileSize(prog.total_bytes).c_str(),
                       prog.speed_mbps);
-        dl->AddText(ImVec2(bar_x, bar_y + 16.0f), UIConfig::Color::TextNormal, stats_buf);
+        dl->AddText(ImVec2(bar_x, bar_y + 12.0f), UIConfig::Color::TextMuted, stats_buf);
         if (Fonts::Small) ImGui::PopFont();
     } else {
         // 空闲等待中
         bool running = WifiTransferServer::getInstance().isRunning();
         if (Fonts::Small) ImGui::PushFont(Fonts::Small);
         if (running) {
-            dl->AddText(ImVec2(x0 + 16.0f, y0 + 44.0f), UIConfig::Color::TextNormal,
-                        "等待电脑或手机接入上传中... 随时可从网页中拖拽音频文件传输");
-            dl->AddText(ImVec2(x0 + 16.0f, y0 + 72.0f), UIConfig::Color::TextMuted,
+            dl->AddText(ImVec2(x0 + 16.0f, y0 + 36.0f), UIConfig::Color::TextNormal,
+                        "等待电脑或手机接入上传中... 随时可在网页端批量拖拽音频文件传输");
+            dl->AddText(ImVec2(x0 + 16.0f, y0 + 58.0f), UIConfig::Color::TextMuted,
                         "支持格式: FLAC, WAV, DSF, DFF, APE, MP3, M4A, AAC, OGG (传输完成自动入库)");
         } else {
-            dl->AddText(ImVec2(x0 + 16.0f, y0 + 44.0f), UIConfig::Color::TextMuted,
+            dl->AddText(ImVec2(x0 + 16.0f, y0 + 36.0f), UIConfig::Color::TextMuted,
                         "WiFi 传歌服务尚未启动，启动后同一局域网设备可免插拔 U 盘秒级传输歌曲");
-            dl->AddText(ImVec2(x0 + 16.0f, y0 + 72.0f), UIConfig::Color::TextMuted,
+            dl->AddText(ImVec2(x0 + 16.0f, y0 + 58.0f), UIConfig::Color::TextMuted,
                         "传输完成后曲库将自动同步刷新，无需重启或重新扫描");
         }
         if (Fonts::Small) ImGui::PopFont();
@@ -264,11 +229,19 @@ void WifiTransferView::renderHistoryCard(ImDrawList* dl, float x0, float y0, flo
     if (Fonts::Regular) ImGui::PopFont();
 
     float list_y = y0 + 36.0f;
-    float list_h = h - 42.0f;
+    float list_h = std::max(h - 44.0f, 30.0f);
 
     ImGui::SetCursorScreenPos(ImVec2(x0 + 12.0f, list_y));
-    if (ImGui::BeginChild("##HistoryItemsList", ImVec2(w - 24.0f, list_h), false,
-                          ImGuiWindowFlags_NoBackground)) {
+    ImGuiWindowFlags child_flags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoBackground;
+    if (ImGui::BeginChild("##HistoryItemsList", ImVec2(w - 24.0f, list_h), false, child_flags)) {
+
+        // 触控拖拽平滑滑动
+        if (ImGui::IsWindowHovered() && !ImGui::IsAnyItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 4.0f)) {
+            float drag_dy = std::clamp(ImGui::GetIO().MouseDelta.y, -40.0f, 40.0f);
+            if (drag_dy != 0.0f) {
+                ImGui::SetScrollY(ImGui::GetScrollY() - drag_dy);
+            }
+        }
 
         if (prog.completed_files.empty()) {
             if (Fonts::Small) ImGui::PushFont(Fonts::Small);
