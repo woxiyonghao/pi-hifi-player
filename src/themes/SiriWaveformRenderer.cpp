@@ -148,34 +148,48 @@ void SiriWaveformRenderer::render(float screen_w, float screen_h, bool is_playin
         dl->AddLine(pA, pB, IM_COL32(255, 255, 255, static_cast<int>(210 * l_fade)), 0.6f);
     }
 
-    // 基础静音待机波幅 ~12px，播放时随音乐大动态激荡至 45~95px
-    float base_amp = 12.0f + smooth_energy_ * 72.0f;
+    // 基础静音待机波幅 ~18px，播放时随音乐大动态激荡至 80~140px
+    float base_amp = 18.0f + smooth_energy_ * 120.0f;
 
-    // 3. 渲染 3 层经典 Siri 多彩交错流体波浪 (Cyan / Magenta / Purple)
-    // [波层 1: 电光青蓝 Cyan Ribbon]
-    ImU32 col_cyan_top = IM_COL32(0, 242, 254, 140);
-    ImU32 col_cyan_bot = IM_COL32(0, 180, 240, 50);
-    drawWaveRibbon(dl, center_x, center_y, total_w, base_amp * 0.95f, 2.2f, 0.0f, anim_time_ * 1.0f,
-                   col_cyan_top, col_cyan_bot, 90.0f, 3.5f);
+    // 从当前主题提取主色调 (HSV)，构建和谐发烧流光，杜绝刺眼色散
+    float th_r = custom_color_.x;
+    float th_g = custom_color_.y;
+    float th_b = custom_color_.z;
+    float th_h = 0.0f, th_s = 0.8f, th_v = 1.0f;
+    ImGui::ColorConvertRGBtoHSV(th_r, th_g, th_b, th_h, th_s, th_v);
 
-    // [波层 2: 鲜亮玫红 Magenta Ribbon]
-    ImU32 col_mag_top = IM_COL32(255, 8, 68, 150);
-    ImU32 col_mag_bot = IM_COL32(250, 45, 72, 50);
-    drawWaveRibbon(dl, center_x, center_y, total_w, base_amp * 1.12f, 2.8f, 1.85f, anim_time_ * 1.15f,
-                   col_mag_top, col_mag_bot, 95.0f, 3.5f);
+    auto makeThemeHsvCol = [&](float hue_offset, float s_scale, float alpha) -> ImU32 {
+        float h = std::fmod(th_h + hue_offset + 1.0f, 1.0f);
+        float s = std::clamp(th_s * s_scale, 0.2f, 1.0f);
+        float r, g, b;
+        ImGui::ColorConvertHSVtoRGB(h, s, th_v, r, g, b);
+        return IM_COL32(static_cast<int>(r * 255.0f), static_cast<int>(g * 255.0f), static_cast<int>(b * 255.0f), static_cast<int>(alpha));
+    };
 
-    // [波层 3: 极光紫罗兰 Violet Ribbon]
-    ImU32 col_pur_top = IM_COL32(168, 85, 247, 135);
-    ImU32 col_pur_bot = IM_COL32(121, 40, 202, 45);
-    drawWaveRibbon(dl, center_x, center_y, total_w, base_amp * 0.82f, 1.8f, 3.42f, anim_time_ * 0.85f,
-                   col_pur_top, col_pur_bot, 85.0f, 3.5f);
+    // 3. 渲染 3 层与主题深度协同的流体波浪，消除生硬杂色斑
+    // [波层 1: 主题色主波]
+    ImU32 col_w1_top = makeThemeHsvCol(0.0f, 1.0f, 140.0f);
+    ImU32 col_w1_bot = makeThemeHsvCol(0.0f, 0.8f, 40.0f);
+    drawWaveRibbon(dl, center_x, center_y, total_w, base_amp * 1.05f, 2.2f, 0.0f, anim_time_ * 1.0f,
+                   col_w1_top, col_w1_bot, 120.0f, 3.2f);
+
+    // [波层 2: 柔和邻近色波]
+    ImU32 col_w2_top = makeThemeHsvCol(0.05f, 0.85f, 130.0f);
+    ImU32 col_w2_bot = makeThemeHsvCol(0.05f, 0.7f, 35.0f);
+    drawWaveRibbon(dl, center_x, center_y, total_w, base_amp * 1.18f, 2.8f, 1.85f, anim_time_ * 1.15f,
+                   col_w2_top, col_w2_bot, 130.0f, 3.2f);
+
+    // [波层 3: 互补微光波]
+    ImU32 col_w3_top = makeThemeHsvCol(-0.05f, 0.9f, 120.0f);
+    ImU32 col_w3_bot = makeThemeHsvCol(-0.05f, 0.75f, 35.0f);
+    drawWaveRibbon(dl, center_x, center_y, total_w, base_amp * 0.90f, 1.8f, 3.42f, anim_time_ * 0.85f,
+                   col_w3_top, col_w3_bot, 110.0f, 3.2f);
 
     // [波层 4: 中央聚核白光高亮核心]
-    // 使用全宽 + 陡峭高斯衰减 (gaussian_pow = 7.5f)，使白光高度聚集于中央并无缝融化入背景，杜绝任何硬截断
-    ImU32 col_core_top = IM_COL32(255, 255, 255, 220);
-    ImU32 col_core_bot = IM_COL32(255, 255, 255, 100);
+    ImU32 col_core_top = IM_COL32(255, 255, 255, 210);
+    ImU32 col_core_bot = IM_COL32(255, 255, 255, 90);
     drawWaveRibbon(dl, center_x, center_y, total_w, base_amp * 0.55f, 3.2f, 0.92f, anim_time_ * 1.25f,
-                   col_core_top, col_core_bot, 45.0f, 7.5f);
+                   col_core_top, col_core_bot, 55.0f, 7.5f);
 
     // 4. 底部发烧流体声波铭牌
     const char* footer_left = "Apple Siri Fluid Acoustic Waveform · Real-Time Spectral Modulation";

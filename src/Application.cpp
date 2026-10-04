@@ -595,40 +595,21 @@ void Application::renderBackground(float screen_w, float screen_h) {
     const float seg_h = 6.0f;                                  // 每个方块高度
     const float gap_y = 2.5f;                                  // 方块纵向间距
     const int num_rows = std::clamp(static_cast<int>((screen_h - 16.0f) / (seg_h + gap_y)), 20, 200); // 随窗口高度自适应满屏行数
-    const float seg_round = 0.0f;                              // 0.0f 纯净直角点阵 (大幅降低 GLES 顶点负载，呈现硬朗经典机皇发烧质感)
+    const float seg_round = 1.0f;                              // 1.0f 微圆角
     const float bot_y = screen_h - 8.0f;                       // 距底部屏幕边缘 8px 起振 (最高行达 y = 8px)
 
-    const ImU32 unlit_color = ThemeManager::getInstance().getSpectrumUnlitColor();
-
-    // 2. 如果未播放且为 LED 频谱模式，保持通透深空暗黑基底，避免在屏幕上生成静态点阵方块伪影
+    // 2. 如果未播放且为 LED 频谱模式，保持通透深空暗黑基底
     if (!is_playing) {
         return;
     }
 
-    const ImU32 accent = UIConfig::Color::Accent;
-    const ImU32 cr = (accent >> IM_COL32_R_SHIFT) & 0xFF;
-    const ImU32 cg = (accent >> IM_COL32_G_SHIFT) & 0xFF;
-    const ImU32 cb = (accent >> IM_COL32_B_SHIFT) & 0xFF;
+    // 静态 48 列峰值保持与物理重力坠落状态
+    static float s_peak_hold[48] = {0.0f};
+    static float s_peak_fall[48] = {0.0f};
 
-    // 常规点亮方块色与顶峰指示色 (完全随主题联动)
     const ImU32 lit_color = ThemeManager::getInstance().getSpectrumLitColor();
     const ImU32 peak_color = ThemeManager::getInstance().getSpectrumPeakColor();
 
-    // 全屏全景氛围微辉光 (随着整体低频能量呼吸涌动)
-    float bass_energy = (levels12[0] + levels12[1] + levels12[2]) / 3.0f;
-    int glow_alpha = static_cast<int>(bass_energy * 32.0f);
-    if (glow_alpha > 0) {
-        bg_dl->AddRectFilledMultiColor(
-            ImVec2(margin_x, 0.0f),
-            ImVec2(screen_w - margin_x, screen_h),
-            IM_COL32(cr, cg, cb, 0),
-            IM_COL32(cr, cg, cb, 0),
-            IM_COL32(cr, cg, cb, glow_alpha),
-            IM_COL32(cr, cg, cb, glow_alpha)
-        );
-    }
-
-    // 平滑插值绘制 48 列分段 LED 矩阵
     for (int c = 0; c < num_cols; ++c) {
         float x0 = margin_x + c * (col_w + gap_x);
         float x1 = x0 + col_w;
@@ -642,25 +623,33 @@ void Application::renderBackground(float screen_w, float screen_h) {
         float smooth_t = (1.0f - std::cos(frac * 3.14159265f)) * 0.5f;
         float level = levels12[idx0] * (1.0f - smooth_t) + levels12[idx1] * smooth_t;
 
-        // 真实声学动态曲线：去除过载过冲，保留真实的高低频落差与音乐跳动层次
-        float dynamic_level = std::clamp(std::pow(level, 0.85f) * 0.90f, 0.0f, 1.0f);
-
+        // 饱满发烧动态曲线：在对数 dB 归一化输入下，微弱信号柔和起振，大动态澎湃跳动至 70%~85% 屏幕高度
+        float dynamic_level = std::clamp(std::pow(level, 0.92f) * 0.88f, 0.0f, 0.92f);
         int active_count = static_cast<int>(std::round(dynamic_level * num_rows));
-        active_count = std::clamp(active_count, 0, num_rows);
 
-        for (int r_idx = 0; r_idx < num_rows; ++r_idx) {
+        // 峰值保持与物理重力坠落计算
+        float cur_row_f = static_cast<float>(active_count);
+        if (cur_row_f >= s_peak_hold[c]) {
+            s_peak_hold[c] = cur_row_f;
+            s_peak_fall[c] = 0.0f;
+        } else {
+            s_peak_fall[c] += 0.06f; // 重力加速度
+            s_peak_hold[c] = std::max(0.0f, s_peak_hold[c] - s_peak_fall[c]);
+        }
+        int peak_row = static_cast<int>(std::round(s_peak_hold[c]));
+
+        // 仅绘制当前激活的方块！杜绝数千次无意义的未点亮暗格 alpha 绘制，彻底消灭 16 位颜色抖动色散与色斑！
+        for (int r_idx = 0; r_idx < active_count; ++r_idx) {
             float y1 = bot_y - r_idx * (seg_h + gap_y);
             float y0 = y1 - seg_h;
+            bg_dl->AddRectFilled(ImVec2(x0, y0), ImVec2(x1, y1), lit_color, seg_round);
+        }
 
-            bool is_lit = (r_idx < active_count);
-            bool is_peak = (r_idx == active_count - 1 && active_count > 0);
-
-            if (is_lit) {
-                ImU32 col = is_peak ? peak_color : lit_color;
-                bg_dl->AddRectFilled(ImVec2(x0, y0), ImVec2(x1, y1), col, seg_round);
-            } else if ((unlit_color & IM_COL32_A_MASK) != 0) {
-                bg_dl->AddRectFilled(ImVec2(x0, y0), ImVec2(x1, y1), unlit_color, seg_round);
-            }
+        // 绘制顶峰指示条 (Peak Hold Cap)
+        if (peak_row > 0 && peak_row < num_rows) {
+            float py1 = bot_y - (peak_row - 1) * (seg_h + gap_y);
+            float py0 = py1 - seg_h;
+            bg_dl->AddRectFilled(ImVec2(x0, py0), ImVec2(x1, py1), peak_color, seg_round);
         }
     }
 }
