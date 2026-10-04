@@ -3,6 +3,8 @@
 #include "public/AppConfig.hpp"
 #include <algorithm>
 #include <iostream>
+#include <fstream>
+#include <cstring>
 
 MusicScanManager::~MusicScanManager() {
     cancelScan();
