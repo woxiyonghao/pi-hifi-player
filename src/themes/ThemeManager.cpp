@@ -274,7 +274,7 @@ void ThemeManager::applyCurrentTheme() {
         const auto& preset = getCurrentPreset();
         UIConfig::Color::Accent = preset.accent_color;
         UIConfig::Color::GlassActiveTint = preset.glass_active_tint;
-        UIConfig::Color::WindowBg = preset.window_bg;
+        UIConfig::Color::WindowBg = IM_COL32(16, 20, 26, 240);
         UIConfig::Color::MainStageBg = preset.main_stage_bg;
     }
 }

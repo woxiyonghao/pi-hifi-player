@@ -1055,29 +1055,25 @@ void AudioEngine::updateSpectrumAnalysis(const float* samples, size_t frame_coun
 
     // 12 个对数分布频段的 Bin 起止索引 (~86Hz 至 ~11kHz)
     static const int band_bins[12][2] = {
-        {1, 1},    // ~86 - 172 Hz (超低频/低频)
-        {2, 2},    // ~172 - 344 Hz (低频鼓点)
-        {3, 4},    // ~258 - 344 Hz (中低频)
-        {5, 7},    // ~430 - 602 Hz (人声基频)
-        {8, 11},   // ~688 - 946 Hz (人声中频)
-        {12, 16},  // ~1.0k - 1.4k Hz (吉他/弦乐)
-        {17, 23},  // ~1.5k - 2.0k Hz (乐器泛音)
-        {24, 32},  // ~2.1k - 2.8k Hz (人声齿音/穿透力)
-        {33, 45},  // ~2.9k - 3.9k Hz (高频打击乐)
-        {46, 64},  // ~4.0k - 5.5k Hz (镲片/空气感)
-        {65, 90},  // ~5.6k - 7.7k Hz (高阶泛音)
-        {91, 127}  // ~7.8k - 11.0k Hz (极高频晶莹感)
+        {1, 1},    // ~86 Hz
+        {2, 2},    // ~172 Hz
+        {3, 4},    // ~258 - 344 Hz
+        {5, 7},    // ~430 - 602 Hz
+        {8, 11},   // ~688 - 946 Hz
+        {12, 16},  // ~1.0k - 1.4k Hz
+        {17, 23},  // ~1.5k - 2.0k Hz
+        {24, 32},  // ~2.1k - 2.8k Hz
+        {33, 45},  // ~2.9k - 3.9k Hz
+        {46, 64},  // ~4.0k - 5.5k Hz
+        {65, 90},  // ~5.6k - 7.7k Hz
+        {91, 127}  // ~7.8k - 11.0k Hz
     };
 
-    // 人耳等响度与高频衰减补偿权重 (Treble Tilt Equal-Loudness)
+    // 高频人耳等响度视觉补偿增益 (Treble Pre-emphasis)
     static const float band_weights[12] = {
-        1.1f, 1.2f, 1.5f, 2.0f, 2.8f, 3.8f,
-        5.0f, 6.8f, 8.5f, 11.0f, 14.5f, 18.0f
+        2.5f, 2.2f, 2.0f, 1.9f, 2.0f, 2.2f,
+        2.5f, 2.9f, 3.4f, 4.0f, 4.8f, 5.8f
     };
-
-    constexpr float kMinDb = -48.0f; // 动态底噪阈值 (-48 dB)
-    constexpr float kMaxDb = 0.0f;   // 峰值参考 (0 dB)
-    constexpr float kDbSpan = kMaxDb - kMinDb;
 
     std::lock_guard lock(spectrum_mutex_);
     for (int b = 0; b < 12; ++b) {
@@ -1087,18 +1083,14 @@ void AudioEngine::updateSpectrumAnalysis(const float* samples, size_t frame_coun
         for (int k = b_start; k <= b_end; ++k) {
             sum_mag += std::sqrt(re[k] * re[k] + im[k] * im[k]);
         }
-        float avg_mag = sum_mag / static_cast<float>(b_end - b_start + 1);
+        float avg_mag = sum_mag / (b_end - b_start + 1);
+        float target = std::clamp(avg_mag * band_weights[b] * 0.15f, 0.0f, 1.0f);
 
-        // 专业分贝 (dB) 对数映射：彻底打破线性幅值局限，使全频段音乐充满活生感
-        float weighted_mag = avg_mag * band_weights[b];
-        float db = 20.0f * std::log10(std::max(weighted_mag, 1e-5f));
-        float target = std::clamp((db - kMinDb) / kDbSpan, 0.0f, 1.0f);
-
-        // 弹道学：瞬态极速拉起 (Attack 0.45) + 重力平滑回落 (Decay 0.82)
+        // 动效弹道：快速起音 (Attack) + 平滑自然衰减 (Decay)
         if (target > spectrum_levels_[b]) {
-            spectrum_levels_[b] = spectrum_levels_[b] * 0.35f + target * 0.65f;
+            spectrum_levels_[b] = target;
         } else {
-            spectrum_levels_[b] = spectrum_levels_[b] * 0.82f + target * 0.18f;
+            spectrum_levels_[b] = spectrum_levels_[b] * 0.85f + target * 0.15f;
         }
     }
 }

@@ -36,7 +36,7 @@ void NeonWaveformRenderer::render(float screen_w, float screen_h, bool is_playin
 
     float center_y = screen_h * 0.48f;
 
-    // 2. 背景层：垂直全景频谱律动光柱 (仅在有能量时绘制，彻底根除暗格低透明度色斑)
+    // 2. 背景层：暗态垂直多频段漫射光柱阴影 (Radiant Spectrum Bars)
     int num_bars = 48;
     float bar_spacing = screen_w / static_cast<float>(num_bars);
     float bar_w = bar_spacing * 0.65f;
@@ -49,17 +49,37 @@ void NeonWaveformRenderer::render(float screen_w, float screen_h, bool is_playin
         float frac = band_pos - static_cast<float>(idx0);
         float band_lvl = smooth_levels_[idx0] * (1.0f - frac) + smooth_levels_[idx1] * frac;
 
-        if (band_lvl <= 0.04f) continue;
-
-        float bar_h = 10.0f + std::pow(band_lvl, 0.9f) * (screen_h * 0.38f);
+        float bar_h = (15.0f + band_lvl * 180.0f);
         float bx = i * bar_spacing + (bar_spacing - bar_w) * 0.5f;
-        int bar_alpha = static_cast<int>(std::clamp(band_lvl * 110.0f, 0.0f, 150.0f));
 
-        dl->AddRectFilled(
-            ImVec2(bx, center_y - bar_h), ImVec2(bx + bar_w, center_y + bar_h),
-            IM_COL32(r, g, b, bar_alpha), 2.0f
+        // 上半段漫射阴影柱
+        int shadow_alpha = static_cast<int>(std::clamp(10.0f + band_lvl * 55.0f, 0.0f, 255.0f));
+        dl->AddRectFilledMultiColor(
+            ImVec2(bx, center_y - bar_h), ImVec2(bx + bar_w, center_y),
+            IM_COL32(r, g, b, 0), IM_COL32(r, g, b, 0),
+            IM_COL32(r, g, b, shadow_alpha), IM_COL32(r, g, b, shadow_alpha)
+        );
+
+        // 下半段漫射阴影柱
+        dl->AddRectFilledMultiColor(
+            ImVec2(bx, center_y), ImVec2(bx + bar_w, center_y + bar_h),
+            IM_COL32(r, g, b, shadow_alpha), IM_COL32(r, g, b, shadow_alpha),
+            IM_COL32(r, g, b, 0), IM_COL32(r, g, b, 0)
         );
     }
+
+    // 3. 中间层：水平全景霓虹氛围漫射微光带
+    int aura_alpha = static_cast<int>(std::clamp(18.0f + avg_energy * 50.0f, 0.0f, 255.0f));
+    dl->AddRectFilledMultiColor(
+        ImVec2(0.0f, center_y - 65.0f), ImVec2(screen_w, center_y),
+        IM_COL32(r, g, b, 0), IM_COL32(r, g, b, 0),
+        IM_COL32(r, g, b, aura_alpha), IM_COL32(r, g, b, aura_alpha)
+    );
+    dl->AddRectFilledMultiColor(
+        ImVec2(0.0f, center_y), ImVec2(screen_w, center_y + 65.0f),
+        IM_COL32(r, g, b, aura_alpha), IM_COL32(r, g, b, aura_alpha),
+        IM_COL32(r, g, b, 0), IM_COL32(r, g, b, 0)
+    );
 
     // 4. 前景层：电光霓虹脉冲波浪核心 (高频密集抗锯齿多道光带)
     constexpr int wave_pts = 320;

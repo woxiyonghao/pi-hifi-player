@@ -147,8 +147,6 @@ bool Application::initWindow() {
 
     SDL_GL_MakeCurrent(window_, gl_context_);
     if (Platform::isRaspberryPi()) {
-        // 树莓派触控屏环境隐藏系统硬件鼠标光标
-        SDL_ShowCursor(SDL_DISABLE);
         // 树莓派 KMSDRM 下解除硬件垂直同步锁等待，配合上层精确 30 FPS 限制器休眠让出 CPU 算力
         SDL_GL_SetSwapInterval(0);
     } else {
@@ -489,41 +487,22 @@ void Application::update(float dt) {
 void Application::renderBackground(float screen_w, float screen_h) {
     ImDrawList* bg_dl = ImGui::GetBackgroundDrawList();
 
+    // 1. 铺设整个 App 的基准发烧底色 (完全对齐原设计的区域与色值规范)
     float ease_t = anim_progress_ < 0.5f ? 4.0f * anim_progress_ * anim_progress_ * anim_progress_
                                          : 1.0f - std::pow(-2.0f * anim_progress_ + 2.0f, 3.0f) * 0.5f;
-    float sidebar_bg_x = (anim_progress_ >= 0.999f) ? 0.0f : (UIConfig::Layout::SidebarWidth * (1.0f - ease_t));
+    float sidebar_bg_x = UIConfig::Layout::SidebarWidth * (1.0f - ease_t);
 
-    // 1. 铺设整个 App 的基准发烧底色 (完全对齐原设计的区域与色值规范)
-    if (anim_progress_ >= 0.999f) {
-        // 完全全屏屏保状态：底板 100% 满屏无缝铺满，杜绝任何分界线与色块
-        bg_dl->AddRectFilled(ImVec2(0.0f, 0.0f), ImVec2(screen_w, screen_h), UIConfig::Color::MainStageBg);
-    } else {
-        if (sidebar_bg_x > 0.5f) {
-            // 左侧侧边栏暗色基底 (0 ~ sidebar_bg_x)
-            bg_dl->AddRectFilled(ImVec2(0.0f, 0.0f), ImVec2(sidebar_bg_x, screen_h), UIConfig::Color::WindowBg);
-        }
-        // 右侧主舞台深空基底 (sidebar_bg_x ~ screen_w)
-        bg_dl->AddRectFilled(ImVec2(sidebar_bg_x, 0.0f), ImVec2(screen_w, screen_h), UIConfig::Color::MainStageBg);
+    if (sidebar_bg_x > 0.5f) {
+        // 左侧侧边栏暗色基底 (0 ~ sidebar_bg_x)
+        bg_dl->AddRectFilled(ImVec2(0.0f, 0.0f), ImVec2(sidebar_bg_x, screen_h), IM_COL32(16, 20, 26, 255));
     }
+    // 右侧主舞台深空基底 (sidebar_bg_x ~ screen_w)
+    bg_dl->AddRectFilled(ImVec2(sidebar_bg_x, 0.0f), ImVec2(screen_w, screen_h), UIConfig::Color::MainStageBg);
 
     auto bg_mode = ThemeManager::getInstance().getBackgroundVisualMode();
     if (bg_mode == BackgroundVisualMode::PureBlack) {
         return;
     }
-
-    // 当未完全进入全屏时，将底层背景视觉特效严格限制在右侧主舞台区域，坚决不向左渗透到侧边栏
-    bool has_sidebar_clip = (sidebar_bg_x > 0.5f);
-    if (has_sidebar_clip) {
-        bg_dl->PushClipRect(ImVec2(sidebar_bg_x, 0.0f), ImVec2(screen_w, screen_h), true);
-    }
-
-    auto end_clip = [&]() {
-        if (has_sidebar_clip) {
-            bg_dl->PopClipRect();
-            // 彻底固化左侧侧边栏暗色基底，确保左侧零色块、零溢出
-            bg_dl->AddRectFilled(ImVec2(0.0f, 0.0f), ImVec2(sidebar_bg_x, screen_h), UIConfig::Color::WindowBg);
-        }
-    };
 
     auto& player = PlayerAdmin::getInstance();
     bool is_playing = player.isPlaying();
@@ -536,11 +515,17 @@ void Application::renderBackground(float screen_w, float screen_h) {
         r = std::clamp((levels12[2] + levels12[3] + levels12[4] + levels12[5] + levels12[6]) * 0.28f, 0.0f, 1.0f);
     }
 
+    auto render_sidebar_mask = [&]() {
+        if (sidebar_bg_x > 0.5f) {
+            bg_dl->AddRectFilled(ImVec2(0.0f, 0.0f), ImVec2(sidebar_bg_x, screen_h), IM_COL32(16, 20, 26, 255));
+        }
+    };
+
     if (bg_mode == BackgroundVisualMode::Accuphase) {
         accuphase_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
         accuphase_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
         accuphase_renderer_.render(screen_w, screen_h, l, r);
-        end_clip();
+        render_sidebar_mask();
         return;
     }
 
@@ -548,7 +533,7 @@ void Application::renderBackground(float screen_w, float screen_h) {
         vu_renderer_.setTheme(ThemeManager::getInstance().getMeterTheme());
         vu_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
         vu_renderer_.render(screen_w, screen_h, l, r);
-        end_clip();
+        render_sidebar_mask();
         return;
     }
 
@@ -556,7 +541,7 @@ void Application::renderBackground(float screen_w, float screen_h) {
         tape_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
         tape_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
         tape_renderer_.render(screen_w, screen_h, is_playing, player.getProgress());
-        end_clip();
+        render_sidebar_mask();
         return;
     }
 
@@ -564,7 +549,7 @@ void Application::renderBackground(float screen_w, float screen_h) {
         siri_wave_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
         siri_wave_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
         siri_wave_renderer_.render(screen_w, screen_h, is_playing, l, r);
-        end_clip();
+        render_sidebar_mask();
         return;
     }
 
@@ -572,7 +557,7 @@ void Application::renderBackground(float screen_w, float screen_h) {
         siri_orb_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
         siri_orb_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
         siri_orb_renderer_.render(screen_w, screen_h, is_playing, l, r);
-        end_clip();
+        render_sidebar_mask();
         return;
     }
 
@@ -580,7 +565,7 @@ void Application::renderBackground(float screen_w, float screen_h) {
         bubbles_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
         bubbles_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
         bubbles_renderer_.render(screen_w, screen_h, is_playing, levels12);
-        end_clip();
+        render_sidebar_mask();
         return;
     }
 
@@ -588,7 +573,7 @@ void Application::renderBackground(float screen_w, float screen_h) {
         neon_wave_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
         neon_wave_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
         neon_wave_renderer_.render(screen_w, screen_h, is_playing, levels12, 12);
-        end_clip();
+        render_sidebar_mask();
         return;
     }
 
@@ -596,7 +581,7 @@ void Application::renderBackground(float screen_w, float screen_h) {
         cyber_grid_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
         cyber_grid_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
         cyber_grid_renderer_.render(screen_w, screen_h, is_playing, levels12, 12);
-        end_clip();
+        render_sidebar_mask();
         return;
     }
 
@@ -604,43 +589,78 @@ void Application::renderBackground(float screen_w, float screen_h) {
         glass_clock_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
         glass_clock_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
         glass_clock_renderer_.render(screen_w, screen_h, is_playing, l, r);
-        end_clip();
+        render_sidebar_mask();
         return;
     }
 
-    // 几何排版参数：
-    // 未全屏时紧密对齐主舞台视口 (sidebar_bg_x + 16px ~ screen_w - 16px)，绝不向左侵入侧边栏
-    // 全屏时随动画平滑展开至全屏 (16px ~ screen_w - 16px)
+    // 几何排版参数：左右对齐发烧容器外边距 (16px ~ 1008px)
     const float margin_x = UIConfig::Layout::ContainerMarginX; // 16.0f
-    const float start_x = (sidebar_bg_x > 0.5f) ? (sidebar_bg_x + margin_x) : margin_x;
-    const float end_x = screen_w - margin_x;
-    const float total_w = std::max(end_x - start_x, 100.0f);
+    const float total_w = screen_w - margin_x * 2.0f;          // 992.0f
     const int num_cols = 48;                                   // 48 列超宽音轨点阵
-    const float gap_x = (total_w > 700.0f) ? 3.5f : 2.5f;      // 列间距
-    const float col_w = (total_w - (num_cols - 1) * gap_x) / num_cols;
+    const float gap_x = 4.0f;                                  // 列间距
+    const float col_w = (total_w - (num_cols - 1) * gap_x) / num_cols; // ~16.75px
     
     const float seg_h = 6.0f;                                  // 每个方块高度
     const float gap_y = 2.5f;                                  // 方块纵向间距
     const int num_rows = std::clamp(static_cast<int>((screen_h - 16.0f) / (seg_h + gap_y)), 20, 200); // 随窗口高度自适应满屏行数
-    const float seg_round = 1.0f;                              // 1.0f 微圆角
+    const float seg_round = 0.0f;                              // 0.0f 纯净直角点阵 (大幅降低 GLES 顶点负载，呈现硬朗经典机皇发烧质感)
     const float bot_y = screen_h - 8.0f;                       // 距底部屏幕边缘 8px 起振 (最高行达 y = 8px)
 
-    // 2. 如果未播放且为 LED 频谱模式，保持通透深空暗黑基底
+    const ImU32 unlit_color = ThemeManager::getInstance().getSpectrumUnlitColor();
+
+    // 2. 如果未播放且为 LED 频谱模式，渲染优雅纯净的熄灭态微光矩阵底板 (让用户知道 48 列点阵已就绪，保持通透深空)
     if (!is_playing) {
-        end_clip();
+        if ((unlit_color & IM_COL32_A_MASK) != 0) {
+            for (int c = 0; c < num_cols; ++c) {
+                float x0 = margin_x + c * (col_w + gap_x);
+                float x1 = x0 + col_w;
+                if (x1 <= sidebar_bg_x) {
+                    continue; // 侧边栏下方不绘制点阵微光，避免非全屏时侧边栏被渲染主题色
+                }
+                for (int r_idx = 0; r_idx < num_rows; ++r_idx) {
+                    float y1 = bot_y - r_idx * (seg_h + gap_y);
+                    float y0 = y1 - seg_h;
+                    bg_dl->AddRectFilled(ImVec2(x0, y0), ImVec2(x1, y1), unlit_color, 0.0f);
+                }
+            }
+        }
+        render_sidebar_mask();
         return;
     }
 
-    // 静态 48 列峰值保持与物理重力坠落状态
-    static float s_peak_hold[48] = {0.0f};
-    static float s_peak_fall[48] = {0.0f};
+    const ImU32 accent = UIConfig::Color::Accent;
+    const ImU32 cr = (accent >> IM_COL32_R_SHIFT) & 0xFF;
+    const ImU32 cg = (accent >> IM_COL32_G_SHIFT) & 0xFF;
+    const ImU32 cb = (accent >> IM_COL32_B_SHIFT) & 0xFF;
 
+    // 常规点亮方块色与顶峰指示色 (完全随主题联动)
     const ImU32 lit_color = ThemeManager::getInstance().getSpectrumLitColor();
     const ImU32 peak_color = ThemeManager::getInstance().getSpectrumPeakColor();
 
+    // 全屏全景氛围微辉光 (随着整体低频能量呼吸涌动，仅在主舞台区域渲染，不侵入侧边栏)
+    float bass_energy = (levels12[0] + levels12[1] + levels12[2]) / 3.0f;
+    int glow_alpha = static_cast<int>(bass_energy * 32.0f);
+    if (glow_alpha > 0) {
+        float glow_x0 = std::max(margin_x, sidebar_bg_x);
+        if (glow_x0 < screen_w - margin_x) {
+            bg_dl->AddRectFilledMultiColor(
+                ImVec2(glow_x0, 0.0f),
+                ImVec2(screen_w - margin_x, screen_h),
+                IM_COL32(cr, cg, cb, 0),
+                IM_COL32(cr, cg, cb, 0),
+                IM_COL32(cr, cg, cb, glow_alpha),
+                IM_COL32(cr, cg, cb, glow_alpha)
+            );
+        }
+    }
+
+    // 平滑插值绘制 48 列分段 LED 矩阵
     for (int c = 0; c < num_cols; ++c) {
-        float x0 = start_x + c * (col_w + gap_x);
+        float x0 = margin_x + c * (col_w + gap_x);
         float x1 = x0 + col_w;
+        if (x1 <= sidebar_bg_x) {
+            continue; // 侧边栏下方不绘制点阵，避免非全屏时侧边栏被渲染主题色
+        }
 
         // 平滑余弦插值获取当前列的连续频段能量
         float norm_x = static_cast<float>(c) / static_cast<float>(num_cols - 1);
@@ -651,37 +671,29 @@ void Application::renderBackground(float screen_w, float screen_h) {
         float smooth_t = (1.0f - std::cos(frac * 3.14159265f)) * 0.5f;
         float level = levels12[idx0] * (1.0f - smooth_t) + levels12[idx1] * smooth_t;
 
-        // 饱满发烧动态曲线：在对数 dB 归一化输入下，微弱信号柔和起振，大动态澎湃跳动至 70%~85% 屏幕高度
-        float dynamic_level = std::clamp(std::pow(level, 0.92f) * 0.88f, 0.0f, 0.92f);
+        // 真实声学动态曲线：去除过载过冲，保留真实的高低频落差与音乐跳动层次
+        float dynamic_level = std::clamp(std::pow(level, 0.85f) * 0.90f, 0.0f, 1.0f);
+
         int active_count = static_cast<int>(std::round(dynamic_level * num_rows));
+        active_count = std::clamp(active_count, 0, num_rows);
 
-        // 峰值保持与物理重力坠落计算
-        float cur_row_f = static_cast<float>(active_count);
-        if (cur_row_f >= s_peak_hold[c]) {
-            s_peak_hold[c] = cur_row_f;
-            s_peak_fall[c] = 0.0f;
-        } else {
-            s_peak_fall[c] += 0.06f; // 重力加速度
-            s_peak_hold[c] = std::max(0.0f, s_peak_hold[c] - s_peak_fall[c]);
-        }
-        int peak_row = static_cast<int>(std::round(s_peak_hold[c]));
-
-        // 仅绘制当前激活的方块！杜绝数千次无意义的未点亮暗格 alpha 绘制，彻底消灭 16 位颜色抖动色散与色斑！
-        for (int r_idx = 0; r_idx < active_count; ++r_idx) {
+        for (int r_idx = 0; r_idx < num_rows; ++r_idx) {
             float y1 = bot_y - r_idx * (seg_h + gap_y);
             float y0 = y1 - seg_h;
-            bg_dl->AddRectFilled(ImVec2(x0, y0), ImVec2(x1, y1), lit_color, seg_round);
-        }
 
-        // 绘制顶峰指示条 (Peak Hold Cap)
-        if (peak_row > 0 && peak_row < num_rows) {
-            float py1 = bot_y - (peak_row - 1) * (seg_h + gap_y);
-            float py0 = py1 - seg_h;
-            bg_dl->AddRectFilled(ImVec2(x0, py0), ImVec2(x1, py1), peak_color, seg_round);
+            bool is_lit = (r_idx < active_count);
+            bool is_peak = (r_idx == active_count - 1 && active_count > 0);
+
+            if (is_lit) {
+                ImU32 col = is_peak ? peak_color : lit_color;
+                bg_dl->AddRectFilled(ImVec2(x0, y0), ImVec2(x1, y1), col, seg_round);
+            } else if ((unlit_color & IM_COL32_A_MASK) != 0) {
+                bg_dl->AddRectFilled(ImVec2(x0, y0), ImVec2(x1, y1), unlit_color, seg_round);
+            }
         }
     }
 
-    end_clip();
+    render_sidebar_mask();
 }
 
 void Application::render() {
@@ -706,18 +718,22 @@ void Application::render() {
 
     // 只有在未完全移出屏幕时才渲染 4 大板块
     if (anim_progress_ < 0.999f) {
-        // 四角移出偏移计算：完全移出大屏视口，确保无边缘色块残留
-        float top_nav_dx = -(230.0f + 60.0f) * ease_t;
-        float top_nav_dy = -(screen_h * 0.5f + 60.0f) * ease_t;
+        // 四角移出偏移计算 (根据当前 screen_w / screen_h 动态计算保证完全移出大屏视口)：
+        // 1. 左上角：sidebar 功能与歌单区 -> 向左上方 (-260, -150)
+        float top_nav_dx = -260.0f * ease_t;
+        float top_nav_dy = -150.0f * ease_t;
 
-        float dac_dx = -(230.0f + 60.0f) * ease_t;
-        float dac_dy = (screen_h * 0.5f + 60.0f) * ease_t;
+        // 2. 左下角：dacview DAC 模块 -> 向左下方 (-260, +150)
+        float dac_dx = -260.0f * ease_t;
+        float dac_dy = (screen_h * 0.25f + 40.0f) * ease_t;
 
-        float main_dx = (screen_w + 50.0f) * ease_t;
-        float main_dy = -(screen_h * 0.5f + 50.0f) * ease_t;
+        // 3. 右上角：mainstateview 主舞台区域 -> 向右上方 (screen_w, -150)
+        float main_dx = (screen_w - 180.0f) * ease_t;
+        float main_dy = -150.0f * ease_t;
 
-        float bottom_dx = (screen_w + 50.0f) * ease_t;
-        float bottom_dy = (screen_h * 0.35f + 80.0f) * ease_t;
+        // 4. 右下角：bottombar 底部播放控制胶囊栏 -> 向右下方 (screen_w, +150)
+        float bottom_dx = (screen_w - 180.0f) * ease_t;
+        float bottom_dy = (screen_h * 0.25f + 40.0f) * ease_t;
 
         // 2. 调度发烧 UI 三驾马车布局渲染
         // 动态同步当前选中的 DAC 芯片状态与显示名称
