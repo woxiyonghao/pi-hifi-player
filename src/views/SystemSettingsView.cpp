@@ -223,7 +223,8 @@ void SystemSettingsView::renderAudioSection(ImDrawList* dl, float x0, float y0, 
 
         float btn_start_x = x0 + 140.0f;
         float btn_gap = 8.0f;
-        float btn_w = (w - 156.0f - btn_gap * (count - 1)) / static_cast<float>(count);
+        const float max_btn_w = 200.0f;
+        float btn_w = std::min((w - 156.0f - btn_gap * (count - 1)) / static_cast<float>(count), max_btn_w);
         float btn_h = 26.0f;
 
         for (int i = 0; i < count; ++i) {
@@ -388,7 +389,8 @@ void SystemSettingsView::renderHardwareSection(ImDrawList* dl, float x0, float y
 
     const char* to_opts[] = { "从不", "5 分钟", "15 分钟", "30 分钟" };
     float to_gap = 8.0f;
-    float to_w = (w - 156.0f - to_gap * 3.0f) / 4.0f;
+    const float max_to_w = 140.0f;
+    float to_w = std::min((w - 156.0f - to_gap * 3.0f) / 4.0f, max_to_w);
 
     for (int i = 0; i < 4; ++i) {
         float bx0 = btn_start_x + i * (to_w + to_gap);
@@ -427,7 +429,8 @@ void SystemSettingsView::renderHardwareSection(ImDrawList* dl, float x0, float y
 
     const char* idle_opts[] = { "15 秒", "30 秒", "1 分钟", "5 分钟", "永不" };
     float idle_gap = 8.0f;
-    float idle_btn_w = (w - 156.0f - idle_gap * 4.0f) / 5.0f;
+    const float max_idle_btn_w = 120.0f;
+    float idle_btn_w = std::min((w - 156.0f - idle_gap * 4.0f) / 5.0f, max_idle_btn_w);
 
     for (int i = 0; i < 5; ++i) {
         float bx0 = btn_start_x + i * (idle_btn_w + idle_gap);

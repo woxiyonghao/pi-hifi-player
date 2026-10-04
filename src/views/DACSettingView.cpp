@@ -173,7 +173,9 @@ void DACSettingView::renderOptionRow(ImDrawList* dl, float x0, float row_y, floa
     float btn_start_x = x0 + 116.0f;
     float btn_gap = 8.0f;
     float total_avail_w = w - 116.0f - 16.0f;
-    float btn_w = (total_avail_w - btn_gap * static_cast<float>(count - 1)) / static_cast<float>(count);
+    float ideal_btn_w = (total_avail_w - btn_gap * static_cast<float>(count - 1)) / static_cast<float>(count);
+    const float max_btn_w = 210.0f; // 限制按钮单体最大合理宽度，避免在大屏/宽屏下拉伸过长失真
+    float btn_w = std::min(ideal_btn_w, max_btn_w);
     float btn_h = 26.0f;
 
     ImU32 accent = ThemeManager::getInstance().getAccentColor();
@@ -261,7 +263,8 @@ void DACSettingView::render(float x, float y, float w, float h) {
     };
 
     float tab_gap = 6.0f;
-    float tab_w = (chip_tab_w - tab_gap * 5.0f) / 6.0f;
+    const float max_tab_w = 140.0f;
+    float tab_w = std::min((chip_tab_w - tab_gap * 5.0f) / 6.0f, max_tab_w);
 
     for (int c = 0; c < 6; ++c) {
         float tx0 = chip_tab_x + static_cast<float>(c) * (tab_w + tab_gap);

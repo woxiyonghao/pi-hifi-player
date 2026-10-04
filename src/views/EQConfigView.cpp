@@ -275,7 +275,8 @@ void EQConfigView::renderPresetChips(ImDrawList* dl, ImVec2 card_min, ImVec2 car
     const size_t count = presets_.size();
 
     const float gap = 7.0f;
-    const float chip_w = (total_w - gap * (count - 1)) / static_cast<float>(count);
+    const float max_chip_w = 115.0f;
+    const float chip_w = std::min((total_w - gap * (count - 1)) / static_cast<float>(count), max_chip_w);
 
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
 
@@ -333,9 +334,12 @@ void EQConfigView::renderCurveCanvas(ImDrawList* dl, ImVec2 card_min, ImVec2 car
 
     const float canvas_x0 = card_min.x + 20.0f;
     const float canvas_x1 = card_max.x - 20.0f;
-    const float y0 = card_min.y + 106.0f;
-    const float y1 = card_min.y + 192.0f;
-    const float h = y1 - y0;
+    const float card_total_h = card_max.y - card_min.y;
+    // 动态适度放大曲线视窗高度 (基础由 86px 扩大至 138px，且随窗口拉高平滑延展，消除压抑矮长感)
+    const float canvas_h = std::clamp(card_total_h * 0.28f, 138.0f, 240.0f);
+    const float y0 = card_min.y + 104.0f;
+    const float y1 = y0 + canvas_h;
+    const float h = canvas_h;
     const float y_mid = (y0 + y1) * 0.5f;
     const float max_dev = h * 0.38f;
 
@@ -451,7 +455,9 @@ void EQConfigView::renderSliders(ImDrawList* dl, ImVec2 card_min, ImVec2 card_ma
     const float total_w = card_max.x - card_min.x - 40.0f - indent_x * 2.0f;
     const float col_w = total_w / static_cast<float>(NUM_BANDS);
 
-    const float y0 = card_min.y + 198.0f;
+    const float card_total_h = card_max.y - card_min.y;
+    const float canvas_h = std::clamp(card_total_h * 0.28f, 138.0f, 240.0f);
+    const float y0 = card_min.y + 104.0f + canvas_h + 12.0f;
     const float y1 = card_max.y - 12.0f;
 
     const float label_top_h = 24.0f;
