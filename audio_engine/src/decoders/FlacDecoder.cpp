@@ -35,7 +35,12 @@ bool FlacDecoder::open(const std::string& filepath) {
 
 uint64_t FlacDecoder::readFrames(float* buffer, uint64_t max_frames) {
     if (!flac_handle_ || !buffer || max_frames == 0) return 0;
-    return drflac_read_pcm_frames_f32(flac_handle_, max_frames, buffer);
+    uint64_t r = drflac_read_pcm_frames_f32(flac_handle_, max_frames, buffer);
+    if (r == 0 && flac_handle_->currentPCMFrame < flac_handle_->totalPCMFrameCount) {
+        std::cerr << "[FlacDecoder] ⚠️ drflac read 0 frames before end! current=" 
+                  << flac_handle_->currentPCMFrame << " total=" << flac_handle_->totalPCMFrameCount << std::endl;
+    }
+    return r;
 }
 
 bool FlacDecoder::seek(double target_seconds) {

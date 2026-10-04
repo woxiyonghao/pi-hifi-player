@@ -787,6 +787,10 @@ void AudioEngine::decodeWorker(std::stop_token stop_token) {
             ring_buffer_.write(decode_buf.data(), samples_to_write);
         } else {
             // 解码完毕 (EOF)
+            if (!is_eof_.load(std::memory_order_relaxed)) {
+                std::cout << "[AudioEngine] decodeWorker: reached EOF, total frames consumed=" 
+                          << frames_consumed_by_sink_.load() << std::endl;
+            }
             is_eof_.store(true, std::memory_order_release);
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
@@ -882,6 +886,7 @@ void AudioEngine::onSinkDataNeeded(float* output, size_t frame_count) {
 
     // 播放完毕检测
     if (is_eof_.load(std::memory_order_acquire) && ring_buffer_.available_read() == 0) {
+        std::cout << "[AudioEngine] onSinkDataNeeded: EOF and buffer drained, triggering eof_callback" << std::endl;
         if (eof_callback_) {
             eof_callback_();
         }

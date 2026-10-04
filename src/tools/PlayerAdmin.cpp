@@ -6,12 +6,14 @@
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <iostream>
 
 PlayerAdmin::PlayerAdmin() {
     loadConfig();
 
     // 注册音频底层 EOF 事件：曲目硬件推流完毕后自动切下一首
     audio_engine::AudioEngine::getInstance().setEofCallback([this]() {
+        std::cout << "[PlayerAdmin] setEofCallback triggered! calling next()..." << std::endl;
         this->next();
     });
 }
@@ -149,12 +151,16 @@ void PlayerAdmin::playPlaylist(const Playlist& playlist, size_t start_index) {
 }
 
 void PlayerAdmin::next() {
+    std::cout << "[PlayerAdmin] next() called! queue_size=" << playback_queue_.size()
+              << " cur_idx=" << current_track_index_
+              << " play_mode=" << static_cast<int>(play_mode_) << std::endl;
     if (playback_queue_.empty()) {
         return;
     }
 
     const size_t total_tracks = playback_queue_.size();
     if (total_tracks == 1) {
+        std::cout << "[PlayerAdmin] only 1 track in queue, rewinding to 0.0" << std::endl;
         seek(0.0);
         play();
         return;
@@ -229,6 +235,7 @@ void PlayerAdmin::previous() {
 // 3. 时间轴与进度步进实现
 // ==============================================================================
 void PlayerAdmin::seek(double target_sec) {
+    std::cout << "[PlayerAdmin] seek called: target_sec=" << target_sec << " (cur_dur=" << getDurationSec() << ")" << std::endl;
     current_time_sec_ = std::clamp(target_sec, 0.0, getDurationSec());
     audio_engine::AudioEngine::getInstance().seek(current_time_sec_);
 }
