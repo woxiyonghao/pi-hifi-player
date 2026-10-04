@@ -1,4 +1,5 @@
 #include "views/DACSettingView.hpp"
+#include "public/Platform.hpp"
 #include "public/UIConfig.hpp"
 #include "public/Font.hpp"
 #include "widgets/GlassCardRenderer.hpp"
@@ -15,14 +16,16 @@ DACSettingView::DACSettingView() {
 }
 
 std::string DACSettingView::getCurrentChipName() const {
+    if (selected_chip_ == 0) {
+        return Platform::isRaspberryPi() ? "ALSA Direct" : "Apple Direct";
+    }
     switch (selected_chip_) {
-        case 0: return "Apple Direct";
         case 1: return "Dual ES9038PRO";
         case 2: return "AK4499EX Velvet";
         case 3: return "CS43198 Master";
         case 4: return "R-2R Discrete";
         case 5: return "BD34301EKV";
-        default: return "Apple Direct";
+        default: return Platform::isRaspberryPi() ? "ALSA Direct" : "Apple Direct";
     }
 }
 
@@ -250,11 +253,11 @@ void DACSettingView::render(float x, float y, float w, float h) {
     float chip_tab_w = card_max.x - card_min.x - 32.0f;
     float chip_tab_h = 30.0f;
 
-    static const struct {
+    const struct {
         const char* label;
         const char* subtitle;
     } chip_tabs[6] = {
-        { "Apple 直通", "MacBook 硬件直通" },
+        { Platform::isRaspberryPi() ? "ALSA 直通" : "Apple 直通", Platform::isRaspberryPi() ? "树莓派硬件直通" : "MacBook 硬件直通" },
         { "ES9038PRO", "ESS Sabre 旗舰并联" },
         { "AK4499EX", "AKM 旭化成 Velvet" },
         { "CS43198", "Cirrus Logic Master" },
@@ -519,7 +522,9 @@ void DACSettingView::renderAppleDirectSettings(ImDrawList* dl, float x0, float& 
     const char* depth_opts[] = { "32-bit Float 浮点直通", "24-bit 整数定点" };
     renderOptionRow(dl, x0, cur_y + 72.0f, w, "数据位深", depth_opts, 2, apple_bit_depth_, "AppleDepth");
 
-    const char* desc = "Apple Direct 说明: MacBook Pro 硬件直通，Bit-Perfect 独占流绕过系统混音，原生 0 损耗输出。";
+    const char* desc = Platform::isRaspberryPi() 
+        ? "ALSA Direct 说明: 树莓派 5 硬件直通，Bit-Perfect 独占流绕过软件重采样，0 损耗输出。"
+        : "Apple Direct 说明: MacBook Pro 硬件直通，Bit-Perfect 独占流绕过系统混音，原生 0 损耗输出。";
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
     dl->AddText(ImVec2(x0 + 16.0f, cur_y + 112.0f), UIConfig::Color::TextMuted, desc);
     if (Fonts::Small) ImGui::PopFont();

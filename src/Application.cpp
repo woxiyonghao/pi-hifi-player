@@ -552,8 +552,8 @@ void Application::renderBackground(float screen_w, float screen_h) {
         float smooth_t = (1.0f - std::cos(frac * 3.14159265f)) * 0.5f;
         float level = levels12[idx0] * (1.0f - smooth_t) + levels12[idx1] * smooth_t;
 
-        // 大动态激荡曲线：确保高频与低频爆发时能满屏激荡涌动 (贯穿整个 600px 屏幕)
-        float dynamic_level = std::clamp(std::pow(level, 0.65f) * 1.35f, 0.0f, 1.0f);
+        // 真实声学动态曲线：去除过载过冲，保留真实的高低频落差与音乐跳动层次
+        float dynamic_level = std::clamp(std::pow(level, 0.85f) * 0.90f, 0.0f, 1.0f);
 
         int active_count = static_cast<int>(std::round(dynamic_level * num_rows));
         active_count = std::clamp(active_count, 0, num_rows);

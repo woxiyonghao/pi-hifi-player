@@ -827,9 +827,11 @@ void AudioEngine::onSinkDataNeeded(float* output, size_t frame_count) {
     } else if (f_state == FadeState::None && vol >= 0.9999f && !is_eq_enabled_.load(std::memory_order_relaxed)) {
         // 【Bit-Perfect 0dB 源码直出】：不进行任何浮点乘法计算，保持原始数据绝对纯净！
     } else {
-        // 【发烧级纯净 64-bit 浮点音量衰减 + 平滑 Hann 升余弦淡入淡出】
-        // 杜绝伪白噪声注入，呈现绝对深邃的黑底宁静度与零沙沙底噪
-        double double_vol = static_cast<double>(vol);
+        // 【发烧级纯净 64-bit 浮点音量衰减 + 人耳等响度对数电位器曲线 (Audio Taper)】
+        // 人耳感知声音强度呈对数特性 (dB)，若采用线性乘法会导致 10% 音量依然极其大声。
+        // 引入经典 HiFi 对数电位器曲线 (Cubic Taper: vol^3)，10% 对应约 -58dB 细腻微风，50% 对应约 -18dB 惬意聆听，100% 保持 0dB Bit-Perfect 源码直出。
+        double audio_taper_vol = (vol >= 0.999f) ? 1.0 : (static_cast<double>(vol) * static_cast<double>(vol) * static_cast<double>(vol));
+        double double_vol = audio_taper_vol;
         uint32_t channels = (current_spec_.channels > 0) ? current_spec_.channels : 2;
         uint64_t f_total = fade_total_frames_.load(std::memory_order_relaxed);
         uint64_t f_curr = fade_current_frame_.load(std::memory_order_relaxed);
