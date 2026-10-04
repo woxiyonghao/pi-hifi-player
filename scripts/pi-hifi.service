@@ -24,8 +24,8 @@ TTYVHangup=yes
 # 启动可执行文件
 ExecStart=/home/winheo/pi-hifi-music/build/PiHifiPlayer
 
-# 进程异常退出自动复活
-Restart=always
+# 进程异常退出自动复活 (正常退出不强行复活，支持退出至终端)
+Restart=on-failure
 RestartSec=2
 
 [Install]

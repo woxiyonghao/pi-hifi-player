@@ -13,7 +13,7 @@
 set -e
 
 # 默认优先使用的树莓派 IP 与用户名
-DEFAULT_PI_HOST="192.168.1.169"
+DEFAULT_PI_HOST="192.168.1.184"
 DEFAULT_PI_USER="winheo"
 
 PI_HOST=""
@@ -132,7 +132,6 @@ rsync -avz --delete \
     --exclude "cmake-build-debug/" \
     --exclude ".idea/" \
     --exclude ".vscode/" \
-    --exclude ".git/" \
     --exclude ".cache/" \
     --exclude "*.DS_Store" \
     ./ "${PI_USER}@${PI_HOST}:${REMOTE_DIR}/"
