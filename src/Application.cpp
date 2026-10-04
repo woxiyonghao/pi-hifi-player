@@ -489,15 +489,15 @@ void Application::update(float dt) {
 void Application::renderBackground(float screen_w, float screen_h) {
     ImDrawList* bg_dl = ImGui::GetBackgroundDrawList();
 
+    float ease_t = anim_progress_ < 0.5f ? 4.0f * anim_progress_ * anim_progress_ * anim_progress_
+                                         : 1.0f - std::pow(-2.0f * anim_progress_ + 2.0f, 3.0f) * 0.5f;
+    float sidebar_bg_x = (anim_progress_ >= 0.999f) ? 0.0f : (UIConfig::Layout::SidebarWidth * (1.0f - ease_t));
+
     // 1. 铺设整个 App 的基准发烧底色 (完全对齐原设计的区域与色值规范)
     if (anim_progress_ >= 0.999f) {
         // 完全全屏屏保状态：底板 100% 满屏无缝铺满，杜绝任何分界线与色块
         bg_dl->AddRectFilled(ImVec2(0.0f, 0.0f), ImVec2(screen_w, screen_h), UIConfig::Color::MainStageBg);
     } else {
-        float ease_t = anim_progress_ < 0.5f ? 4.0f * anim_progress_ * anim_progress_ * anim_progress_
-                                             : 1.0f - std::pow(-2.0f * anim_progress_ + 2.0f, 3.0f) * 0.5f;
-        float sidebar_bg_x = UIConfig::Layout::SidebarWidth * (1.0f - ease_t);
-
         if (sidebar_bg_x > 0.5f) {
             // 左侧侧边栏暗色基底 (0 ~ sidebar_bg_x)
             bg_dl->AddRectFilled(ImVec2(0.0f, 0.0f), ImVec2(sidebar_bg_x, screen_h), UIConfig::Color::WindowBg);
@@ -510,6 +510,20 @@ void Application::renderBackground(float screen_w, float screen_h) {
     if (bg_mode == BackgroundVisualMode::PureBlack) {
         return;
     }
+
+    // 当未完全进入全屏时，将底层背景视觉特效严格限制在右侧主舞台区域，坚决不向左渗透到侧边栏
+    bool has_sidebar_clip = (sidebar_bg_x > 0.5f);
+    if (has_sidebar_clip) {
+        bg_dl->PushClipRect(ImVec2(sidebar_bg_x, 0.0f), ImVec2(screen_w, screen_h), true);
+    }
+
+    auto end_clip = [&]() {
+        if (has_sidebar_clip) {
+            bg_dl->PopClipRect();
+            // 彻底固化左侧侧边栏暗色基底，确保左侧零色块、零溢出
+            bg_dl->AddRectFilled(ImVec2(0.0f, 0.0f), ImVec2(sidebar_bg_x, screen_h), UIConfig::Color::WindowBg);
+        }
+    };
 
     auto& player = PlayerAdmin::getInstance();
     bool is_playing = player.isPlaying();
@@ -526,6 +540,7 @@ void Application::renderBackground(float screen_w, float screen_h) {
         accuphase_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
         accuphase_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
         accuphase_renderer_.render(screen_w, screen_h, l, r);
+        end_clip();
         return;
     }
 
@@ -533,6 +548,7 @@ void Application::renderBackground(float screen_w, float screen_h) {
         vu_renderer_.setTheme(ThemeManager::getInstance().getMeterTheme());
         vu_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
         vu_renderer_.render(screen_w, screen_h, l, r);
+        end_clip();
         return;
     }
 
@@ -540,6 +556,7 @@ void Application::renderBackground(float screen_w, float screen_h) {
         tape_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
         tape_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
         tape_renderer_.render(screen_w, screen_h, is_playing, player.getProgress());
+        end_clip();
         return;
     }
 
@@ -547,6 +564,7 @@ void Application::renderBackground(float screen_w, float screen_h) {
         siri_wave_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
         siri_wave_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
         siri_wave_renderer_.render(screen_w, screen_h, is_playing, l, r);
+        end_clip();
         return;
     }
 
@@ -554,6 +572,7 @@ void Application::renderBackground(float screen_w, float screen_h) {
         siri_orb_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
         siri_orb_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
         siri_orb_renderer_.render(screen_w, screen_h, is_playing, l, r);
+        end_clip();
         return;
     }
 
@@ -561,6 +580,7 @@ void Application::renderBackground(float screen_w, float screen_h) {
         bubbles_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
         bubbles_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
         bubbles_renderer_.render(screen_w, screen_h, is_playing, levels12);
+        end_clip();
         return;
     }
 
@@ -568,6 +588,7 @@ void Application::renderBackground(float screen_w, float screen_h) {
         neon_wave_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
         neon_wave_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
         neon_wave_renderer_.render(screen_w, screen_h, is_playing, levels12, 12);
+        end_clip();
         return;
     }
 
@@ -575,6 +596,7 @@ void Application::renderBackground(float screen_w, float screen_h) {
         cyber_grid_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
         cyber_grid_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
         cyber_grid_renderer_.render(screen_w, screen_h, is_playing, levels12, 12);
+        end_clip();
         return;
     }
 
@@ -582,15 +604,20 @@ void Application::renderBackground(float screen_w, float screen_h) {
         glass_clock_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
         glass_clock_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
         glass_clock_renderer_.render(screen_w, screen_h, is_playing, l, r);
+        end_clip();
         return;
     }
 
-    // 几何排版参数：左右对齐发烧容器外边距 (16px ~ 1008px)
+    // 几何排版参数：
+    // 未全屏时紧密对齐主舞台视口 (sidebar_bg_x + 16px ~ screen_w - 16px)，绝不向左侵入侧边栏
+    // 全屏时随动画平滑展开至全屏 (16px ~ screen_w - 16px)
     const float margin_x = UIConfig::Layout::ContainerMarginX; // 16.0f
-    const float total_w = screen_w - margin_x * 2.0f;          // 992.0f
+    const float start_x = (sidebar_bg_x > 0.5f) ? (sidebar_bg_x + margin_x) : margin_x;
+    const float end_x = screen_w - margin_x;
+    const float total_w = std::max(end_x - start_x, 100.0f);
     const int num_cols = 48;                                   // 48 列超宽音轨点阵
-    const float gap_x = 4.0f;                                  // 列间距
-    const float col_w = (total_w - (num_cols - 1) * gap_x) / num_cols; // ~16.75px
+    const float gap_x = (total_w > 700.0f) ? 3.5f : 2.5f;      // 列间距
+    const float col_w = (total_w - (num_cols - 1) * gap_x) / num_cols;
     
     const float seg_h = 6.0f;                                  // 每个方块高度
     const float gap_y = 2.5f;                                  // 方块纵向间距
@@ -600,6 +627,7 @@ void Application::renderBackground(float screen_w, float screen_h) {
 
     // 2. 如果未播放且为 LED 频谱模式，保持通透深空暗黑基底
     if (!is_playing) {
+        end_clip();
         return;
     }
 
@@ -611,7 +639,7 @@ void Application::renderBackground(float screen_w, float screen_h) {
     const ImU32 peak_color = ThemeManager::getInstance().getSpectrumPeakColor();
 
     for (int c = 0; c < num_cols; ++c) {
-        float x0 = margin_x + c * (col_w + gap_x);
+        float x0 = start_x + c * (col_w + gap_x);
         float x1 = x0 + col_w;
 
         // 平滑余弦插值获取当前列的连续频段能量
@@ -652,6 +680,8 @@ void Application::renderBackground(float screen_w, float screen_h) {
             bg_dl->AddRectFilled(ImVec2(x0, py0), ImVec2(x1, py1), peak_color, seg_round);
         }
     }
+
+    end_clip();
 }
 
 void Application::render() {

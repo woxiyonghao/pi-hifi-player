@@ -631,7 +631,7 @@ float SystemSettingsView::renderPowerSection(ImDrawList* dl, float x0, float y0,
     // 1. 固件版本
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
     dl->AddText(ImVec2(x0 + 16.0f, y0 + 34.0f), UIConfig::Color::TextMuted,
-                "固件版本：PiHiFi Player OS v1.0.3 (ARMv8.2-A / 60fps Native Pure C++20)");
+                "固件版本：PiHiFi Player OS v1.0.4 (ARMv8.2-A / 60fps Native Pure C++20)");
 
     // 2. 实时网络与调试 IP
     std::string ip_str = net.is_connected ? (net.ip + " (" + net.interface_name + ")") : "未连接网络";
