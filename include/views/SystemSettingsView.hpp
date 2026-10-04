@@ -41,11 +41,18 @@ private:
     void loadSettings();
     void saveSettings();
 
+    enum class ConfirmAction {
+        None,
+        Reboot,
+        Shutdown
+    };
+
     // 内部模块卡片渲染闭包
     void renderAudioSection(ImDrawList* dl, float x0, float y0, float w);
     void renderHardwareSection(ImDrawList* dl, float x0, float y0, float w);
     float renderUpdateSection(ImDrawList* dl, float x0, float y0, float w);
-    void renderPowerSection(ImDrawList* dl, float x0, float y0, float w);
+    float renderPowerSection(ImDrawList* dl, float x0, float y0, float w);
+    void renderPowerConfirmModal();
 
     static void applyHardwareBufferSize(int mode);
     static void applyFadeDuration(int mode);
@@ -67,4 +74,7 @@ private:
 
     NavigateTabCallback on_navigate_tab_;
     IdleFullscreenCallback on_idle_fullscreen_changed_;
+
+    ConfirmAction confirm_action_ = ConfirmAction::None;
+    std::string power_status_msg_;
 };

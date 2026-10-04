@@ -122,6 +122,9 @@ void MainStageView::render(SidebarTab current_tab,
             case SidebarTab::CustomPlaylist:
                 custom_playlist_view_.render(selected_playlist_id, playlists, stage_x, stage_y, stage_w, stage_h);
                 break;
+            case SidebarTab::Terminal:
+                terminal_view_.render(stage_x, stage_y, stage_w, stage_h);
+                break;
         }
     }
     ImGui::End();

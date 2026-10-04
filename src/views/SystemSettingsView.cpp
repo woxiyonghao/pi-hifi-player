@@ -7,6 +7,7 @@
 #include "tools/UpdateManager.hpp"
 #include "audio_engine/AudioEngine.hpp"
 #include "tools/PlayerAdmin.hpp"
+#include "tools/NetworkTool.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -185,15 +186,19 @@ void SystemSettingsView::render(float x, float y, float w, float h) {
         ImGui::SetCursorScreenPos(ImVec2(p_update.x, p_update.y + update_card_h));
         ImGui::Dummy(ImVec2(0.0f, 10.0f));
 
-        // 板块四：系统维护与电源管控 (88px)
+        // 板块四：系统维护、网络调试与电源管控
         ImVec2 p_power = ImGui::GetCursorScreenPos();
-        renderPowerSection(child_dl, p_power.x, p_power.y, section_w);
-        ImGui::SetCursorScreenPos(ImVec2(p_power.x, p_power.y + 88.0f));
+        float power_card_h = renderPowerSection(child_dl, p_power.x, p_power.y, section_w);
+        ImGui::SetCursorScreenPos(ImVec2(p_power.x, p_power.y + power_card_h));
         ImGui::Dummy(ImVec2(0.0f, 16.0f)); // 底部缓冲留白
     }
     ImGui::EndChild();
     ImGui::PopStyleColor(4);
     ImGui::PopStyleVar(2);
+
+    if (confirm_action_ != ConfirmAction::None) {
+        renderPowerConfirmModal();
+    }
 }
 
 void SystemSettingsView::renderAudioSection(ImDrawList* dl, float x0, float y0, float w) {
@@ -606,8 +611,8 @@ float SystemSettingsView::renderUpdateSection(ImDrawList* dl, float x0, float y0
     return h;
 }
 
-void SystemSettingsView::renderPowerSection(ImDrawList* dl, float x0, float y0, float w) {
-    float h = 88.0f;
+float SystemSettingsView::renderPowerSection(ImDrawList* dl, float x0, float y0, float w) {
+    float h = 142.0f;
     ImVec2 p0(x0, y0);
     ImVec2 p1(x0 + w, y0 + h);
 
@@ -616,17 +621,57 @@ void SystemSettingsView::renderPowerSection(ImDrawList* dl, float x0, float y0, 
     dl->AddLine(ImVec2(p0.x + 10.0f, p0.y), ImVec2(p1.x - 10.0f, p0.y), IM_COL32(255, 255, 255, 38), 1.0f);
 
     if (Fonts::Regular) ImGui::PushFont(Fonts::Regular);
-    dl->AddText(ImVec2(x0 + 16.0f, y0 + 10.0f), UIConfig::Color::TextActive, "系统维护与电源管控");
+    dl->AddText(ImVec2(x0 + 16.0f, y0 + 10.0f), UIConfig::Color::TextActive, "系统维护、网络调试与电源管控");
     if (Fonts::Regular) ImGui::PopFont();
 
+    NetworkInfo net = NetworkTool::getNetworkInfo();
+
+    // 1. 固件版本
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
     dl->AddText(ImVec2(x0 + 16.0f, y0 + 34.0f), UIConfig::Color::TextMuted,
                 "固件版本：PiHiFi Player OS v1.0.0 (ARMv8.2-A / 60fps Native Pure C++20)");
+
+    // 2. 实时网络与调试 IP
+    std::string ip_str = net.is_connected ? (net.ip + " (" + net.interface_name + ")") : "未连接网络";
+    dl->AddText(ImVec2(x0 + 16.0f, y0 + 54.0f), UIConfig::Color::TextMuted, "局域网 IP：");
+    dl->AddText(ImVec2(x0 + 84.0f, y0 + 54.0f), net.is_connected ? IM_COL32(52, 211, 153, 255) : IM_COL32(248, 113, 113, 255), ip_str.c_str());
+
+    if (!net.mac.empty() && net.mac != "--") {
+        std::string mac_str = " · MAC: " + net.mac;
+        ImVec2 ip_sz = ImGui::CalcTextSize(ip_str.c_str());
+        dl->AddText(ImVec2(x0 + 88.0f + ip_sz.x, y0 + 54.0f), UIConfig::Color::TextMuted, mac_str.c_str());
+    }
+
+    // 3. Wi-Fi 连接信息与刷新按钮
+    dl->AddText(ImVec2(x0 + 16.0f, y0 + 74.0f), UIConfig::Color::TextMuted, "Wi-Fi 状态：");
+    std::string wifi_str = net.wifi_ssid + " (" + net.wifi_signal + ")";
+    dl->AddText(ImVec2(x0 + 84.0f, y0 + 74.0f), net.is_connected ? IM_COL32(56, 189, 248, 255) : UIConfig::Color::TextMuted, wifi_str.c_str());
+
+    // 刷新网络按钮
+    ImVec2 wifi_sz = ImGui::CalcTextSize(wifi_str.c_str());
+    float ref_btn_x = x0 + 96.0f + wifi_sz.x;
+    float ref_btn_y = y0 + 72.0f;
+    float ref_btn_w = 80.0f;
+    float ref_btn_h = 20.0f;
+
+    ImGui::SetCursorScreenPos(ImVec2(ref_btn_x, ref_btn_y));
+    ImGui::InvisibleButton("##RefreshNetBtn", ImVec2(ref_btn_w, ref_btn_h));
+    bool ref_hov = ImGui::IsItemHovered();
+    if (ImGui::IsItemClicked()) {
+        NetworkTool::refreshAsync();
+    }
+    dl->AddRectFilled(ImVec2(ref_btn_x, ref_btn_y), ImVec2(ref_btn_x + ref_btn_w, ref_btn_y + ref_btn_h),
+                      ref_hov ? IM_COL32(255, 255, 255, 45) : IM_COL32(255, 255, 255, 20), 4.0f);
+    dl->AddRect(ImVec2(ref_btn_x, ref_btn_y), ImVec2(ref_btn_x + ref_btn_w, ref_btn_y + ref_btn_h),
+                IM_COL32(255, 255, 255, ref_hov ? 120 : 45), 4.0f, 0, 1.0f);
+    ImVec2 ref_sz = ImGui::CalcTextSize("刷新网络");
+    dl->AddText(ImVec2(ref_btn_x + (ref_btn_w - ref_sz.x) * 0.5f, ref_btn_y + (ref_btn_h - ref_sz.y) * 0.5f),
+                IM_COL32(220, 230, 245, 240), "刷新网络");
     if (Fonts::Small) ImGui::PopFont();
 
     float btn_w = 140.0f;
-    float btn_h = 26.0f;
-    float btn_y = y0 + 52.0f;
+    float btn_h = 28.0f;
+    float btn_y = y0 + 102.0f;
 
     // 重启系统
     ImVec2 rb_min(x0 + 16.0f, btn_y);
@@ -634,7 +679,9 @@ void SystemSettingsView::renderPowerSection(ImDrawList* dl, float x0, float y0, 
     ImGui::SetCursorScreenPos(rb_min);
     ImGui::InvisibleButton("##RebootBtn", ImVec2(btn_w, btn_h));
     bool rb_hov = ImGui::IsItemHovered();
-    (void)rb_hov;
+    if (ImGui::IsItemClicked()) {
+        confirm_action_ = ConfirmAction::Reboot;
+    }
     dl->AddRectFilled(rb_min, rb_max, rb_hov ? IM_COL32(234, 179, 8, 55) : IM_COL32(234, 179, 8, 25), 6.0f);
     dl->AddRect(rb_min, rb_max, IM_COL32(234, 179, 8, rb_hov ? 200 : 100), 6.0f, 0, 1.0f);
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
@@ -649,7 +696,9 @@ void SystemSettingsView::renderPowerSection(ImDrawList* dl, float x0, float y0, 
     ImGui::SetCursorScreenPos(sd_min);
     ImGui::InvisibleButton("##ShutdownBtn", ImVec2(btn_w, btn_h));
     bool sd_hov = ImGui::IsItemHovered();
-    (void)sd_hov;
+    if (ImGui::IsItemClicked()) {
+        confirm_action_ = ConfirmAction::Shutdown;
+    }
     dl->AddRectFilled(sd_min, sd_max, sd_hov ? IM_COL32(239, 68, 68, 60) : IM_COL32(239, 68, 68, 25), 6.0f);
     dl->AddRect(sd_min, sd_max, IM_COL32(239, 68, 68, sd_hov ? 220 : 110), 6.0f, 0, 1.0f);
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
@@ -657,4 +706,113 @@ void SystemSettingsView::renderPowerSection(ImDrawList* dl, float x0, float y0, 
     dl->AddText(ImVec2(sd_min.x + (btn_w - sd_sz.x) * 0.5f, btn_y + (btn_h - sd_sz.y) * 0.5f),
                 IM_COL32(254, 202, 202, 240), "安全关机");
     if (Fonts::Small) ImGui::PopFont();
+
+    if (!power_status_msg_.empty()) {
+        if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+        dl->AddText(ImVec2(x0 + 36.0f + btn_w * 2.0f, btn_y + 6.0f), IM_COL32(245, 158, 11, 255), power_status_msg_.c_str());
+        if (Fonts::Small) ImGui::PopFont();
+    }
+
+    return h;
+}
+
+void SystemSettingsView::renderPowerConfirmModal() {
+    ImGuiIO& io = ImGui::GetIO();
+    float screen_w = io.DisplaySize.x;
+    float screen_h = io.DisplaySize.y;
+
+    // 1. 全透明交互遮罩
+    ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
+    ImGui::SetNextWindowSize(io.DisplaySize);
+    ImGuiWindowFlags backdrop_flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                                      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+                                      ImGuiWindowFlags_NoBackground;
+    if (ImGui::Begin("##PowerConfirmModalBackdrop", nullptr, backdrop_flags)) {
+        ImGui::InvisibleButton("##PowerModalBackdropBlocker", io.DisplaySize);
+        if (ImGui::IsItemClicked()) {
+            confirm_action_ = ConfirmAction::None;
+        }
+    }
+    ImGui::End();
+
+    // 2. 居中模态卡片尺寸
+    const float modal_w = 400.0f;
+    const float modal_h = 190.0f;
+    const float modal_x = (screen_w - modal_w) * 0.5f;
+    const float modal_y = (screen_h - modal_h) * 0.5f;
+
+    ImGui::SetNextWindowPos(ImVec2(modal_x, modal_y));
+    ImGui::SetNextWindowSize(ImVec2(modal_w, modal_h));
+
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                             ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+                             ImGuiWindowFlags_NoCollapse;
+
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, IM_COL32(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_Border, IM_COL32(0, 0, 0, 0));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 16.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(24.0f, 20.0f));
+
+    if (ImGui::Begin("##PowerConfirmModalDialog", nullptr, flags)) {
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        ImVec2 p_min = ImGui::GetWindowPos();
+        ImVec2 p_max(p_min.x + modal_w, p_min.y + modal_h);
+
+        dl->AddRectFilled(ImVec2(p_min.x - 2.0f, p_min.y + 4.0f),
+                          ImVec2(p_max.x + 2.0f, p_max.y + 14.0f),
+                          IM_COL32(0, 0, 0, 140), 18.0f);
+        GlassCardRenderer::drawFrosted(dl, p_min, p_max, 16.0f);
+
+        bool is_reboot = (confirm_action_ == ConfirmAction::Reboot);
+        const char* title = is_reboot ? "确认重启数播系统" : "确认安全关机";
+        const char* desc1 = is_reboot ? "确定要安全重启树莓派吗？" : "确定要安全关闭树莓派吗？";
+        const char* desc2 = is_reboot ? "系统将安全落盘所有曲库与设置数据后重新引导。" : "系统将安全卸载磁盘。等待绿色指示灯熄灭后方可拔电！";
+
+        if (Fonts::Medium) ImGui::PushFont(Fonts::Medium);
+        ImU32 title_col = is_reboot ? IM_COL32(234, 179, 8, 255) : IM_COL32(239, 68, 68, 255);
+        ImGui::TextColored(ImColor(title_col).Value, "%s", title);
+        if (Fonts::Medium) ImGui::PopFont();
+
+        ImGui::Dummy(ImVec2(0.0f, 8.0f));
+
+        if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+        ImGui::TextColored(ImVec4(0.85f, 0.88f, 0.95f, 1.0f), "%s", desc1);
+        ImGui::TextColored(ImVec4(0.60f, 0.65f, 0.75f, 1.0f), "%s", desc2);
+        if (Fonts::Small) ImGui::PopFont();
+
+        ImGui::Dummy(ImVec2(0.0f, 16.0f));
+
+        float btn_w = 120.0f;
+        float btn_h = 32.0f;
+        float spacing = 20.0f;
+        float start_x = (modal_w - (btn_w * 2.0f + spacing)) * 0.5f;
+
+        ImGui::SetCursorPos(ImVec2(start_x, modal_h - btn_h - 20.0f));
+        if (ImGui::Button("取消", ImVec2(btn_w, btn_h))) {
+            confirm_action_ = ConfirmAction::None;
+        }
+
+        ImGui::SameLine(0.0f, spacing);
+        ImGui::PushStyleColor(ImGuiCol_Button, is_reboot ? IM_COL32(202, 138, 4, 180) : IM_COL32(220, 38, 38, 180));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, is_reboot ? IM_COL32(234, 179, 8, 220) : IM_COL32(239, 68, 68, 220));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, is_reboot ? IM_COL32(161, 98, 7, 255) : IM_COL32(185, 28, 28, 255));
+
+        const char* confirm_label = is_reboot ? "确认重启" : "确认关机";
+        if (ImGui::Button(confirm_label, ImVec2(btn_w, btn_h))) {
+            if (is_reboot) {
+                power_status_msg_ = "正在执行重启指令...";
+                confirm_action_ = ConfirmAction::None;
+                system("sudo reboot || reboot &");
+            } else {
+                power_status_msg_ = "正在执行关机指令，请待绿灯熄灭后拔电...";
+                confirm_action_ = ConfirmAction::None;
+                system("sudo poweroff || shutdown -h now &");
+            }
+        }
+        ImGui::PopStyleColor(3);
+    }
+    ImGui::End();
+    ImGui::PopStyleVar(3);
+    ImGui::PopStyleColor(2);
 }

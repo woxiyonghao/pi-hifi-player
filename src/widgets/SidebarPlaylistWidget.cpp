@@ -36,6 +36,13 @@ void SidebarPlaylistWidget::drawPlaylistIcon(ImDrawList* dl, ImVec2 center, Play
             dl->AddLine(ImVec2(center.x, center.y - 5.0f), ImVec2(center.x, center.y + 5.0f), color, 1.5f);
             break;
         }
+        case PlaylistIcon::Terminal: {
+            // 发烧极客风格终端提示符：>_
+            dl->AddLine(ImVec2(center.x - 5.0f, center.y - 4.5f), ImVec2(center.x - 1.0f, center.y), color, 1.6f);
+            dl->AddLine(ImVec2(center.x - 1.0f, center.y), ImVec2(center.x - 5.0f, center.y + 4.5f), color, 1.6f);
+            dl->AddLine(ImVec2(center.x + 1.0f, center.y + 4.5f), ImVec2(center.x + 5.5f, center.y + 4.5f), color, 1.6f);
+            break;
+        }
     }
 }
 
@@ -131,6 +138,19 @@ std::optional<PlaylistIndicatorTarget> SidebarPlaylistWidget::render(
             if (on_create_playlist_) {
                 on_create_playlist_();
             }
+        }
+    }
+
+    // 4. 系统终端 (放置在添加播放列表正下方)
+    {
+        ImGui::Dummy(ImVec2(0.0f, 4.0f));
+        bool is_terminal = (current_tab == SidebarTab::Terminal);
+        PlaylistIndicatorTarget target{};
+        if (drawPlaylistItem(PlaylistIcon::Terminal, "系统终端", is_terminal, target)) {
+            current_tab = SidebarTab::Terminal;
+        }
+        if (is_terminal) {
+            active_target = target;
         }
     }
 

@@ -20,7 +20,8 @@ struct PlaylistIndicatorTarget {
 enum class PlaylistIcon {
     Music,      // 发烧音符 (所有音乐)
     Playlist,   // 三道横线 (实体歌单)
-    Add         // 十字加号 (新建歌单)
+    Add,        // 十字加号 (新建歌单)
+    Terminal    // 终端提示符 (系统终端)
 };
 
 class SidebarPlaylistWidget {
