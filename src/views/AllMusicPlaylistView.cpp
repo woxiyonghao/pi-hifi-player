@@ -301,7 +301,7 @@ void AllMusicPlaylistView::render(float x, float y, float w, float h, const std:
                 cur_dl->AddText(ImVec2(left_x, text_y), accent, "▶");
                 left_x += 16.0f;
             } else {
-                char num_buf[16];
+                char num_buf[32];
                 std::snprintf(num_buf, sizeof(num_buf), "%02zu.", row_idx + 1);
                 if (Fonts::Small) ImGui::PushFont(Fonts::Small);
                 cur_dl->AddText(ImVec2(left_x, text_y + 1.0f), IM_COL32(140, 155, 175, 200), num_buf);
