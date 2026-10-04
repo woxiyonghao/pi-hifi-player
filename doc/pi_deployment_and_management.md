@@ -30,9 +30,29 @@ sudo nmcli connection modify "<YOUR_WIFI_SSID>" 802-11-wireless.powersave 2
 hostname -I
 ```
 
+### Mac 端探测树莓派是否连通
+在 Mac 终端中运行以下命令，可快速验证与树莓派的连通状态：
+```bash
+# 方式 A：通过 mDNS 主机名测试连通性 (无需每次手动查 IP)
+ping -c 3 winheo-pi.local
+
+# 方式 B：直接探测当前分配的 IP
+ping -c 3 <PI_IP>
+
+# 方式 C：检测 22 端口 (SSH 服务是否就绪)
+nc -zvw 2 <PI_IP> 22
+# 若显示 "succeeded!" 说明已连通且随时可一键部署
+```
+
 ---
 
 ## 二、Git 认证与专属 SSH 密钥配置 (打通 GitHub 免密 OTA 自更)
+
+> [!IMPORTANT]
+> **安全与密钥保护规范**：  
+> 本项目文档与代码库中**严格禁止出现任何私钥、明文密码或个人敏感凭据**。  
+> 树莓派的 SSH 密钥由树莓派底层系统直接原生生成（私钥权限 `600`，严格驻留在树莓派本机 `~/.ssh/`）。  
+> 拷贝到 GitHub 的仅为**公开的公钥（Public Key）**，用于身份鉴权，绝不泄露任何私密信息。
 
 为了让树莓派内置的 **UpdateManager (OTA 检查与自动更新模块)** 能够随时拉取 GitHub 最新代码并自动编译，需在树莓派上配置 GitHub 专属 SSH 密钥：
 
