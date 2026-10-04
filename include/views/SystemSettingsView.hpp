@@ -77,4 +77,5 @@ private:
 
     ConfirmAction confirm_action_ = ConfirmAction::None;
     std::string power_status_msg_;
+    float network_refresh_feedback_timer_ = 0.0f;
 };

@@ -649,26 +649,36 @@ float SystemSettingsView::renderPowerSection(ImDrawList* dl, float x0, float y0,
     std::string wifi_str = net.wifi_ssid + " (" + net.wifi_signal + ")";
     dl->AddText(ImVec2(x0 + 84.0f, y0 + 74.0f), net.is_connected ? IM_COL32(56, 189, 248, 255) : UIConfig::Color::TextMuted, wifi_str.c_str());
 
-    // 刷新网络按钮
-    ImVec2 wifi_sz = ImGui::CalcTextSize(wifi_str.c_str());
-    float ref_btn_x = x0 + 96.0f + wifi_sz.x;
-    float ref_btn_y = y0 + 72.0f;
-    float ref_btn_w = 80.0f;
-    float ref_btn_h = 20.0f;
+    // 专属「刷新网络」独立大按钮 (靠右排布，面积充裕，适合 7 寸触控屏单指点击)
+    float ref_btn_w = 92.0f;
+    float ref_btn_h = 30.0f;
+    float ref_btn_x = x0 + w - ref_btn_w - 18.0f;
+    float ref_btn_y = y0 + 52.0f;
 
     ImGui::SetCursorScreenPos(ImVec2(ref_btn_x, ref_btn_y));
     ImGui::InvisibleButton("##RefreshNetBtn", ImVec2(ref_btn_w, ref_btn_h));
     bool ref_hov = ImGui::IsItemHovered();
     if (ImGui::IsItemClicked()) {
         NetworkTool::refreshAsync();
+        network_refresh_feedback_timer_ = 1.5f; // 显示 1.5 秒绿色刷新反馈
     }
-    dl->AddRectFilled(ImVec2(ref_btn_x, ref_btn_y), ImVec2(ref_btn_x + ref_btn_w, ref_btn_y + ref_btn_h),
-                      ref_hov ? IM_COL32(255, 255, 255, 45) : IM_COL32(255, 255, 255, 20), 4.0f);
-    dl->AddRect(ImVec2(ref_btn_x, ref_btn_y), ImVec2(ref_btn_x + ref_btn_w, ref_btn_y + ref_btn_h),
-                IM_COL32(255, 255, 255, ref_hov ? 120 : 45), 4.0f, 0, 1.0f);
-    ImVec2 ref_sz = ImGui::CalcTextSize("刷新网络");
-    dl->AddText(ImVec2(ref_btn_x + (ref_btn_w - ref_sz.x) * 0.5f, ref_btn_y + (ref_btn_h - ref_sz.y) * 0.5f),
-                IM_COL32(220, 230, 245, 240), "刷新网络");
+
+    if (network_refresh_feedback_timer_ > 0.0f) {
+        network_refresh_feedback_timer_ -= ImGui::GetIO().DeltaTime;
+    }
+
+    bool is_just_refreshed = (network_refresh_feedback_timer_ > 0.0f);
+    const char* ref_label = is_just_refreshed ? "已刷新" : "刷新网络";
+
+    ImU32 btn_bg = is_just_refreshed ? IM_COL32(52, 211, 153, 50) : (ref_hov ? IM_COL32(255, 255, 255, 40) : IM_COL32(255, 255, 255, 20));
+    ImU32 btn_border = is_just_refreshed ? IM_COL32(52, 211, 153, 180) : (ref_hov ? IM_COL32(255, 255, 255, 120) : IM_COL32(255, 255, 255, 45));
+    ImU32 btn_text_col = is_just_refreshed ? IM_COL32(52, 211, 153, 255) : (ref_hov ? UIConfig::Color::TextActive : UIConfig::Color::TextNormal);
+
+    dl->AddRectFilled(ImVec2(ref_btn_x, ref_btn_y), ImVec2(ref_btn_x + ref_btn_w, ref_btn_y + ref_btn_h), btn_bg, 6.0f);
+    dl->AddRect(ImVec2(ref_btn_x, ref_btn_y), ImVec2(ref_btn_x + ref_btn_w, ref_btn_y + ref_btn_h), btn_border, 6.0f, 0, 1.0f);
+    ImVec2 ref_sz = ImGui::CalcTextSize(ref_label);
+    dl->AddText(ImVec2(ref_btn_x + (ref_btn_w - ref_sz.x) * 0.5f, ref_btn_y + (ref_btn_h - ref_sz.y) * 0.5f), btn_text_col, ref_label);
+
     if (Fonts::Small) ImGui::PopFont();
 
     float btn_w = 140.0f;
