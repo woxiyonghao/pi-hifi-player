@@ -228,7 +228,7 @@ void UpdateManager::executeUpdateAsync(std::function<void(bool success, const st
         refreshLocalVersionInfo();
         {
             std::lock_guard<std::mutex> lock(mutex_);
-            progress_msg_ = "✅ 固件更新与编译成功！";
+            progress_msg_ = "固件更新与编译成功！";
             status_.store(UpdateStatus::UpdateSuccess);
         }
 

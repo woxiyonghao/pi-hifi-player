@@ -527,21 +527,29 @@ float SystemSettingsView::renderUpdateSection(ImDrawList* dl, float x0, float y0
                     UIConfig::Color::TextMuted, st == UpdateStatus::Checking ? "检测中..." : "编译中...");
     }
 
-    // 2. 状态标签或动作按钮
+    // 2. 状态标签或动作按钮 (使用精细硬件状态呼吸灯 + 纯净 CJK 文本，杜绝 Emoji 字体缺失导致 '?' 乱码)
     float status_x = chk_max.x + 14.0f;
+    float dot_radius = 3.5f;
+    float dot_cy = btn_y + btn_h * 0.5f;
+    float text_x = status_x + 14.0f;
+
     if (st == UpdateStatus::Idle) {
-        dl->AddText(ImVec2(status_x, btn_y + 5.0f), UIConfig::Color::TextMuted, "点击左侧按钮向远端仓库请求检测最新固件");
+        dl->AddCircleFilled(ImVec2(status_x + dot_radius, dot_cy), dot_radius, IM_COL32(148, 163, 184, 200));
+        dl->AddText(ImVec2(text_x, btn_y + 5.0f), UIConfig::Color::TextMuted, "点击左侧按钮向远端仓库请求检测最新固件");
     } else if (st == UpdateStatus::Checking) {
-        dl->AddText(ImVec2(status_x, btn_y + 5.0f), IM_COL32(250, 204, 21, 240), "正在连接远端仓库 (git fetch)...");
+        dl->AddCircleFilled(ImVec2(status_x + dot_radius, dot_cy), dot_radius, IM_COL32(250, 204, 21, 240));
+        dl->AddText(ImVec2(text_x, btn_y + 5.0f), IM_COL32(250, 204, 21, 240), "正在连接远端仓库 (git fetch)...");
     } else if (st == UpdateStatus::UpToDate) {
-        dl->AddText(ImVec2(status_x, btn_y + 5.0f), IM_COL32(52, 211, 153, 240), "✅ 当前固件已是最新版本 (与远端保持同步)");
+        dl->AddCircleFilled(ImVec2(status_x + dot_radius, dot_cy), dot_radius, IM_COL32(52, 211, 153, 240));
+        dl->AddText(ImVec2(text_x, btn_y + 5.0f), IM_COL32(52, 211, 153, 240), "当前固件已是最新版本 (与远端保持同步)");
     } else if (st == UpdateStatus::UpdateAvailable) {
-        std::string notice = "🔥 发现 " + std::to_string(um.getNewCommitCount()) + " 个新提交 (最新: " + um.getRemoteCommitHash() + ")";
-        dl->AddText(ImVec2(status_x, btn_y + 5.0f), IM_COL32(251, 146, 60, 240), notice.c_str());
+        dl->AddCircleFilled(ImVec2(status_x + dot_radius, dot_cy), dot_radius, IM_COL32(251, 146, 60, 240));
+        std::string notice = "发现 " + std::to_string(um.getNewCommitCount()) + " 个新提交 (最新: " + um.getRemoteCommitHash() + ")";
+        dl->AddText(ImVec2(text_x, btn_y + 5.0f), IM_COL32(251, 146, 60, 240), notice.c_str());
 
         // 立即更新按钮
-        float upd_btn_w = 170.0f;
-        float upd_btn_x = status_x + ImGui::CalcTextSize(notice.c_str()).x + 16.0f;
+        float upd_btn_w = 160.0f;
+        float upd_btn_x = text_x + ImGui::CalcTextSize(notice.c_str()).x + 16.0f;
         if (upd_btn_x + upd_btn_w > x0 + w - 16.0f) {
             upd_btn_x = x0 + w - 16.0f - upd_btn_w;
         }
@@ -555,9 +563,9 @@ float SystemSettingsView::renderUpdateSection(ImDrawList* dl, float x0, float y0
         }
         dl->AddRectFilled(upd_min, upd_max, upd_hov ? IM_COL32(16, 185, 129, 90) : IM_COL32(16, 185, 129, 50), 6.0f);
         dl->AddRect(upd_min, upd_max, IM_COL32(16, 185, 129, upd_hov ? 240 : 150), 6.0f, 0, 1.0f);
-        ImVec2 upd_sz = ImGui::CalcTextSize("🚀 一键在线更新并编译");
+        ImVec2 upd_sz = ImGui::CalcTextSize("一键在线更新并编译");
         dl->AddText(ImVec2(upd_min.x + (upd_btn_w - upd_sz.x) * 0.5f, btn_y + (btn_h - upd_sz.y) * 0.5f),
-                    IM_COL32(255, 255, 255, 240), "🚀 一键在线更新并编译");
+                    IM_COL32(255, 255, 255, 240), "一键在线更新并编译");
 
         if (has_logs) {
             float log_y = btn_y + btn_h + 8.0f;
@@ -565,13 +573,15 @@ float SystemSettingsView::renderUpdateSection(ImDrawList* dl, float x0, float y0
             dl->AddText(ImVec2(x0 + 16.0f, log_y), IM_COL32(203, 213, 225, 220), first_log.c_str());
         }
     } else if (st == UpdateStatus::Updating) {
+        dl->AddCircleFilled(ImVec2(status_x + dot_radius, dot_cy), dot_radius, IM_COL32(96, 165, 250, 240));
         std::string prog_msg = um.getProgressMessage();
-        dl->AddText(ImVec2(status_x, btn_y + 5.0f), IM_COL32(96, 165, 250, 240), prog_msg.c_str());
+        dl->AddText(ImVec2(text_x, btn_y + 5.0f), IM_COL32(96, 165, 250, 240), prog_msg.c_str());
     } else if (st == UpdateStatus::UpdateSuccess) {
-        dl->AddText(ImVec2(status_x, btn_y + 5.0f), IM_COL32(52, 211, 153, 240), "✅ 固件重编译成功！");
+        dl->AddCircleFilled(ImVec2(status_x + dot_radius, dot_cy), dot_radius, IM_COL32(52, 211, 153, 240));
+        dl->AddText(ImVec2(text_x, btn_y + 5.0f), IM_COL32(52, 211, 153, 240), "固件重编译成功！");
 
-        float rst_btn_w = 120.0f;
-        float rst_btn_x = status_x + 160.0f;
+        float rst_btn_w = 110.0f;
+        float rst_btn_x = text_x + 140.0f;
         ImVec2 rst_min(rst_btn_x, btn_y);
         ImVec2 rst_max(rst_min.x + rst_btn_w, btn_y + btn_h);
         ImGui::SetCursorScreenPos(rst_min);
@@ -582,13 +592,14 @@ float SystemSettingsView::renderUpdateSection(ImDrawList* dl, float x0, float y0
         }
         dl->AddRectFilled(rst_min, rst_max, rst_hov ? IM_COL32(59, 130, 246, 80) : IM_COL32(59, 130, 246, 40), 6.0f);
         dl->AddRect(rst_min, rst_max, IM_COL32(59, 130, 246, 180), 6.0f, 0, 1.0f);
-        ImVec2 rst_sz = ImGui::CalcTextSize("🔄 立即重启生效");
+        ImVec2 rst_sz = ImGui::CalcTextSize("立即重启生效");
         dl->AddText(ImVec2(rst_min.x + (rst_btn_w - rst_sz.x) * 0.5f, btn_y + (btn_h - rst_sz.y) * 0.5f),
-                    IM_COL32(255, 255, 255, 240), "🔄 立即重启生效");
+                    IM_COL32(255, 255, 255, 240), "立即重启生效");
     } else if (st == UpdateStatus::UpdateFailed) {
-        std::string err = "❌ " + um.getErrorMessage();
+        dl->AddCircleFilled(ImVec2(status_x + dot_radius, dot_cy), dot_radius, IM_COL32(239, 68, 68, 240));
+        std::string err = "[更新失败] " + um.getErrorMessage();
         if (err.length() > 60) err = err.substr(0, 57) + "...";
-        dl->AddText(ImVec2(status_x, btn_y + 5.0f), IM_COL32(239, 68, 68, 240), err.c_str());
+        dl->AddText(ImVec2(text_x, btn_y + 5.0f), IM_COL32(239, 68, 68, 240), err.c_str());
     }
 
     if (Fonts::Small) ImGui::PopFont();
