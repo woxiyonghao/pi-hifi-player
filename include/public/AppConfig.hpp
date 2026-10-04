@@ -1,5 +1,4 @@
-#pragma once
-
+#include "public/Platform.hpp"
 #include <string>
 #include <cstdlib>
 #include <filesystem>
@@ -9,6 +8,15 @@
 // 集中管理系统路径、曲库默认目录、硬件设备标识等全局设置
 // ==============================================================================
 namespace AppConfig {
+
+    // 运行平台判定与帧率调度
+    namespace Target {
+        inline PlatformType getPlatform() { return Platform::current(); }
+        inline std::string getPlatformName() { return Platform::name(); }
+        inline std::string getDisplayName() { return Platform::displayName(); }
+        inline int getTargetFps() { return Platform::getTargetFps(); }
+        inline bool isRaspberryPi() { return Platform::isRaspberryPi(); }
+    }
 
     namespace Path {
         // 默认曲库子路径相对目录 (如果希望直接扫描用户根目录可设为 ""，若扫描 Music 目录则设为 "/Music")

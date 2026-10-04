@@ -2,6 +2,7 @@
 
 #include <SDL2/SDL.h>
 #include <vector>
+#include "public/Platform.hpp"
 #include "types/MusicModel.hpp"
 #include "views/SidebarView.hpp"
 #include "views/MainStageView.hpp"
@@ -35,8 +36,13 @@ public:
     // 初始化硬件窗口、图形后端与全局组件 (返回成功/失败)
     bool init();
 
-    // 启动 60fps 主事件心跳驱动循环 (阻塞直至用户退出)
+    // 启动主事件心跳驱动循环 (树莓派 30fps，其他平台 60fps)
     int run();
+
+    // 运行平台与目标帧率策略查询
+    PlatformType getPlatform() const { return platform_; }
+    std::string getPlatformName() const { return Platform::name(); }
+    int getTargetFps() const { return Platform::getTargetFps(); }
 
     // 退出清理资源
     void shutdown();
@@ -59,6 +65,7 @@ private:
     SDL_Window* window_ = nullptr;
     SDL_GLContext gl_context_ = nullptr;
     const char* glsl_version_ = "#version 150";
+    PlatformType platform_ = Platform::current();
 
     bool running_ = false;
     float sim_time_ = 0.0f;

@@ -69,7 +69,17 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j$(nproc 2>/dev/null || echo 4)
 echo -e "${GREEN}>> ✅ 编译完成！可执行程序: ${PROJECT_DIR}/build/PiHifiPlayer${RESET}"
 
-# 5. 根据所选动作启动程序
+# 5. 解除 ALSA 声卡硬件静音并提升至 100% 线路电平 (确保输出给后级功放不偏小)
+echo -e "${CYAN}>> 正在校准 ALSA 硬件混音器 (解除静音并拉满 100% 线路电平直通功放)...${RESET}"
+for c in 0 1 2 3; do
+    amixer -c $c sset Master 100% unmute 2>/dev/null || true
+    amixer -c $c sset PCM 100% unmute 2>/dev/null || true
+    amixer -c $c sset Headphone 100% unmute 2>/dev/null || true
+    amixer -c $c sset Speaker 100% unmute 2>/dev/null || true
+    amixer -c $c sset 'Line Out' 100% unmute 2>/dev/null || true
+done
+
+# 6. 根据所选动作启动程序
 echo -e "${CYAN}>> [2/2] 执行启动策略 (${ACTION})...${RESET}"
 
 if [ "${ACTION}" = "service" ]; then

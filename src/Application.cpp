@@ -71,11 +71,10 @@ bool Application::init() {
     initData();
 
     running_ = true;
-#if defined(__linux__) && !defined(HIFI_PLATFORM_MAC)
-    std::cout << "[Application] 纯音数播图形与事件中枢初始化完毕，树莓派锁定 30fps 发烧控温低功耗模式。" << std::endl;
-#else
-    std::cout << "[Application] 纯音数播图形与事件中枢初始化完毕，锁定 60fps 原生垂直同步。" << std::endl;
-#endif
+    platform_ = Platform::current();
+    std::cout << "[Application] 运行平台: " << Platform::displayName()
+              << " (" << Platform::name() << ")，目标刷新率: "
+              << Platform::getTargetFps() << " FPS" << std::endl;
     return true;
 }
 
@@ -132,12 +131,12 @@ bool Application::initWindow() {
     }
 
     SDL_GL_MakeCurrent(window_, gl_context_);
-#if defined(__linux__) && !defined(HIFI_PLATFORM_MAC)
-    // 树莓派 KMSDRM 下解除硬件垂直同步锁等待，配合上层精确 30 FPS 限制器休眠让出 CPU 算力
-    SDL_GL_SetSwapInterval(0);
-#else
-    SDL_GL_SetSwapInterval(1); // 锁定 V-Sync
-#endif
+    if (Platform::isRaspberryPi()) {
+        // 树莓派 KMSDRM 下解除硬件垂直同步锁等待，配合上层精确 30 FPS 限制器休眠让出 CPU 算力
+        SDL_GL_SetSwapInterval(0);
+    } else {
+        SDL_GL_SetSwapInterval(1); // Mac / iOS 等锁定 60fps 原生垂直同步
+    }
     return true;
 }
 
@@ -800,12 +799,8 @@ int Application::run() {
     Uint64 last_time = SDL_GetPerformanceCounter();
     const double freq = static_cast<double>(SDL_GetPerformanceFrequency());
 
-#if defined(__linux__) && !defined(HIFI_PLATFORM_MAC)
-    // 树莓派 Linux 平台锁定 30 FPS：降低 CPU/GPU 负载与发热，为发烧级音频解码提供充裕算力裕量
-    constexpr double TARGET_FRAME_TIME = 1.0 / 30.0; // ~33.33ms
-#else
-    constexpr double TARGET_FRAME_TIME = 1.0 / 60.0; // Mac 平台 60 FPS
-#endif
+    // 核心帧率策略：除树莓派锁定 30fps 控温降载外，其他平台 (Mac/iOS/Android/Windows) 统一 60fps
+    const double target_frame_time = Platform::getTargetFrameTime();
 
     while (running_) {
         Uint64 frame_start = SDL_GetPerformanceCounter();
@@ -820,8 +815,8 @@ int Application::run() {
         // 精确帧率限制器：休眠多余时间，彻底解放 CPU 占用与降低发热
         Uint64 frame_end = SDL_GetPerformanceCounter();
         double elapsed_sec = static_cast<double>(frame_end - frame_start) / freq;
-        if (elapsed_sec < TARGET_FRAME_TIME) {
-            double sleep_ms = (TARGET_FRAME_TIME - elapsed_sec) * 1000.0;
+        if (elapsed_sec < target_frame_time) {
+            double sleep_ms = (target_frame_time - elapsed_sec) * 1000.0;
             if (sleep_ms >= 1.0) {
                 SDL_Delay(static_cast<Uint32>(sleep_ms));
             }
