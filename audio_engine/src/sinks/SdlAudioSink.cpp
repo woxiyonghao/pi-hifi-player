@@ -81,6 +81,8 @@ bool SdlAudioSink::open(const AudioFormatSpec& requested_spec, AudioCallback cal
         return false;
     }
 
+    active_device_name_ = (target_device_name != nullptr) ? target_device_name : "系统默认音频输出";
+
 #if defined(__linux__) && !defined(HIFI_PLATFORM_MAC)
     // 自动重置 ALSA 硬件混音器：解除静音并将 Master/PCM/Headphone/Speaker 增益推至 100% (0dB)，
     // 输出标准的 Line-Out 线路电平 (1.0~2.0Vrms)，彻底解决外接后级功放时音量极微弱或无声的问题！

@@ -8,13 +8,14 @@
 // 支持根据接入或选定的硬件芯片动态下发支持的硬件参数
 // ==============================================================================
 enum class DACType {
-    APPLE_DIRECT = 0, // Apple Direct (MacBook Pro M1 Pro 硬件直通)
-    ES9038PRO    = 1, // ESS SABRE 旗舰双并联架构
-    AK4499EX     = 2, // AKM 旗舰分离式 Velvet Sound 架构
-    CS43198      = 3, // Cirrus Logic MasterHIFI 架构
-    R2R_DISCRETE = 4, // R-2R 纯分立电阻网络 (NOS/OS)
-    ROHM_BD34301 = 5, // ROHM 罗姆 MUS-IC 旗舰架构
-    GENERIC_I2S  = 6  // 标准通用 I2S / 平台声卡
+    APPLE_DIRECT      = 0, // 真实物理硬件声卡 / 外接 DAC 侦测
+    PHYSICAL_HARDWARE = 0,
+    ES9038PRO         = 1, // ESS SABRE 旗舰双并联架构
+    AK4499EX          = 2, // AKM 旗舰分离式 Velvet Sound 架构
+    CS43198           = 3, // Cirrus Logic MasterHIFI 架构
+    R2R_DISCRETE      = 4, // R-2R 纯分立电阻网络 (NOS/OS)
+    ROHM_BD34301      = 5, // ROHM 罗姆 MUS-IC 旗舰架构
+    GENERIC_I2S       = 6  // 标准通用 I2S / 平台声卡
 };
 
 struct DACProfileInfo {
@@ -30,13 +31,13 @@ struct DACProfileInfo {
 inline const std::vector<DACProfileInfo>& getSupportedDACProfiles() {
     static const std::vector<DACProfileInfo> kProfiles = {
         {
-            DACType::APPLE_DIRECT,
-            "Apple Direct",
-            "Apple Direct",
-            "Apple Inc. (CoreAudio)",
-            "MacBook Pro M1 Pro 硬件直通 · Bit-Perfect 独占流",
-            "192kHz / 32-bit Float",
-            "DoP 硬件直通"
+            DACType::PHYSICAL_HARDWARE,
+            "物理硬件声卡",
+            "物理声卡",
+            "ALSA / CoreAudio 原生驱动",
+            "系统底层物理音频设备自动探测 · 真实硬件直通",
+            "自适应母带 (最高 192k/384k)",
+            "原生硬件直通"
         },
         {
             DACType::ES9038PRO,

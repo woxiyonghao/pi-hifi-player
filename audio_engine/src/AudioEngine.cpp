@@ -444,7 +444,10 @@ std::string AudioEngine::getActiveHardwareDeviceName() const {
 #elif defined(__APPLE__) && TARGET_OS_IPHONE
     return "iPad / iOS 原生音频输出";
 #else
-    return "ALSA 硬件输出";
+    if (sink_ && sink_->isOpen()) {
+        return sink_->getDeviceName();
+    }
+    return "系统默认音频输出";
 #endif
 }
 
