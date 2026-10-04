@@ -18,7 +18,8 @@ SidebarFeatureWidget::SidebarFeatureWidget() {
         { SidebarTab::MSEBTuning,     "调音魔棒" },
         { SidebarTab::DACSettings,    "DAC" },
         { SidebarTab::ThemeSettings,  "主题" },
-        { SidebarTab::SystemSettings, "设置" }
+        { SidebarTab::SystemSettings, "设置" },
+        { SidebarTab::WifiTransfer,   "WiFi传歌" }
     };
 }
 
@@ -80,6 +81,17 @@ void SidebarFeatureWidget::drawFeatureIcon(ImDrawList* dl, ImVec2 center, Sideba
                 ImVec2 p1(center.x + ca * 6.8f, center.y + sa * 6.8f);
                 dl->AddLine(p0, p1, color, 1.6f);
             }
+            break;
+        }
+        case SidebarTab::WifiTransfer: {
+            // 无线传歌：经典 Wi-Fi 辐射波纹矢量图标 (中心点 + 双层同心弧度波)
+            constexpr float kPi = 3.14159265f;
+            ImVec2 origin(center.x, center.y + 4.0f);
+            dl->AddCircleFilled(origin, 1.8f, color);
+            dl->PathArcTo(origin, 4.5f, -kPi * 0.75f, -kPi * 0.25f, 16);
+            dl->PathStroke(color, 0, 1.4f);
+            dl->PathArcTo(origin, 8.0f, -kPi * 0.75f, -kPi * 0.25f, 16);
+            dl->PathStroke(color, 0, 1.5f);
             break;
         }
         default:

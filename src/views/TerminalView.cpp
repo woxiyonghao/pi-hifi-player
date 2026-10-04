@@ -49,7 +49,7 @@ void TerminalView::executeCommand(const std::string& cmd) {
     }
 
     if (is_running_) {
-        appendLine("⚠️ 前序命令正在执行中，请等待其完成后再试: " + running_cmd_, TermLineType::Error);
+        appendLine("[提示] 前序命令正在执行中，请等待其完成后再试: " + running_cmd_, TermLineType::Error);
         return;
     }
 
@@ -146,14 +146,14 @@ void TerminalView::renderQuickCommands(float x0, float y0, float w) {
     };
 
     static const QuickCmd cmds[] = {
-        { "🌐 当前IP",    "hostname -I 2>/dev/null || ifconfig" },
-        { "📶 WiFi状态",   "nmcli -t -f ACTIVE,SSID,SIGNAL,DEVICE dev wifi 2>/dev/null || iwconfig" },
-        { "🌡️ CPU温度",   "vcgencmd measure_temp 2>/dev/null || cat /sys/class/thermal/thermal_zone0/temp" },
-        { "💾 磁盘空间",   "df -h /" },
-        { "🧠 内存状态",   "free -h" },
-        { "🎵 ALSA声卡",   "aplay -l" },
-        { "🏓 外网测试",   "ping -c 3 223.5.5.5" },
-        { "🧹 清屏",       "clear" }
+        { "[IP] 当前IP",     "hostname -I 2>/dev/null || ifconfig" },
+        { "[WiFi] WiFi状态", "nmcli -t -f ACTIVE,SSID,SIGNAL,DEVICE dev wifi 2>/dev/null || iwconfig" },
+        { "[CPU] CPU温度",   "vcgencmd measure_temp 2>/dev/null || cat /sys/class/thermal/thermal_zone0/temp" },
+        { "[磁盘] 磁盘空间",   "df -h /" },
+        { "[内存] 内存状态",   "free -h" },
+        { "[声卡] ALSA声卡",   "aplay -l" },
+        { "[网络] 外网测试",   "ping -c 3 223.5.5.5" },
+        { "[清屏] 清屏",       "clear" }
     };
 
     ImDrawList* dl = ImGui::GetWindowDrawList();
@@ -248,7 +248,7 @@ void TerminalView::renderConsoleWindow(float x0, float y0, float w, float h) {
         }
 
         if (is_running_) {
-            ImGui::TextColored(ImVec4(0.38f, 0.65f, 0.98f, 1.0f), "⏳ 正在执行: %s ...", running_cmd_.c_str());
+            ImGui::TextColored(ImVec4(0.38f, 0.65f, 0.98f, 1.0f), "[执行中] 正在执行: %s ...", running_cmd_.c_str());
         }
 
         if (scroll_to_bottom_) {
