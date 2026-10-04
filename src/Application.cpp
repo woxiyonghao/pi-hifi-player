@@ -147,6 +147,8 @@ bool Application::initWindow() {
 
     SDL_GL_MakeCurrent(window_, gl_context_);
     if (Platform::isRaspberryPi()) {
+        // 树莓派触控屏环境隐藏系统硬件鼠标光标
+        SDL_ShowCursor(SDL_DISABLE);
         // 树莓派 KMSDRM 下解除硬件垂直同步锁等待，配合上层精确 30 FPS 限制器休眠让出 CPU 算力
         SDL_GL_SetSwapInterval(0);
     } else {
@@ -488,16 +490,21 @@ void Application::renderBackground(float screen_w, float screen_h) {
     ImDrawList* bg_dl = ImGui::GetBackgroundDrawList();
 
     // 1. 铺设整个 App 的基准发烧底色 (完全对齐原设计的区域与色值规范)
-    float ease_t = anim_progress_ < 0.5f ? 4.0f * anim_progress_ * anim_progress_ * anim_progress_
-                                         : 1.0f - std::pow(-2.0f * anim_progress_ + 2.0f, 3.0f) * 0.5f;
-    float sidebar_bg_x = UIConfig::Layout::SidebarWidth * (1.0f - ease_t);
+    if (anim_progress_ >= 0.999f) {
+        // 完全全屏屏保状态：底板 100% 满屏无缝铺满，杜绝任何分界线与色块
+        bg_dl->AddRectFilled(ImVec2(0.0f, 0.0f), ImVec2(screen_w, screen_h), UIConfig::Color::MainStageBg);
+    } else {
+        float ease_t = anim_progress_ < 0.5f ? 4.0f * anim_progress_ * anim_progress_ * anim_progress_
+                                             : 1.0f - std::pow(-2.0f * anim_progress_ + 2.0f, 3.0f) * 0.5f;
+        float sidebar_bg_x = UIConfig::Layout::SidebarWidth * (1.0f - ease_t);
 
-    if (sidebar_bg_x > 0.5f) {
-        // 左侧侧边栏暗色基底 (0 ~ sidebar_bg_x)
-        bg_dl->AddRectFilled(ImVec2(0.0f, 0.0f), ImVec2(sidebar_bg_x, screen_h), UIConfig::Color::WindowBg);
+        if (sidebar_bg_x > 0.5f) {
+            // 左侧侧边栏暗色基底 (0 ~ sidebar_bg_x)
+            bg_dl->AddRectFilled(ImVec2(0.0f, 0.0f), ImVec2(sidebar_bg_x, screen_h), UIConfig::Color::WindowBg);
+        }
+        // 右侧主舞台深空基底 (sidebar_bg_x ~ screen_w)
+        bg_dl->AddRectFilled(ImVec2(sidebar_bg_x, 0.0f), ImVec2(screen_w, screen_h), UIConfig::Color::MainStageBg);
     }
-    // 右侧主舞台深空基底 (sidebar_bg_x ~ screen_w)
-    bg_dl->AddRectFilled(ImVec2(sidebar_bg_x, 0.0f), ImVec2(screen_w, screen_h), UIConfig::Color::MainStageBg);
 
     auto bg_mode = ThemeManager::getInstance().getBackgroundVisualMode();
     if (bg_mode == BackgroundVisualMode::PureBlack) {
@@ -593,19 +600,8 @@ void Application::renderBackground(float screen_w, float screen_h) {
 
     const ImU32 unlit_color = ThemeManager::getInstance().getSpectrumUnlitColor();
 
-    // 2. 如果未播放且为 LED 频谱模式，渲染优雅纯净的熄灭态微光矩阵底板 (让用户知道 48 列点阵已就绪，保持通透深空)
+    // 2. 如果未播放且为 LED 频谱模式，保持通透深空暗黑基底，避免在屏幕上生成静态点阵方块伪影
     if (!is_playing) {
-        if ((unlit_color & IM_COL32_A_MASK) != 0) {
-            for (int c = 0; c < num_cols; ++c) {
-                float x0 = margin_x + c * (col_w + gap_x);
-                float x1 = x0 + col_w;
-                for (int r_idx = 0; r_idx < num_rows; ++r_idx) {
-                    float y1 = bot_y - r_idx * (seg_h + gap_y);
-                    float y0 = y1 - seg_h;
-                    bg_dl->AddRectFilled(ImVec2(x0, y0), ImVec2(x1, y1), unlit_color, 0.0f);
-                }
-            }
-        }
         return;
     }
 
@@ -691,22 +687,18 @@ void Application::render() {
 
     // 只有在未完全移出屏幕时才渲染 4 大板块
     if (anim_progress_ < 0.999f) {
-        // 四角移出偏移计算 (根据当前 screen_w / screen_h 动态计算保证完全移出大屏视口)：
-        // 1. 左上角：sidebar 功能与歌单区 -> 向左上方 (-260, -150)
-        float top_nav_dx = -260.0f * ease_t;
-        float top_nav_dy = -150.0f * ease_t;
+        // 四角移出偏移计算：完全移出大屏视口，确保无边缘色块残留
+        float top_nav_dx = -(230.0f + 60.0f) * ease_t;
+        float top_nav_dy = -(screen_h * 0.5f + 60.0f) * ease_t;
 
-        // 2. 左下角：dacview DAC 模块 -> 向左下方 (-260, +150)
-        float dac_dx = -260.0f * ease_t;
-        float dac_dy = (screen_h * 0.25f + 40.0f) * ease_t;
+        float dac_dx = -(230.0f + 60.0f) * ease_t;
+        float dac_dy = (screen_h * 0.5f + 60.0f) * ease_t;
 
-        // 3. 右上角：mainstateview 主舞台区域 -> 向右上方 (screen_w, -150)
-        float main_dx = (screen_w - 180.0f) * ease_t;
-        float main_dy = -150.0f * ease_t;
+        float main_dx = (screen_w + 50.0f) * ease_t;
+        float main_dy = -(screen_h * 0.5f + 50.0f) * ease_t;
 
-        // 4. 右下角：bottombar 底部播放控制胶囊栏 -> 向右下方 (screen_w, +150)
-        float bottom_dx = (screen_w - 180.0f) * ease_t;
-        float bottom_dy = (screen_h * 0.25f + 40.0f) * ease_t;
+        float bottom_dx = (screen_w + 50.0f) * ease_t;
+        float bottom_dy = (screen_h * 0.35f + 80.0f) * ease_t;
 
         // 2. 调度发烧 UI 三驾马车布局渲染
         // 动态同步当前选中的 DAC 芯片状态与显示名称

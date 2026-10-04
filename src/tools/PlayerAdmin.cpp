@@ -73,6 +73,11 @@ void PlayerAdmin::stop() {
 // 2. 曲目与播放队列管理实现
 // ==============================================================================
 void PlayerAdmin::playTrack(const Track& track) {
+    // 如果正是当前正在播放的曲目，不重复重启声卡
+    if (current_track_.has_value() && current_track_->id == track.id && state_ == PlaybackState::Playing) {
+        return;
+    }
+
     // 维护当前队列一致性
     if (playback_queue_.empty()) {
         playback_queue_.push_back(track);
@@ -89,7 +94,10 @@ void PlayerAdmin::playTrack(const Track& track) {
         }
     }
 
-    switchTrack(track);
+    // 手动选曲与切歌：立即中止淡出过渡，即时起播新曲，体验零延迟
+    is_transitioning_ = false;
+    pending_track_ = std::nullopt;
+    executeTrackSwitch(track);
 }
 
 void PlayerAdmin::switchTrack(const Track& track) {

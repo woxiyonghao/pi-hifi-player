@@ -291,12 +291,12 @@ void AccuphaseMeterRenderer::render(float screen_w, float screen_h, float raw_le
     // 1. 金嗓子原机香槟黑曜石底板
     dl->AddRectFilled(ImVec2(0.0f, 0.0f), ImVec2(screen_w, screen_h), pal.chassis_bg);
 
-    // 2. 双表头几何排版 (左右对称布局)
+    // 2. 双表头几何排版 (左右对称布局，自适应各类屏幕高度)
     const float pad_x = 24.0f;
     const float gap_x = 32.0f;
     const float meter_w = (screen_w - pad_x * 2.0f - gap_x) * 0.5f;
-    const float pad_y = 52.0f;
-    const float meter_h = 390.0f;
+    const float pad_y = std::clamp(screen_h * 0.08f, 24.0f, 52.0f);
+    const float meter_h = std::min(screen_h - pad_y - 58.0f, 390.0f);
 
     ImVec2 left_min(pad_x, pad_y);
     ImVec2 left_max(pad_x + meter_w, pad_y + meter_h);
@@ -316,9 +316,9 @@ void AccuphaseMeterRenderer::render(float screen_w, float screen_h, float raw_le
     const char* footer_right = "BALANCED AAVA · PURE CLASS A OPERATION";
 
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-    dl->AddText(ImVec2(pad_x + 6.0f, screen_h - 32.0f), pal.footer_color, footer_left);
+    dl->AddText(ImVec2(pad_x + 6.0f, screen_h - 28.0f), pal.footer_color, footer_left);
     ImVec2 r_sz = ImGui::CalcTextSize(footer_right);
-    dl->AddText(ImVec2(screen_w - r_sz.x - pad_x - 6.0f, screen_h - 32.0f), pal.footer_color, footer_right);
+    dl->AddText(ImVec2(screen_w - r_sz.x - pad_x - 6.0f, screen_h - 28.0f), pal.footer_color, footer_right);
     if (Fonts::Small) ImGui::PopFont();
 }
 
@@ -351,7 +351,8 @@ void AccuphaseMeterRenderer::drawCenterDisplay(ImDrawList* dl, float center_x, f
 
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
     ImVec2 db_sz = ImGui::CalcTextSize(db_buf);
-    dl->AddText(ImVec2(center_x - db_sz.x * 0.5f, 460.0f), IM_COL32(255, 45, 45, 240), db_buf);
+    float db_y = std::min(screen_h - 48.0f, 460.0f);
+    dl->AddText(ImVec2(center_x - db_sz.x * 0.5f, db_y), IM_COL32(255, 45, 45, 240), db_buf);
     if (Fonts::Small) ImGui::PopFont();
 }
 

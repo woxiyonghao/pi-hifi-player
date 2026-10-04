@@ -341,7 +341,8 @@ void DACSettingView::render(float x, float y, float w, float h) {
 
         ImDrawList* child_dl = ImGui::GetWindowDrawList();
         float section_w = ImGui::GetContentRegionAvail().x;
-        float cur_y = ImGui::GetCursorScreenPos().y;
+        float start_cur_y = ImGui::GetCursorScreenPos().y;
+        float cur_y = start_cur_y;
         float x0 = ImGui::GetCursorScreenPos().x;
 
         // 渲染通用声卡硬件输出与独占流状态条 (所有芯片架构均共享底层声卡硬件控制)
@@ -369,6 +370,8 @@ void DACSettingView::render(float x, float y, float w, float h) {
                 break;
         }
 
+        // 精准将 ImGui 内部游标推进到所有自定义图元的最底部，确保 100% 完整滚动
+        ImGui::SetCursorScreenPos(ImVec2(x0, cur_y));
         ImGui::Dummy(ImVec2(0.0f, 16.0f));
     }
     ImGui::EndChild();
@@ -420,7 +423,6 @@ void DACSettingView::renderHardwareStatusBar(ImDrawList* dl, float x0, float& cu
     ImU32 info_text_col = UIConfig::Color::TextNormal;
 
     if (is_bt) {
-        // 蓝牙模式：跟随主题强调色
         if (is_exclusive_pref) {
             dot_col = accent;
             dl->AddCircle(dot_center, 6.5f, IM_COL32(r, g, b, 80), 0, 1.5f);
@@ -432,19 +434,16 @@ void DACSettingView::renderHardwareStatusBar(ImDrawList* dl, float x0, float& cu
             info_text_col = UIConfig::Color::TextMuted;
         }
     } else if (is_real_hog) {
-        // 物理有线声卡 / USB DAC 且已成功占用 Hog 锁 (跟随主题色)
         dot_col = accent;
         dl->AddCircle(dot_center, 6.5f, IM_COL32(r, g, b, 80), 0, 1.5f);
         info_text = "声卡硬件: " + dev_name + "  |  Hog Mode 硬件已独占 (Bit-Perfect)  |  " + std::to_string(cur_sr / 1000) + " kHz";
         info_text_col = UIConfig::Color::TextActive;
     } else if (is_exclusive_pref) {
-        // 独占已开启，处于起播即独占待命状态 (跟随主题色)
         dot_col = accent;
         dl->AddCircle(dot_center, 6.5f, IM_COL32(r, g, b, 60), 0, 1.5f);
         info_text = "声卡硬件: " + dev_name + "  |  独占模式就绪 (起播锁定)  |  " + std::to_string(cur_sr / 1000) + " kHz";
         info_text_col = UIConfig::Color::TextActive;
     } else {
-        // 共享混音模式
         dot_col = IM_COL32(160, 160, 160, 200);
         info_text = "声卡硬件: " + dev_name + "  |  系统混音共享模式  |  " + std::to_string(cur_sr / 1000) + " kHz";
         info_text_col = UIConfig::Color::TextMuted;
@@ -474,7 +473,7 @@ void DACSettingView::renderHardwareStatusBar(ImDrawList* dl, float x0, float& cu
                 btn_text_col, btn_text);
     if (Fonts::Small) ImGui::PopFont();
 
-    cur_y += h + 10.0f;
+    cur_y += h + 8.0f;
 }
 
 // ==============================================================================
@@ -490,16 +489,16 @@ void DACSettingView::renderHardwareDeviceSettings(ImDrawList* dl, float x0, floa
     // --------------------------------------------------------------------------
     // 板块一：当前物理 DAC 连接状态与核心指标 (Real DAC Status)
     // --------------------------------------------------------------------------
-    float h1 = 122.0f;
+    float h1 = 76.0f;
     ImVec2 p0(x0, cur_y);
     ImVec2 p1(x0 + w, cur_y + h1);
 
-    dl->AddRectFilled(p0, p1, IM_COL32(20, 26, 36, 175), 10.0f);
-    dl->AddRect(p0, p1, IM_COL32(255, 255, 255, 20), 10.0f, 0, 1.0f);
+    dl->AddRectFilled(p0, p1, IM_COL32(20, 26, 36, 175), 8.0f);
+    dl->AddRect(p0, p1, IM_COL32(255, 255, 255, 20), 8.0f, 0, 1.0f);
     dl->AddLine(ImVec2(p0.x + 10.0f, p0.y), ImVec2(p1.x - 10.0f, p0.y), IM_COL32(255, 255, 255, 38), 1.0f);
 
     // 硬件状态呼吸指示灯
-    ImVec2 dot_pos(p0.x + 22.0f, cur_y + 20.0f);
+    ImVec2 dot_pos(p0.x + 20.0f, cur_y + 18.0f);
     if (status.has_external_dac) {
         dl->AddCircleFilled(dot_pos, 6.0f, IM_COL32(52, 199, 89, 80));
         dl->AddCircleFilled(dot_pos, 3.5f, IM_COL32(52, 199, 89, 255));
@@ -510,53 +509,45 @@ void DACSettingView::renderHardwareDeviceSettings(ImDrawList* dl, float x0, floa
     if (Fonts::Regular) ImGui::PushFont(Fonts::Regular);
     std::string main_title = status.has_external_dac ? 
         ("物理外置 DAC: " + status.dac_name + " (已识别就绪)") : 
-        "物理外置 DAC: 未连接 (当前仅为系统默认音频)";
+        "物理外置 DAC: 未连接 (当前为系统板载/默认音频)";
     ImU32 title_color = status.has_external_dac ? UIConfig::Color::TextActive : UIConfig::Color::TextMuted;
-    dl->AddText(ImVec2(p0.x + 36.0f, cur_y + 12.0f), title_color, main_title.c_str());
+    dl->AddText(ImVec2(p0.x + 34.0f, cur_y + 10.0f), title_color, main_title.c_str());
     if (Fonts::Regular) ImGui::PopFont();
 
-    // 硬件描述行
+    // 硬件总线与推流信息
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
     std::string desc_line = "硬件总线描述: " + status.dac_full_desc;
-    dl->AddText(ImVec2(p0.x + 18.0f, cur_y + 42.0f), UIConfig::Color::TextMuted, desc_line.c_str());
+    dl->AddText(ImVec2(p0.x + 18.0f, cur_y + 34.0f), UIConfig::Color::TextMuted, desc_line.c_str());
 
-    // 当前推流输出通道与时钟
     std::string active_sink = audio_engine::AudioEngine::getInstance().getActiveHardwareDeviceName();
     uint32_t active_sr = audio_engine::AudioEngine::getInstance().getActiveHardwareSampleRate();
     std::string stream_info = "底层推流设备: " + active_sink + 
                               "  |  硬件时钟: " + std::to_string(active_sr / 1000) + " kHz" +
                               "  |  推流模式: " + (apple_exclusive_mode_ == 0 ? "Bit-Perfect 直通" : "系统混音共享");
-    dl->AddText(ImVec2(p0.x + 18.0f, cur_y + 66.0f), UIConfig::Color::TextNormal, stream_info.c_str());
-
-    std::string honesty_badge = status.has_external_dac ? 
-        "✓ 真实物理硬件侦测生效 · 绝无虚构参数 · 信号直接推向物理声卡" : 
-        "ℹ 未接入外置 USB/I2S 独立 DAC，插入后系统将实时识别";
-    dl->AddText(ImVec2(p0.x + 18.0f, cur_y + 90.0f), 
-                status.has_external_dac ? IM_COL32(52, 199, 89, 220) : IM_COL32(255, 179, 0, 220), 
-                honesty_badge.c_str());
+    dl->AddText(ImVec2(p0.x + 18.0f, cur_y + 54.0f), UIConfig::Color::TextNormal, stream_info.c_str());
     if (Fonts::Small) ImGui::PopFont();
 
-    cur_y += h1 + 10.0f;
+    cur_y += h1 + 8.0f;
 
     // --------------------------------------------------------------------------
     // 板块二：系统底层物理声卡拓扑清单 (ALSA / CoreAudio Cards)
     // --------------------------------------------------------------------------
     size_t dev_count = status.devices.size();
-    float dev_row_h = 32.0f;
-    float h2 = 42.0f + std::max((size_t)1, dev_count) * dev_row_h + 10.0f;
+    float dev_row_h = 30.0f;
+    float h2 = 36.0f + std::max((size_t)1, dev_count) * dev_row_h + 8.0f;
     ImVec2 q0(x0, cur_y);
     ImVec2 q1(x0 + w, cur_y + h2);
 
-    dl->AddRectFilled(q0, q1, IM_COL32(20, 26, 36, 175), 10.0f);
-    dl->AddRect(q0, q1, IM_COL32(255, 255, 255, 20), 10.0f, 0, 1.0f);
+    dl->AddRectFilled(q0, q1, IM_COL32(20, 26, 36, 175), 8.0f);
+    dl->AddRect(q0, q1, IM_COL32(255, 255, 255, 20), 8.0f, 0, 1.0f);
     dl->AddLine(ImVec2(q0.x + 10.0f, q0.y), ImVec2(q1.x - 10.0f, q0.y), IM_COL32(255, 255, 255, 38), 1.0f);
 
     if (Fonts::Regular) ImGui::PushFont(Fonts::Regular);
-    dl->AddText(ImVec2(x0 + 16.0f, cur_y + 10.0f), UIConfig::Color::TextActive,
+    dl->AddText(ImVec2(x0 + 16.0f, cur_y + 8.0f), UIConfig::Color::TextActive,
                 "底层物理音频设备拓扑清单 (ALSA / 系统声卡实时枚举)");
     if (Fonts::Regular) ImGui::PopFont();
 
-    float dev_y = cur_y + 38.0f;
+    float dev_y = cur_y + 32.0f;
     if (status.devices.empty()) {
         if (Fonts::Small) ImGui::PushFont(Fonts::Small);
         dl->AddText(ImVec2(x0 + 18.0f, dev_y + 4.0f), UIConfig::Color::TextMuted, "未发现任何物理音频声卡");
@@ -566,7 +557,7 @@ void DACSettingView::renderHardwareDeviceSettings(ImDrawList* dl, float x0, floa
             float row_x = x0 + 16.0f;
             float row_w = w - 32.0f;
             ImVec2 rb0(row_x, dev_y);
-            ImVec2 rb1(row_x + row_w, dev_y + 26.0f);
+            ImVec2 rb1(row_x + row_w, dev_y + 24.0f);
 
             bool is_active_card = d.is_active;
             ImU32 row_bg = is_active_card ? IM_COL32(r, g, b, 35) : IM_COL32(255, 255, 255, 8);
@@ -578,7 +569,7 @@ void DACSettingView::renderHardwareDeviceSettings(ImDrawList* dl, float x0, floa
 
             // Card 编号与名称
             std::string c_info = "[Card " + std::to_string(d.card_num) + "] " + d.name;
-            dl->AddText(ImVec2(row_x + 10.0f, dev_y + 5.0f),
+            dl->AddText(ImVec2(row_x + 10.0f, dev_y + 4.0f),
                         is_active_card ? UIConfig::Color::TextActive : UIConfig::Color::TextNormal,
                         c_info.c_str());
 
@@ -586,7 +577,7 @@ void DACSettingView::renderHardwareDeviceSettings(ImDrawList* dl, float x0, floa
             float drv_x = row_x + 220.0f;
             if (drv_x < row_x + row_w - 200.0f) {
                 std::string drv_info = "驱动: " + d.driver;
-                dl->AddText(ImVec2(drv_x, dev_y + 5.0f), UIConfig::Color::TextMuted, drv_info.c_str());
+                dl->AddText(ImVec2(drv_x, dev_y + 4.0f), UIConfig::Color::TextMuted, drv_info.c_str());
             }
 
             // 右侧标签: [外置 DAC] / [系统板载] 与 [当前输出]
@@ -594,9 +585,9 @@ void DACSettingView::renderHardwareDeviceSettings(ImDrawList* dl, float x0, floa
             if (is_active_card) {
                 ImVec2 b_sz = ImGui::CalcTextSize("当前输出");
                 float bx = badge_right - b_sz.x - 12.0f;
-                dl->AddRectFilled(ImVec2(bx, dev_y + 3.0f), ImVec2(badge_right, dev_y + 23.0f), IM_COL32(52, 199, 89, 50), 3.0f);
-                dl->AddRect(ImVec2(bx, dev_y + 3.0f), ImVec2(badge_right, dev_y + 23.0f), IM_COL32(52, 199, 89, 180), 3.0f);
-                dl->AddText(ImVec2(bx + 6.0f, dev_y + 5.0f), IM_COL32(52, 199, 89, 255), "当前输出");
+                dl->AddRectFilled(ImVec2(bx, dev_y + 2.0f), ImVec2(badge_right, dev_y + 22.0f), IM_COL32(52, 199, 89, 50), 3.0f);
+                dl->AddRect(ImVec2(bx, dev_y + 2.0f), ImVec2(badge_right, dev_y + 22.0f), IM_COL32(52, 199, 89, 180), 3.0f);
+                dl->AddText(ImVec2(bx + 6.0f, dev_y + 4.0f), IM_COL32(52, 199, 89, 255), "当前输出");
                 badge_right = bx - 6.0f;
             }
 
@@ -605,9 +596,9 @@ void DACSettingView::renderHardwareDeviceSettings(ImDrawList* dl, float x0, floa
             float tx = badge_right - t_sz.x - 12.0f;
             ImU32 t_bg = d.is_external_dac ? IM_COL32(r, g, b, 50) : IM_COL32(255, 255, 255, 15);
             ImU32 t_border = d.is_external_dac ? accent : IM_COL32(255, 255, 255, 30);
-            dl->AddRectFilled(ImVec2(tx, dev_y + 3.0f), ImVec2(badge_right, dev_y + 23.0f), t_bg, 3.0f);
-            dl->AddRect(ImVec2(tx, dev_y + 3.0f), ImVec2(badge_right, dev_y + 23.0f), t_border, 3.0f);
-            dl->AddText(ImVec2(tx + 6.0f, dev_y + 5.0f),
+            dl->AddRectFilled(ImVec2(tx, dev_y + 2.0f), ImVec2(badge_right, dev_y + 22.0f), t_bg, 3.0f);
+            dl->AddRect(ImVec2(tx, dev_y + 2.0f), ImVec2(badge_right, dev_y + 22.0f), t_border, 3.0f);
+            dl->AddText(ImVec2(tx + 6.0f, dev_y + 4.0f),
                         d.is_external_dac ? UIConfig::Color::TextActive : UIConfig::Color::TextMuted,
                         type_str);
 
@@ -616,36 +607,26 @@ void DACSettingView::renderHardwareDeviceSettings(ImDrawList* dl, float x0, floa
         }
     }
 
-    cur_y += h2 + 10.0f;
+    cur_y += h2 + 8.0f;
 
     // --------------------------------------------------------------------------
     // 板块三：推流模式与采样率追踪
     // --------------------------------------------------------------------------
-    float h3 = 146.0f;
+    float h3 = 80.0f;
     ImVec2 s0(x0, cur_y);
     ImVec2 s1(x0 + w, cur_y + h3);
 
-    dl->AddRectFilled(s0, s1, IM_COL32(20, 26, 36, 175), 10.0f);
-    dl->AddRect(s0, s1, IM_COL32(255, 255, 255, 20), 10.0f, 0, 1.0f);
+    dl->AddRectFilled(s0, s1, IM_COL32(20, 26, 36, 175), 8.0f);
+    dl->AddRect(s0, s1, IM_COL32(255, 255, 255, 20), 8.0f, 0, 1.0f);
     dl->AddLine(ImVec2(s0.x + 10.0f, s0.y), ImVec2(s1.x - 10.0f, s0.y), IM_COL32(255, 255, 255, 38), 1.0f);
 
-    if (Fonts::Regular) ImGui::PushFont(Fonts::Regular);
-    dl->AddText(ImVec2(x0 + 16.0f, cur_y + 10.0f), UIConfig::Color::TextActive,
-                "硬件推流控制 (Hardware Stream & Bit-Perfect)");
-    if (Fonts::Regular) ImGui::PopFont();
-
     const char* excl_opts[] = { "Bit-Perfect 独占流", "系统混音共享" };
-    renderOptionRow(dl, x0, cur_y + 36.0f, w, "硬件独占流", excl_opts, 2, apple_exclusive_mode_, "HwExcl");
+    renderOptionRow(dl, x0, cur_y + 12.0f, w, "硬件独占流", excl_opts, 2, apple_exclusive_mode_, "HwExcl");
 
     const char* rate_opts[] = { "原生跟随母带 (44.1k-192k)", "锁定 96kHz", "锁定 192kHz" };
-    renderOptionRow(dl, x0, cur_y + 72.0f, w, "采样率追踪", rate_opts, 3, apple_sample_rate_, "HwRate");
+    renderOptionRow(dl, x0, cur_y + 44.0f, w, "采样率追踪", rate_opts, 3, apple_sample_rate_, "HwRate");
 
-    const char* desc = "真实直通说明: 严格遵循物理声卡拓扑与硬件能力。外接独立 DAC 时，推流直接贯通底层硬件管道，绕过一切软件重采样；未接入时如实反映状态，绝无虚假伪造。";
-    if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-    dl->AddText(ImVec2(x0 + 16.0f, cur_y + 112.0f), UIConfig::Color::TextMuted, desc);
-    if (Fonts::Small) ImGui::PopFont();
-
-    cur_y += h3;
+    cur_y += h3 + 8.0f;
 }
 
 void DACSettingView::renderAppleDirectSettings(ImDrawList* dl, float x0, float& cur_y, float w) {
