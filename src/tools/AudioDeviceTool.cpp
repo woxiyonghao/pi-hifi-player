@@ -148,61 +148,93 @@ AudioHardwareStatus detectMacCoreAudioDevices() {
         kAudioObjectPropertyScopeGlobal,
         kAudioObjectPropertyElementMain
     };
+    AudioObjectGetPropertyData(kAudioObjectSystemObject, &addr, 0, nullptr, &size, &default_dev);
 
-    if (AudioObjectGetPropertyData(kAudioObjectSystemObject, &addr, 0, nullptr, &size, &default_dev) == noErr &&
-        default_dev != kAudioObjectUnknown) {
-        
-        // 获取名称
-        CFStringRef cfName = nullptr;
-        UInt32 name_size = sizeof(cfName);
-        AudioObjectPropertyAddress name_addr = {
-            kAudioObjectPropertyName,
-            kAudioObjectPropertyScopeGlobal,
-            kAudioObjectPropertyElementMain
-        };
-        std::string dev_name = "系统默认音频";
-        if (AudioObjectGetPropertyData(default_dev, &name_addr, 0, nullptr, &name_size, &cfName) == noErr && cfName) {
-            char buf[256] = {0};
-            CFStringGetCString(cfName, buf, sizeof(buf), kCFStringEncodingUTF8);
-            CFRelease(cfName);
-            if (buf[0] != '\0') dev_name = buf;
+    // 枚举系统中所有音频设备
+    UInt32 devices_size = 0;
+    AudioObjectPropertyAddress dev_list_addr = {
+        kAudioHardwarePropertyDevices,
+        kAudioObjectPropertyScopeGlobal,
+        kAudioObjectPropertyElementMain
+    };
+
+    if (AudioObjectGetPropertyDataSize(kAudioObjectSystemObject, &dev_list_addr, 0, nullptr, &devices_size) == noErr && devices_size > 0) {
+        int dev_count = static_cast<int>(devices_size / sizeof(AudioDeviceID));
+        std::vector<AudioDeviceID> device_ids(dev_count);
+        if (AudioObjectGetPropertyData(kAudioObjectSystemObject, &dev_list_addr, 0, nullptr, &devices_size, device_ids.data()) == noErr) {
+            int card_idx = 0;
+            for (int i = 0; i < dev_count; ++i) {
+                AudioDeviceID dev_id = device_ids[i];
+
+                // 仅检测包含输出通道 (Output Streams) 的设备
+                AudioObjectPropertyAddress stream_addr = {
+                    kAudioDevicePropertyStreams,
+                    kAudioDevicePropertyScopeOutput,
+                    kAudioObjectPropertyElementMain
+                };
+                UInt32 stream_size = 0;
+                if (AudioObjectGetPropertyDataSize(dev_id, &stream_addr, 0, nullptr, &stream_size) != noErr || stream_size == 0) {
+                    continue; // 无输出通道，跳过纯输入设备
+                }
+
+                // 获取名称
+                CFStringRef cfName = nullptr;
+                UInt32 name_size = sizeof(cfName);
+                AudioObjectPropertyAddress name_addr = {
+                    kAudioObjectPropertyName,
+                    kAudioObjectPropertyScopeGlobal,
+                    kAudioObjectPropertyElementMain
+                };
+                std::string dev_name = "音频设备";
+                if (AudioObjectGetPropertyData(dev_id, &name_addr, 0, nullptr, &name_size, &cfName) == noErr && cfName) {
+                    char buf[256] = {0};
+                    CFStringGetCString(cfName, buf, sizeof(buf), kCFStringEncodingUTF8);
+                    CFRelease(cfName);
+                    if (buf[0] != '\0') dev_name = buf;
+                }
+
+                // 获取传输类型 (USB / BuiltIn / Bluetooth)
+                UInt32 transport = 0;
+                UInt32 t_size = sizeof(transport);
+                AudioObjectPropertyAddress t_addr = {
+                    kAudioDevicePropertyTransportType,
+                    kAudioObjectPropertyScopeGlobal,
+                    kAudioObjectPropertyElementMain
+                };
+                bool is_usb = false;
+                if (AudioObjectGetPropertyData(dev_id, &t_addr, 0, nullptr, &t_size, &transport) == noErr) {
+                    is_usb = (transport == kAudioDeviceTransportTypeUSB);
+                }
+
+                PhysicalAudioDevice dev;
+                dev.card_num = card_idx++;
+                dev.name = dev_name;
+                dev.long_name = dev_name + (is_usb ? " (USB 独立解码设备)" : " (Mac 内置音频架构)");
+                dev.driver = is_usb ? "USB-Audio" : "AppleHDA";
+                dev.is_external_dac = is_usb;
+                dev.is_active = (dev_id == default_dev);
+                status.devices.push_back(dev);
+
+                if (dev.is_active) {
+                    status.active_output_name = dev_name;
+                    if (is_usb) {
+                        status.has_external_dac = true;
+                        status.dac_name = dev_name;
+                        status.dac_full_desc = dev_name + " (CoreAudio 硬件直通)";
+                    } else {
+                        status.has_external_dac = false;
+                        status.dac_name = "Apple Direct";
+                        status.dac_full_desc = "当前使用 " + dev_name + " (Mac 原生直通)";
+                    }
+                }
+            }
         }
+    }
 
-        // 获取传输类型 (USB / BuiltIn / Bluetooth)
-        UInt32 transport = 0;
-        UInt32 t_size = sizeof(transport);
-        AudioObjectPropertyAddress t_addr = {
-            kAudioDevicePropertyTransportType,
-            kAudioObjectPropertyScopeGlobal,
-            kAudioObjectPropertyElementMain
-        };
-        bool is_usb = false;
-        if (AudioObjectGetPropertyData(default_dev, &t_addr, 0, nullptr, &t_size, &transport) == noErr) {
-            is_usb = (transport == kAudioDeviceTransportTypeUSB);
-        }
-
-        PhysicalAudioDevice dev;
-        dev.card_num = 0;
-        dev.name = dev_name;
-        dev.long_name = dev_name + (is_usb ? " (USB 独立解码设备)" : " (Mac 内置音频架构)");
-        dev.driver = is_usb ? "USB-Audio" : "AppleHDA";
-        dev.is_external_dac = is_usb;
-        dev.is_active = true;
-        status.devices.push_back(dev);
-
-        status.active_output_name = dev_name;
-        status.has_external_dac = is_usb;
-        if (is_usb) {
-            status.dac_name = dev_name;
-            status.dac_full_desc = dev_name + " (CoreAudio 硬件直通)";
-        } else {
-            status.dac_name = "未连接";
-            status.dac_full_desc = "当前使用 MacBook 内置音频输出 (未接入外置 DAC)";
-        }
-    } else {
+    if (status.devices.empty()) {
         status.has_external_dac = false;
-        status.dac_name = "未连接";
-        status.dac_full_desc = "未能获取音频设备信息";
+        status.dac_name = "Apple Direct";
+        status.dac_full_desc = "Mac 原生音频输出";
         status.active_output_name = "默认音频输出";
     }
 

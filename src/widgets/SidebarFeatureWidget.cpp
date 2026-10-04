@@ -1,4 +1,5 @@
 #include "widgets/SidebarFeatureWidget.hpp"
+#include "public/Platform.hpp"
 #include "Font.hpp"
 #include "UIConfig.hpp"
 #include <string>
@@ -18,9 +19,13 @@ SidebarFeatureWidget::SidebarFeatureWidget() {
         { SidebarTab::MSEBTuning,     "调音魔棒" },
         { SidebarTab::DACSettings,    "DAC" },
         { SidebarTab::ThemeSettings,  "主题" },
-        { SidebarTab::SystemSettings, "设置" },
-        { SidebarTab::WifiTransfer,   "WiFi传歌" }
+        { SidebarTab::SystemSettings, "设置" }
     };
+
+    // WiFi 无线传歌仅在树莓派等无头/便携 Linux 部署环境下启用，macOS 上不予显示
+    if (Platform::isRaspberryPi()) {
+        features_.push_back({ SidebarTab::WifiTransfer, "WiFi传歌" });
+    }
 }
 
 void SidebarFeatureWidget::drawFeatureIcon(ImDrawList* dl, ImVec2 center, SidebarTab tab, ImU32 color) {

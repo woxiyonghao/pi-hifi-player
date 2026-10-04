@@ -1,4 +1,5 @@
 #include "widgets/SidebarPlaylistWidget.hpp"
+#include "public/Platform.hpp"
 #include "Font.hpp"
 #include "UIConfig.hpp"
 #include <string>
@@ -141,8 +142,8 @@ std::optional<PlaylistIndicatorTarget> SidebarPlaylistWidget::render(
         }
     }
 
-    // 4. 系统终端 (放置在添加播放列表正下方)
-    {
+    // 4. 系统终端 (仅在树莓派/便携 Linux 部署环境下启用，macOS 上不予显示)
+    if (Platform::isRaspberryPi()) {
         ImGui::Dummy(ImVec2(0.0f, 4.0f));
         bool is_terminal = (current_tab == SidebarTab::Terminal);
         PlaylistIndicatorTarget target{};

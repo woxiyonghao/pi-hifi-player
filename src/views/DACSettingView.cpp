@@ -19,7 +19,11 @@ DACSettingView::DACSettingView() {
 std::string DACSettingView::getCurrentChipName() const {
     if (selected_chip_ == 0) {
         auto status = AudioDeviceTool::getHardwareStatus();
-        return status.has_external_dac ? status.dac_name : (Platform::isRaspberryPi() ? "未连接" : "Mac 原生音频");
+        if (Platform::isRaspberryPi()) {
+            return status.has_external_dac ? status.dac_name : "未连接";
+        } else {
+            return status.has_external_dac ? status.dac_name : "Apple Direct";
+        }
     }
     switch (selected_chip_) {
         case 1: return "Dual ES9038PRO";
@@ -29,14 +33,22 @@ std::string DACSettingView::getCurrentChipName() const {
         case 5: return "BD34301EKV";
         default: {
             auto status = AudioDeviceTool::getHardwareStatus();
-            return status.has_external_dac ? status.dac_name : "未连接";
+            if (Platform::isRaspberryPi()) {
+                return status.has_external_dac ? status.dac_name : "未连接";
+            } else {
+                return status.has_external_dac ? status.dac_name : "Apple Direct";
+            }
         }
     }
 }
 
 bool DACSettingView::isDacConnected() const {
     if (selected_chip_ == 0) {
-        return AudioDeviceTool::getHardwareStatus().has_external_dac;
+        if (Platform::isRaspberryPi()) {
+            return AudioDeviceTool::getHardwareStatus().has_external_dac;
+        } else {
+            return true; // macOS 下 Apple Direct 随时可用
+        }
     }
     return true;
 }
@@ -269,7 +281,8 @@ void DACSettingView::render(float x, float y, float w, float h) {
         const char* label;
         const char* subtitle;
     } chip_tabs[6] = {
-        { "物理声卡侦测", "真实硬件 DAC 状态" },
+        { Platform::isRaspberryPi() ? "物理声卡侦测" : "Apple 直通",
+          Platform::isRaspberryPi() ? "真实硬件 DAC 状态" : "Mac 原生硬件直通" },
         { "ES9038PRO", "ESS Sabre 旗舰并联" },
         { "AK4499EX", "AKM 旭化成 Velvet" },
         { "CS43198", "Cirrus Logic Master" },
@@ -351,7 +364,11 @@ void DACSettingView::render(float x, float y, float w, float h) {
         // 根据顶部选中的芯片架构，渲染专属的发烧设置面板
         switch (selected_chip_) {
             case 0:
-                renderHardwareDeviceSettings(child_dl, x0, cur_y, section_w);
+                if (Platform::isRaspberryPi()) {
+                    renderHardwareDeviceSettings(child_dl, x0, cur_y, section_w);
+                } else {
+                    renderAppleDirectSettings(child_dl, x0, cur_y, section_w);
+                }
                 break;
             case 1:
                 renderESSSabreSettings(child_dl, x0, cur_y, section_w);
@@ -630,7 +647,148 @@ void DACSettingView::renderHardwareDeviceSettings(ImDrawList* dl, float x0, floa
 }
 
 void DACSettingView::renderAppleDirectSettings(ImDrawList* dl, float x0, float& cur_y, float w) {
-    renderHardwareDeviceSettings(dl, x0, cur_y, w);
+    bool is_bt = audio_engine::AudioEngine::getInstance().isCurrentDeviceBluetooth();
+    float h1 = is_bt ? 134.0f : 114.0f;
+    ImVec2 p0(x0, cur_y);
+    ImVec2 p1(x0 + w, cur_y + h1);
+
+    dl->AddRectFilled(p0, p1, IM_COL32(20, 26, 36, 175), 8.0f);
+    dl->AddRect(p0, p1, IM_COL32(255, 255, 255, 20), 8.0f, 0, 1.0f);
+    dl->AddLine(ImVec2(p0.x + 10.0f, p0.y), ImVec2(p1.x - 10.0f, p0.y), IM_COL32(255, 255, 255, 38), 1.0f);
+
+    if (Fonts::Regular) ImGui::PushFont(Fonts::Regular);
+    dl->AddText(ImVec2(x0 + 16.0f, cur_y + 10.0f), UIConfig::Color::TextActive,
+                "Mac 硬件直通通道 (Apple CoreAudio Bit-Perfect)");
+    if (Fonts::Regular) ImGui::PopFont();
+
+    const char* excl_opts[] = { "Bit-Perfect 独占流", "系统混音共享" };
+    renderOptionRow(dl, x0, cur_y + 36.0f, w, "硬件独占流", excl_opts, 2, apple_exclusive_mode_, "AppleExcl");
+
+    const char* rate_opts[] = { "原生跟随母带 (44.1k-192k)", "锁定 96kHz", "锁定 192kHz" };
+    renderOptionRow(dl, x0, cur_y + 72.0f, w, "采样率追踪", rate_opts, 3, apple_sample_rate_, "AppleRate");
+
+    if (is_bt) {
+        ImU32 accent = ThemeManager::getInstance().getAccentColor();
+        const ImU32 r = (accent >> IM_COL32_R_SHIFT) & 0xFF;
+        const ImU32 g = (accent >> IM_COL32_G_SHIFT) & 0xFF;
+        const ImU32 b = (accent >> IM_COL32_B_SHIFT) & 0xFF;
+
+        if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+        dl->AddText(ImVec2(x0 + 16.0f, cur_y + 110.0f),
+                    IM_COL32(r, g, b, 230),
+                    "已连接蓝牙设备，音频走系统 AAC 无线协议，已自动回退至 0dB 共享直通，确保稳定发声。");
+        if (Fonts::Small) ImGui::PopFont();
+    }
+
+    cur_y += h1 + 8.0f;
+
+    // 板块二：耳机阻抗侦测与位深
+    float h2 = 146.0f;
+    ImVec2 q0(x0, cur_y);
+    ImVec2 q1(x0 + w, cur_y + h2);
+
+    dl->AddRectFilled(q0, q1, IM_COL32(20, 26, 36, 175), 8.0f);
+    dl->AddRect(q0, q1, IM_COL32(255, 255, 255, 20), 8.0f, 0, 1.0f);
+    dl->AddLine(ImVec2(q0.x + 10.0f, q0.y), ImVec2(q1.x - 10.0f, q0.y), IM_COL32(255, 255, 255, 38), 1.0f);
+
+    if (Fonts::Regular) ImGui::PushFont(Fonts::Regular);
+    dl->AddText(ImVec2(x0 + 16.0f, cur_y + 10.0f), UIConfig::Color::TextActive,
+                "高阻抗耳机智能驱动与数据精度 (Impedance & Bit Depth)");
+    if (Fonts::Regular) ImGui::PopFont();
+
+    const char* drive_opts[] = { "智能检测 (1.25V~3Vrms)", "强制高输出 (3.0Vrms)", "标准输出 (1.25Vrms)" };
+    renderOptionRow(dl, x0, cur_y + 36.0f, w, "阻抗驱动力", drive_opts, 3, apple_headphone_drive_, "AppleDrive");
+
+    const char* depth_opts[] = { "32-bit Float 浮点直通", "24-bit 整数定点" };
+    renderOptionRow(dl, x0, cur_y + 72.0f, w, "数据位深", depth_opts, 2, apple_bit_depth_, "AppleDepth");
+
+    const char* desc = "Apple Direct 说明: MacBook Pro 硬件直通，Bit-Perfect 独占流绕过系统混音，原生 0 损耗输出。支持 3.5mm 智能阻抗自适应放大。";
+    if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+    dl->AddText(ImVec2(x0 + 16.0f, cur_y + 112.0f), UIConfig::Color::TextMuted, desc);
+    if (Fonts::Small) ImGui::PopFont();
+
+    cur_y += h2 + 8.0f;
+
+    // 板块三：系统 CoreAudio 物理音频输出拓扑 (实时侦测)
+    auto status = AudioDeviceTool::getHardwareStatus();
+    ImU32 accent = ThemeManager::getInstance().getAccentColor();
+    const ImU32 r = (accent >> IM_COL32_R_SHIFT) & 0xFF;
+    const ImU32 g = (accent >> IM_COL32_G_SHIFT) & 0xFF;
+    const ImU32 b = (accent >> IM_COL32_B_SHIFT) & 0xFF;
+
+    size_t dev_count = status.devices.size();
+    float dev_row_h = 30.0f;
+    float h3 = 36.0f + std::max((size_t)1, dev_count) * dev_row_h + 8.0f;
+    ImVec2 r0(x0, cur_y);
+    ImVec2 r1(x0 + w, cur_y + h3);
+
+    dl->AddRectFilled(r0, r1, IM_COL32(20, 26, 36, 175), 8.0f);
+    dl->AddRect(r0, r1, IM_COL32(255, 255, 255, 20), 8.0f, 0, 1.0f);
+    dl->AddLine(ImVec2(r0.x + 10.0f, r0.y), ImVec2(r1.x - 10.0f, r0.y), IM_COL32(255, 255, 255, 38), 1.0f);
+
+    if (Fonts::Regular) ImGui::PushFont(Fonts::Regular);
+    dl->AddText(ImVec2(x0 + 16.0f, cur_y + 8.0f), UIConfig::Color::TextActive,
+                "CoreAudio 音频输出设备拓扑 (实时枚举)");
+    if (Fonts::Regular) ImGui::PopFont();
+
+    float dev_y = cur_y + 32.0f;
+    if (status.devices.empty()) {
+        if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+        dl->AddText(ImVec2(x0 + 18.0f, dev_y + 4.0f), UIConfig::Color::TextMuted, "系统默认音频输出 (Apple CoreAudio)");
+        if (Fonts::Small) ImGui::PopFont();
+    } else {
+        for (const auto& d : status.devices) {
+            float row_x = x0 + 16.0f;
+            float row_w = w - 32.0f;
+            ImVec2 rb0(row_x, dev_y);
+            ImVec2 rb1(row_x + row_w, dev_y + 24.0f);
+
+            bool is_active_card = d.is_active;
+            ImU32 row_bg = is_active_card ? IM_COL32(r, g, b, 35) : IM_COL32(255, 255, 255, 8);
+            ImU32 row_border = is_active_card ? IM_COL32(r, g, b, 120) : IM_COL32(255, 255, 255, 18);
+            dl->AddRectFilled(rb0, rb1, row_bg, 4.0f);
+            dl->AddRect(rb0, rb1, row_border, 4.0f, 0, 1.0f);
+
+            if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+
+            std::string c_info = d.name;
+            dl->AddText(ImVec2(row_x + 10.0f, dev_y + 4.0f),
+                        is_active_card ? UIConfig::Color::TextActive : UIConfig::Color::TextNormal,
+                        c_info.c_str());
+
+            float drv_x = row_x + 220.0f;
+            if (drv_x < row_x + row_w - 200.0f) {
+                std::string drv_info = "架构: " + d.driver;
+                dl->AddText(ImVec2(drv_x, dev_y + 4.0f), UIConfig::Color::TextMuted, drv_info.c_str());
+            }
+
+            float badge_right = row_x + row_w - 8.0f;
+            if (is_active_card) {
+                ImVec2 b_sz = ImGui::CalcTextSize("当前输出");
+                float bx = badge_right - b_sz.x - 12.0f;
+                dl->AddRectFilled(ImVec2(bx, dev_y + 2.0f), ImVec2(badge_right, dev_y + 22.0f), IM_COL32(52, 199, 89, 50), 3.0f);
+                dl->AddRect(ImVec2(bx, dev_y + 2.0f), ImVec2(badge_right, dev_y + 22.0f), IM_COL32(52, 199, 89, 180), 3.0f);
+                dl->AddText(ImVec2(bx + 6.0f, dev_y + 4.0f), IM_COL32(52, 199, 89, 255), "当前输出");
+                badge_right = bx - 6.0f;
+            }
+
+            const char* type_str = d.is_external_dac ? "外置 DAC" : "Mac 内置";
+            ImVec2 t_sz = ImGui::CalcTextSize(type_str);
+            float tx = badge_right - t_sz.x - 12.0f;
+            ImU32 t_bg = d.is_external_dac ? IM_COL32(r, g, b, 50) : IM_COL32(255, 255, 255, 15);
+            ImU32 t_border = d.is_external_dac ? accent : IM_COL32(255, 255, 255, 30);
+            dl->AddRectFilled(ImVec2(tx, dev_y + 2.0f), ImVec2(badge_right, dev_y + 22.0f), t_bg, 3.0f);
+            dl->AddRect(ImVec2(tx, dev_y + 2.0f), ImVec2(badge_right, dev_y + 22.0f), t_border, 3.0f);
+            dl->AddText(ImVec2(tx + 6.0f, dev_y + 4.0f),
+                        d.is_external_dac ? UIConfig::Color::TextActive : UIConfig::Color::TextMuted,
+                        type_str);
+
+            if (Fonts::Small) ImGui::PopFont();
+            dev_y += dev_row_h;
+        }
+    }
+
+    cur_y += h3 + 8.0f;
 }
 
 // ==============================================================================
