@@ -103,13 +103,82 @@ Track MusicScanManager::parseBasicMetadata(uint64_t id, const std::filesystem::d
         track.album = "本地曲库";
     }
 
-    // 初始发烧规格占位 (待后续接入解码器后获取真实比特率与采样率)
+    // 初始发烧规格占位
     if (format == AudioFormat::DSD_DSF || format == AudioFormat::DSD_DFF) {
         track.sample_rate = 2822400; // DSD64 (1-bit / 2.8224MHz)
         track.bit_depth = 1;
-    } else if (format == AudioFormat::FLAC || format == AudioFormat::WAV) {
-        track.sample_rate = 96000; // 默认 Hi-Res 24bit/96kHz 规格占位
+    } else if (format == AudioFormat::FLAC) {
+        track.sample_rate = 96000;
         track.bit_depth = 24;
+        std::ifstream file(track.file_path, std::ios::binary);
+        if (file) {
+            char magic[4];
+            if (file.read(magic, 4) && std::memcmp(magic, "fLaC", 4) == 0) {
+                unsigned char hdr[4];
+                if (file.read(reinterpret_cast<char*>(hdr), 4) && (hdr[0] & 0x7F) == 0) {
+                    uint32_t len = (static_cast<uint32_t>(hdr[1]) << 16) |
+                                   (static_cast<uint32_t>(hdr[2]) << 8) |
+                                   static_cast<uint32_t>(hdr[3]);
+                    if (len >= 18) {
+                        std::vector<unsigned char> data(len);
+                        if (file.read(reinterpret_cast<char*>(data.data()), len)) {
+                            uint64_t b = 0;
+                            for (int i = 10; i < 18; ++i) {
+                                b = (b << 8) | data[i];
+                            }
+                            uint32_t sr = static_cast<uint32_t>(b >> 44);
+                            uint8_t bps = static_cast<uint8_t>(((b >> 36) & 0x1F) + 1);
+                            uint64_t total_samples = b & 0xFFFFFFFFF;
+                            if (sr > 0) {
+                                track.sample_rate = sr;
+                                track.bit_depth = bps;
+                                track.duration_sec = static_cast<uint32_t>(total_samples / sr);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    } else if (format == AudioFormat::WAV) {
+        track.sample_rate = 44100;
+        track.bit_depth = 16;
+        std::ifstream file(track.file_path, std::ios::binary);
+        if (file) {
+            char riff[4];
+            if (file.read(riff, 4) && std::memcmp(riff, "RIFF", 4) == 0) {
+                file.seekg(8);
+                char wave[4];
+                if (file.read(wave, 4) && std::memcmp(wave, "WAVE", 4) == 0) {
+                    char chunk_id[4];
+                    uint32_t chunk_sz = 0;
+                    uint32_t byte_rate = 0;
+                    uint32_t data_sz = 0;
+                    while (file.read(chunk_id, 4) && file.read(reinterpret_cast<char*>(&chunk_sz), 4)) {
+                        if (std::memcmp(chunk_id, "fmt ", 4) == 0 && chunk_sz >= 16) {
+                            uint16_t audio_fmt = 0, ch = 0, bps = 0;
+                            uint32_t sr = 0;
+                            file.read(reinterpret_cast<char*>(&audio_fmt), 2);
+                            file.read(reinterpret_cast<char*>(&ch), 2);
+                            file.read(reinterpret_cast<char*>(&sr), 4);
+                            file.read(reinterpret_cast<char*>(&byte_rate), 4);
+                            file.seekg(2, std::ios::cur);
+                            file.read(reinterpret_cast<char*>(&bps), 2);
+                            track.sample_rate = sr;
+                            track.bit_depth = bps;
+                            if (chunk_sz > 16) file.seekg(chunk_sz - 16, std::ios::cur);
+                        } else if (std::memcmp(chunk_id, "data", 4) == 0) {
+                            data_sz = chunk_sz;
+                            break;
+                        } else {
+                            file.seekg(chunk_sz, std::ios::cur);
+                        }
+                    }
+                    if (byte_rate > 0 && data_sz > 0) {
+                        track.duration_sec = data_sz / byte_rate;
+                    }
+                }
+            }
+        }
     } else {
         track.sample_rate = 44100;
         track.bit_depth = 16;
