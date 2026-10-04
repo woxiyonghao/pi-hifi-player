@@ -4,6 +4,7 @@
 #include "widgets/GlassCardRenderer.hpp"
 #include "tools/MusicDatabase.hpp"
 #include "themes/ThemeManager.hpp"
+#include "tools/UpdateManager.hpp"
 #include "audio_engine/AudioEngine.hpp"
 #include "tools/PlayerAdmin.hpp"
 #include <algorithm>
@@ -178,7 +179,13 @@ void SystemSettingsView::render(float x, float y, float w, float h) {
         ImGui::SetCursorScreenPos(ImVec2(p_hw.x, p_hw.y + 182.0f));
         ImGui::Dummy(ImVec2(0.0f, 10.0f));
 
-        // 板块三：系统维护与电源管控 (88px)
+        // 板块三：固件与在线更新 (OTA)
+        ImVec2 p_update = ImGui::GetCursorScreenPos();
+        float update_card_h = renderUpdateSection(child_dl, p_update.x, p_update.y, section_w);
+        ImGui::SetCursorScreenPos(ImVec2(p_update.x, p_update.y + update_card_h));
+        ImGui::Dummy(ImVec2(0.0f, 10.0f));
+
+        // 板块四：系统维护与电源管控 (88px)
         ImVec2 p_power = ImGui::GetCursorScreenPos();
         renderPowerSection(child_dl, p_power.x, p_power.y, section_w);
         ImGui::SetCursorScreenPos(ImVec2(p_power.x, p_power.y + 88.0f));
@@ -454,6 +461,135 @@ void SystemSettingsView::renderHardwareSection(ImDrawList* dl, float x0, float y
                     is_act ? UIConfig::Color::TextActive : UIConfig::Color::TextNormal, idle_opts[i]);
         if (Fonts::Small) ImGui::PopFont();
     }
+}
+
+float SystemSettingsView::renderUpdateSection(ImDrawList* dl, float x0, float y0, float w) {
+    auto& um = UpdateManager::getInstance();
+    UpdateStatus st = um.getStatus();
+
+    bool has_logs = (st == UpdateStatus::UpdateAvailable && !um.getUpdateLog().empty());
+    float h = has_logs ? 148.0f : 100.0f;
+    if (st == UpdateStatus::UpdateFailed && !um.getErrorMessage().empty()) {
+        h = 130.0f;
+    }
+
+    ImVec2 p0(x0, y0);
+    ImVec2 p1(x0 + w, y0 + h);
+
+    dl->AddRectFilled(p0, p1, IM_COL32(20, 26, 36, 175), 10.0f);
+    dl->AddRect(p0, p1, IM_COL32(255, 255, 255, 20), 10.0f, 0, 1.0f);
+    dl->AddLine(ImVec2(p0.x + 10.0f, p0.y), ImVec2(p1.x - 10.0f, p0.y), IM_COL32(255, 255, 255, 38), 1.0f);
+
+    if (Fonts::Regular) ImGui::PushFont(Fonts::Regular);
+    dl->AddText(ImVec2(x0 + 16.0f, y0 + 10.0f), UIConfig::Color::TextActive, "固件与在线更新 (OTA Update)");
+    if (Fonts::Regular) ImGui::PopFont();
+
+    // 状态与版本信息文本
+    std::string ver_info = "当前固件：" + um.getCurrentCommitHash() + " (" + um.getCurrentCommitDate() +
+                           ") · 分支: " + um.getCurrentBranch();
+    if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+    dl->AddText(ImVec2(x0 + 16.0f, y0 + 34.0f), UIConfig::Color::TextMuted, ver_info.c_str());
+
+    float btn_h = 26.0f;
+    float btn_y = y0 + 58.0f;
+
+    ImU32 accent = ThemeManager::getInstance().getAccentColor();
+    const ImU32 r = (accent >> IM_COL32_R_SHIFT) & 0xFF;
+    const ImU32 g = (accent >> IM_COL32_G_SHIFT) & 0xFF;
+    const ImU32 b = (accent >> IM_COL32_B_SHIFT) & 0xFF;
+
+    // 1. 检查更新按钮
+    float chk_btn_w = 110.0f;
+    ImVec2 chk_min(x0 + 16.0f, btn_y);
+    ImVec2 chk_max(chk_min.x + chk_btn_w, btn_y + btn_h);
+    ImGui::SetCursorScreenPos(chk_min);
+
+    bool is_busy = (st == UpdateStatus::Checking || st == UpdateStatus::Updating);
+    if (!is_busy) {
+        ImGui::InvisibleButton("##CheckUpdateBtn", ImVec2(chk_btn_w, btn_h));
+        bool chk_hov = ImGui::IsItemHovered();
+        if (ImGui::IsItemClicked()) {
+            um.checkForUpdatesAsync();
+        }
+        dl->AddRectFilled(chk_min, chk_max, chk_hov ? IM_COL32(r, g, b, 70) : IM_COL32(255, 255, 255, 16), 6.0f);
+        dl->AddRect(chk_min, chk_max, chk_hov ? accent : IM_COL32(255, 255, 255, 30), 6.0f, 0, 1.0f);
+        ImVec2 sz = ImGui::CalcTextSize("检查更新");
+        dl->AddText(ImVec2(chk_min.x + (chk_btn_w - sz.x) * 0.5f, btn_y + (btn_h - sz.y) * 0.5f),
+                    UIConfig::Color::TextActive, "检查更新");
+    } else {
+        dl->AddRectFilled(chk_min, chk_max, IM_COL32(255, 255, 255, 10), 6.0f);
+        dl->AddRect(chk_min, chk_max, IM_COL32(255, 255, 255, 20), 6.0f, 0, 1.0f);
+        ImVec2 sz = ImGui::CalcTextSize(st == UpdateStatus::Checking ? "检测中..." : "编译中...");
+        dl->AddText(ImVec2(chk_min.x + (chk_btn_w - sz.x) * 0.5f, btn_y + (btn_h - sz.y) * 0.5f),
+                    UIConfig::Color::TextMuted, st == UpdateStatus::Checking ? "检测中..." : "编译中...");
+    }
+
+    // 2. 状态标签或动作按钮
+    float status_x = chk_max.x + 14.0f;
+    if (st == UpdateStatus::Idle) {
+        dl->AddText(ImVec2(status_x, btn_y + 5.0f), UIConfig::Color::TextMuted, "点击左侧按钮向远端仓库请求检测最新固件");
+    } else if (st == UpdateStatus::Checking) {
+        dl->AddText(ImVec2(status_x, btn_y + 5.0f), IM_COL32(250, 204, 21, 240), "正在连接远端仓库 (git fetch)...");
+    } else if (st == UpdateStatus::UpToDate) {
+        dl->AddText(ImVec2(status_x, btn_y + 5.0f), IM_COL32(52, 211, 153, 240), "✅ 当前固件已是最新版本 (与远端保持同步)");
+    } else if (st == UpdateStatus::UpdateAvailable) {
+        std::string notice = "🔥 发现 " + std::to_string(um.getNewCommitCount()) + " 个新提交 (最新: " + um.getRemoteCommitHash() + ")";
+        dl->AddText(ImVec2(status_x, btn_y + 5.0f), IM_COL32(251, 146, 60, 240), notice.c_str());
+
+        // 立即更新按钮
+        float upd_btn_w = 170.0f;
+        float upd_btn_x = status_x + ImGui::CalcTextSize(notice.c_str()).x + 16.0f;
+        if (upd_btn_x + upd_btn_w > x0 + w - 16.0f) {
+            upd_btn_x = x0 + w - 16.0f - upd_btn_w;
+        }
+        ImVec2 upd_min(upd_btn_x, btn_y);
+        ImVec2 upd_max(upd_min.x + upd_btn_w, btn_y + btn_h);
+        ImGui::SetCursorScreenPos(upd_min);
+        ImGui::InvisibleButton("##ExecuteUpdateBtn", ImVec2(upd_btn_w, btn_h));
+        bool upd_hov = ImGui::IsItemHovered();
+        if (ImGui::IsItemClicked()) {
+            um.executeUpdateAsync();
+        }
+        dl->AddRectFilled(upd_min, upd_max, upd_hov ? IM_COL32(16, 185, 129, 90) : IM_COL32(16, 185, 129, 50), 6.0f);
+        dl->AddRect(upd_min, upd_max, IM_COL32(16, 185, 129, upd_hov ? 240 : 150), 6.0f, 0, 1.0f);
+        ImVec2 upd_sz = ImGui::CalcTextSize("🚀 一键在线更新并编译");
+        dl->AddText(ImVec2(upd_min.x + (upd_btn_w - upd_sz.x) * 0.5f, btn_y + (btn_h - upd_sz.y) * 0.5f),
+                    IM_COL32(255, 255, 255, 240), "🚀 一键在线更新并编译");
+
+        if (has_logs) {
+            float log_y = btn_y + btn_h + 8.0f;
+            std::string first_log = um.getUpdateLog();
+            dl->AddText(ImVec2(x0 + 16.0f, log_y), IM_COL32(203, 213, 225, 220), first_log.c_str());
+        }
+    } else if (st == UpdateStatus::Updating) {
+        std::string prog_msg = um.getProgressMessage();
+        dl->AddText(ImVec2(status_x, btn_y + 5.0f), IM_COL32(96, 165, 250, 240), prog_msg.c_str());
+    } else if (st == UpdateStatus::UpdateSuccess) {
+        dl->AddText(ImVec2(status_x, btn_y + 5.0f), IM_COL32(52, 211, 153, 240), "✅ 固件重编译成功！");
+
+        float rst_btn_w = 120.0f;
+        float rst_btn_x = status_x + 160.0f;
+        ImVec2 rst_min(rst_btn_x, btn_y);
+        ImVec2 rst_max(rst_min.x + rst_btn_w, btn_y + btn_h);
+        ImGui::SetCursorScreenPos(rst_min);
+        ImGui::InvisibleButton("##RestartServiceBtn", ImVec2(rst_btn_w, btn_h));
+        bool rst_hov = ImGui::IsItemHovered();
+        if (ImGui::IsItemClicked()) {
+            um.restartApplication();
+        }
+        dl->AddRectFilled(rst_min, rst_max, rst_hov ? IM_COL32(59, 130, 246, 80) : IM_COL32(59, 130, 246, 40), 6.0f);
+        dl->AddRect(rst_min, rst_max, IM_COL32(59, 130, 246, 180), 6.0f, 0, 1.0f);
+        ImVec2 rst_sz = ImGui::CalcTextSize("🔄 立即重启生效");
+        dl->AddText(ImVec2(rst_min.x + (rst_btn_w - rst_sz.x) * 0.5f, btn_y + (btn_h - rst_sz.y) * 0.5f),
+                    IM_COL32(255, 255, 255, 240), "🔄 立即重启生效");
+    } else if (st == UpdateStatus::UpdateFailed) {
+        std::string err = "❌ " + um.getErrorMessage();
+        if (err.length() > 60) err = err.substr(0, 57) + "...";
+        dl->AddText(ImVec2(status_x, btn_y + 5.0f), IM_COL32(239, 68, 68, 240), err.c_str());
+    }
+
+    if (Fonts::Small) ImGui::PopFont();
+    return h;
 }
 
 void SystemSettingsView::renderPowerSection(ImDrawList* dl, float x0, float y0, float w) {

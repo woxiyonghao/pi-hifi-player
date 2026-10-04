@@ -79,9 +79,9 @@ void MainStageView::render(SidebarTab current_tab,
                            uint64_t selected_playlist_id, 
                            std::vector<Playlist>& playlists,
                            float stage_x, float stage_y, float stage_w, float stage_h) {
-    // 创建主舞台专属透明顶层无边框窗口 (严格限制高度不重叠底部 BottomBar，消除事件劫持)
+    // 创建主舞台专属透明顶层无边框窗口 (动态避让底部 BottomBar 胶囊高 48px + 边距 16px + 缓冲 12px = 76px)
     ImGui::SetNextWindowPos(ImVec2(stage_x, stage_y));
-    float safe_stage_h = std::min(stage_h, 524.0f); // BottomBar 位于 y = 536，卡片底位于 y = 514
+    float safe_stage_h = std::max(stage_h - 76.0f, 300.0f);
     ImGui::SetNextWindowSize(ImVec2(stage_w, safe_stage_h));
 
     ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar 

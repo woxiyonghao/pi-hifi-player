@@ -73,7 +73,7 @@ set(
 )
 
 # 收集项目自身所有 C++ 源码
-file(GLOB_RECURSE APP_SOURCES "src/*.cpp")
+file(GLOB_RECURSE APP_SOURCES CONFIGURE_DEPENDS "src/*.cpp")
 
 # 6. 生成目标可执行程序 (产物将命名为 PiHifiPlayer)
 add_executable(${PROJECT_NAME} ${APP_SOURCES} ${IMGUI_SOURCES})

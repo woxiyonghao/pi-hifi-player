@@ -11,7 +11,10 @@ void initialize(ImGuiIO& io) {
         "/System/Library/Fonts/Hiragino Sans GB.ttc",            // macOS 原生冬青黑体
         "/System/Library/Fonts/STHeiti Light.ttc",               // macOS 华文黑体
         "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",        // 树莓派文泉驿微米黑
-        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc" // 树莓派 Noto Sans
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",// 树莓派 Noto Sans
+        "C:\\Windows\\Fonts\\msyh.ttc",                          // Windows 微软雅黑
+        "C:\\Windows\\Fonts\\simhei.ttf",                         // Windows 黑体
+        "C:\\Windows\\Fonts\\simsun.ttc"                          // Windows 宋体
     };
 
     const char* matched_path = nullptr;
@@ -50,7 +53,9 @@ void initialize(ImGuiIO& io) {
         "/System/Library/Fonts/SFNSDisplay-Bold.otf",
         "/System/Library/Fonts/Supplemental/Futura.ttc",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-        "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf"
+        "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
+        "C:\\Windows\\Fonts\\arialbd.ttf",
+        "C:\\Windows\\Fonts\\segoeuib.ttf"
     };
     const char* clock_font_path = nullptr;
     for (const auto& path : clock_font_candidates) {

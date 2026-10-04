@@ -111,17 +111,32 @@ bool Application::initOpenGL() {
 }
 
 bool Application::initWindow() {
-    // 物理拟合微雪 7 寸 QLED 纯平触控屏 (1024×600)
+    Uint32 window_flags = SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN;
+    const char* title = "PiHifiPlayer - High Fidelity Music Player";
+    if (Platform::isRaspberryPi()) {
+        // 树莓派微雪 7 寸屏锁定纯平专机标题
+        title = "PiHifiPlayer - High Fidelity Music Player (1024x600)";
+    } else {
+        // Mac / Windows / 桌面环境支持窗口自由调节与拖拽拉伸
+        window_flags |= SDL_WINDOW_RESIZABLE;
+    }
+
+    // 默认创建发烧标准比例窗口 (1024×600)
     window_ = SDL_CreateWindow(
-        "PiHifiPlayer - High Fidelity Music Player (1024x600)",
+        title,
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         1024, 600,
-        SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN
+        window_flags
     );
 
     if (!window_) {
         std::cerr << "[Window] 窗口创建失败: " << SDL_GetError() << std::endl;
         return false;
+    }
+
+    if (!Platform::isRaspberryPi()) {
+        // 设置桌面环境下的安全最小窗口尺寸，保证发烧控件与歌单在紧凑视口下完整可用
+        SDL_SetWindowMinimumSize(window_, 960, 540);
     }
 
     gl_context_ = SDL_GL_CreateContext(window_);
@@ -259,11 +274,18 @@ void Application::pollEvents() {
     while (SDL_PollEvent(&event)) {
         ImGui_ImplSDL2_ProcessEvent(&event);
 
-        // 原生多点触摸 (TouchScreen) 转 ImGui 交互与平滑手势拖拽滚动 (针对微雪 7 寸触控屏)
+        // 原生多点触摸 (TouchScreen) 转 ImGui 交互与平滑手势拖拽滚动 (自适应窗口调节与微雪触控屏)
         ImGuiIO& io = ImGui::GetIO();
+        int cur_w = 1024, cur_h = 600;
+        if (window_) {
+            SDL_GetWindowSize(window_, &cur_w, &cur_h);
+        }
+        float touch_w = (cur_w > 0) ? static_cast<float>(cur_w) : 1024.0f;
+        float touch_h = (cur_h > 0) ? static_cast<float>(cur_h) : 600.0f;
+
         if (event.type == SDL_FINGERDOWN) {
-            float x = event.tfinger.x * 1024.0f;
-            float y = event.tfinger.y * 600.0f;
+            float x = event.tfinger.x * touch_w;
+            float y = event.tfinger.y * touch_h;
             touch_start_y_ = y;
             touch_last_y_ = y;
             touch_accum_dy_ = 0.0f;
@@ -275,16 +297,16 @@ void Application::pollEvents() {
             io.AddMouseButtonEvent(0, true);
             resetIdle();
         } else if (event.type == SDL_FINGERUP) {
-            float x = event.tfinger.x * 1024.0f;
-            float y = event.tfinger.y * 600.0f;
+            float x = event.tfinger.x * touch_w;
+            float y = event.tfinger.y * touch_h;
             io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
             io.AddMousePosEvent(x, y);
             io.AddMouseButtonEvent(0, false);
             is_touch_scrolling_ = false;
             resetIdle();
         } else if (event.type == SDL_FINGERMOTION) {
-            float x = event.tfinger.x * 1024.0f;
-            float y = event.tfinger.y * 600.0f;
+            float x = event.tfinger.x * touch_w;
+            float y = event.tfinger.y * touch_h;
             float dy = y - touch_last_y_;
             touch_accum_dy_ += std::abs(dy);
             touch_last_y_ = y;
@@ -469,9 +491,9 @@ void Application::renderBackground(float screen_w, float screen_h) {
     const float gap_x = 4.0f;                                  // 列间距
     const float col_w = (total_w - (num_cols - 1) * gap_x) / num_cols; // ~16.75px
     
-    const int num_rows = 69;                                   // 69 行分段 LED (全屏满屏高度贯通)
     const float seg_h = 6.0f;                                  // 每个方块高度
     const float gap_y = 2.5f;                                  // 方块纵向间距
+    const int num_rows = std::clamp(static_cast<int>((screen_h - 16.0f) / (seg_h + gap_y)), 20, 200); // 随窗口高度自适应满屏行数
     const float seg_round = 0.0f;                              // 0.0f 纯净直角点阵 (大幅降低 GLES 顶点负载，呈现硬朗经典机皇发烧质感)
     const float bot_y = screen_h - 8.0f;                       // 距底部屏幕边缘 8px 起振 (最高行达 y = 8px)
 
@@ -561,8 +583,10 @@ void Application::render() {
 
     int display_w = 0, display_h = 0;
     SDL_GL_GetDrawableSize(window_, &display_w, &display_h);
-    const float screen_w = (display_w > 0) ? static_cast<float>(display_w) : 1024.0f;
-    const float screen_h = (display_h > 0) ? static_cast<float>(display_h) : 600.0f;
+    ImGuiIO& io = ImGui::GetIO();
+    // 使用 ImGui 逻辑尺寸作为全屏排版依据 (适配 Retina 高分屏与窗口自由缩放)
+    const float screen_w = (io.DisplaySize.x > 0.0f) ? io.DisplaySize.x : ((display_w > 0) ? static_cast<float>(display_w) : 1024.0f);
+    const float screen_h = (io.DisplaySize.y > 0.0f) ? io.DisplaySize.y : ((display_h > 0) ? static_cast<float>(display_h) : 600.0f);
 
     // [全景底层背景与音乐律动动效] (位于所有窗口最底层)
     renderBackground(screen_w, screen_h);
@@ -573,22 +597,22 @@ void Application::render() {
 
     // 只有在未完全移出屏幕时才渲染 4 大板块
     if (anim_progress_ < 0.999f) {
-        // 四角移出偏移计算：
-        // 1. 左上角：sidebar 功能与歌单区 -> 向左上方 (-250, -150)
-        float top_nav_dx = -250.0f * ease_t;
+        // 四角移出偏移计算 (根据当前 screen_w / screen_h 动态计算保证完全移出大屏视口)：
+        // 1. 左上角：sidebar 功能与歌单区 -> 向左上方 (-260, -150)
+        float top_nav_dx = -260.0f * ease_t;
         float top_nav_dy = -150.0f * ease_t;
 
-        // 2. 左下角：dacview DAC 模块 -> 向左下方 (-250, +120)
-        float dac_dx = -250.0f * ease_t;
-        float dac_dy = 120.0f * ease_t;
+        // 2. 左下角：dacview DAC 模块 -> 向左下方 (-260, +150)
+        float dac_dx = -260.0f * ease_t;
+        float dac_dy = (screen_h * 0.25f + 40.0f) * ease_t;
 
-        // 3. 右上角：mainstateview 主舞台区域 -> 向右上方 (+820, -150)
-        float main_dx = 820.0f * ease_t;
+        // 3. 右上角：mainstateview 主舞台区域 -> 向右上方 (screen_w, -150)
+        float main_dx = (screen_w - 180.0f) * ease_t;
         float main_dy = -150.0f * ease_t;
 
-        // 4. 右下角：bottombar 底部播放控制胶囊栏 -> 向右下方 (+820, +120)
-        float bottom_dx = 820.0f * ease_t;
-        float bottom_dy = 120.0f * ease_t;
+        // 4. 右下角：bottombar 底部播放控制胶囊栏 -> 向右下方 (screen_w, +150)
+        float bottom_dx = (screen_w - 180.0f) * ease_t;
+        float bottom_dy = (screen_h * 0.25f + 40.0f) * ease_t;
 
         // 2. 调度发烧 UI 三驾马车布局渲染
         // 动态同步当前选中的 DAC 芯片状态与显示名称
