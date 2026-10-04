@@ -60,12 +60,16 @@ LOCAL_HASH=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 LOCAL_DATE=$(git log -1 --format=%cd --date=short 2>/dev/null || echo "unknown")
 echo -e "${CYAN}>> 本地版本: ${LOCAL_HASH} (${LOCAL_DATE})${RESET}"
 
-# 2. 检查网络与 Fetch 远端元数据
+# 2. 检查网络与 Fetch 远端元数据 (若 SSH 未配置则自动使用公开免密 HTTPS)
 echo -ne "${YELLOW}>> 正在连接远端仓库 (git fetch origin ${TARGET_BRANCH})... ${RESET}"
 if ! git fetch origin "${TARGET_BRANCH}" --quiet 2>/dev/null; then
-    echo -e "${RED}[连接失败]${RESET}"
-    echo -e "${RED}无法连接到远程 Git 仓库，请检查网络连接或 GitHub/Gitee 认证。${RESET}"
-    exit 1
+    echo -e "${YELLOW}[切换至公开免密 HTTPS 通道重试]... ${RESET}"
+    git remote set-url origin https://github.com/woxiyonghao/pi-hifi-player.git 2>/dev/null || true
+    if ! git fetch origin "${TARGET_BRANCH}" --quiet 2>/dev/null; then
+        echo -e "${RED}[连接失败]${RESET}"
+        echo -e "${RED}无法连接到远程 Git 仓库，请检查网络连接。${RESET}"
+        exit 1
+    fi
 fi
 echo -e "${GREEN}[OK]${RESET}"
 

@@ -104,14 +104,18 @@ void UpdateManager::checkForUpdatesAsync() {
             branch = current_branch_;
         }
 
-        // 1. Fetch 远程分支 (超时保护，免干扰本地改动)
+        // 1. Fetch 远程分支 (若 SSH 认证未配置，自动切换至公开免密 HTTPS 通道)
         int fetch_code = 0;
         std::string fetch_out = execCommand("git fetch origin " + branch + " --quiet", &fetch_code);
         if (fetch_code != 0) {
-            std::lock_guard<std::mutex> lock(mutex_);
-            error_msg_ = "远端连接失败: " + fetch_out;
-            status_.store(UpdateStatus::UpdateFailed);
-            return;
+            execCommand("git remote set-url origin https://github.com/woxiyonghao/pi-hifi-player.git");
+            fetch_out = execCommand("git fetch origin " + branch + " --quiet", &fetch_code);
+            if (fetch_code != 0) {
+                std::lock_guard<std::mutex> lock(mutex_);
+                error_msg_ = "远端连接失败: " + fetch_out;
+                status_.store(UpdateStatus::UpdateFailed);
+                return;
+            }
         }
 
         // 2. 查询远端最新 Commit Hash
