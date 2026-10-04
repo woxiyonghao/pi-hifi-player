@@ -101,10 +101,16 @@ private:
     bool is_fullscreen_idle_ = false;
     float anim_progress_ = 0.0f; // 0.0f (完全移入展出) ~ 1.0f (完全移出至四角)
 
-    // 触控屏手指拖拽滑动与动量平滑滚动 (针对微雪触控屏)
+    // 触控屏原生多指触摸与平滑手势管理 (杜绝双指坐标交叉震荡)
+    struct TouchFinger {
+        SDL_FingerID id = 0;
+        float x = 0.0f;
+        float y = 0.0f;
+        float last_x = 0.0f;
+        float last_y = 0.0f;
+    };
+    std::vector<TouchFinger> active_fingers_;
     bool is_touch_scrolling_ = false;
-    float touch_start_y_ = 0.0f;
-    float touch_last_y_ = 0.0f;
     float touch_accum_dy_ = 0.0f;
     float touch_scroll_velocity_ = 0.0f;
 };

@@ -44,7 +44,7 @@ void SidebarView::renderTopNav(const std::vector<Playlist>& playlists, float wid
     // 触控与鼠标拖拽平滑滚动：当歌单列表超长时支持手势滑动
     if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem) &&
         ImGui::IsMouseDragging(ImGuiMouseButton_Left, 4.0f)) {
-        float drag_dy = ImGui::GetIO().MouseDelta.y;
+        float drag_dy = std::clamp(ImGui::GetIO().MouseDelta.y, -40.0f, 40.0f);
         if (drag_dy != 0.0f) {
             ImGui::SetScrollY(ImGui::GetScrollY() - drag_dy);
         }

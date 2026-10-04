@@ -92,8 +92,10 @@ void ThemeSettingView::render(float x, float y, float w, float h) {
 
         // 触控与鼠标在背景区平滑拖拽滚动
         if (ImGui::IsWindowHovered() && !ImGui::IsAnyItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 4.0f)) {
-            float drag_dy = ImGui::GetIO().MouseDelta.y;
-            ImGui::SetScrollY(ImGui::GetScrollY() - drag_dy);
+            float drag_dy = std::clamp(ImGui::GetIO().MouseDelta.y, -40.0f, 40.0f);
+            if (drag_dy != 0.0f) {
+                ImGui::SetScrollY(ImGui::GetScrollY() - drag_dy);
+            }
         }
 
         ImDrawList* cdl = ImGui::GetWindowDrawList();

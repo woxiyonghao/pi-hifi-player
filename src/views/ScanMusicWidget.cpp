@@ -613,7 +613,7 @@ void ScanMusicWidget::renderCompletedState([[maybe_unused]] ImDrawList* dl, ImVe
     // 纵向拖拽平滑滚动：当用户在主区域（包括各格式行内外）上下拖拽时，平滑滚动页面
     if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem) &&
         ImGui::IsMouseDragging(ImGuiMouseButton_Left, 4.0f)) {
-        float drag_dy = ImGui::GetIO().MouseDelta.y;
+        float drag_dy = std::clamp(ImGui::GetIO().MouseDelta.y, -40.0f, 40.0f);
         float drag_dx = ImGui::GetIO().MouseDelta.x;
         if (std::abs(drag_dy) >= std::abs(drag_dx) && drag_dy != 0.0f) {
             ImGui::SetScrollY(ImGui::GetScrollY() - drag_dy);

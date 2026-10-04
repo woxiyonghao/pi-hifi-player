@@ -79,9 +79,9 @@ bool Application::init() {
 }
 
 bool Application::initSDL() {
-    // 强制开启 SDL2 触摸转鼠标模拟提示，适配各类触控屏
-    SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "1");
-    SDL_SetHint(SDL_HINT_MOUSE_TOUCH_EVENTS, "1");
+    // 禁用 SDL2 默认单指触摸模拟鼠标事件，由原生多指触控引擎统一全权调度 (杜绝双指坐标交叉震荡)
+    SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
+    SDL_SetHint(SDL_HINT_MOUSE_TOUCH_EVENTS, "0");
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_EVENTS) != 0) {
         std::cerr << "[SDL] 初始化失败: " << SDL_GetError() << std::endl;
@@ -286,47 +286,141 @@ void Application::pollEvents() {
         if (event.type == SDL_FINGERDOWN) {
             float x = event.tfinger.x * touch_w;
             float y = event.tfinger.y * touch_h;
-            touch_start_y_ = y;
-            touch_last_y_ = y;
-            touch_accum_dy_ = 0.0f;
-            is_touch_scrolling_ = false;
-            touch_scroll_velocity_ = 0.0f;
+            SDL_FingerID fid = event.tfinger.fingerId;
 
-            io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
-            io.AddMousePosEvent(x, y);
-            io.AddMouseButtonEvent(0, true);
+            // 维护当前活跃触控点
+            auto it = std::find_if(active_fingers_.begin(), active_fingers_.end(),
+                                   [fid](const TouchFinger& f) { return f.id == fid; });
+            if (it == active_fingers_.end()) {
+                active_fingers_.push_back({fid, x, y, x, y});
+            } else {
+                it->x = x; it->y = y; it->last_x = x; it->last_y = y;
+            }
+
             resetIdle();
+
+            if (active_fingers_.size() == 1) {
+                // 单指初次触屏：准备常规轻触点击或单指拖拽
+                touch_accum_dy_ = 0.0f;
+                is_touch_scrolling_ = false;
+                touch_scroll_velocity_ = 0.0f;
+
+                io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
+                io.AddMousePosEvent(x, y);
+                io.AddMouseButtonEvent(0, true);
+            } else {
+                // 多指触屏 (如双指滚动或多指手势)：
+                // 1. 立即释放鼠标按下状态，防止意外触发任何按键或曲目误点击
+                io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
+                io.AddMouseButtonEvent(0, false);
+                // 2. 进入多指平滑滚动准备态
+                is_touch_scrolling_ = true;
+                touch_scroll_velocity_ = 0.0f;
+                // 重置所有活跃手指的 last 坐标，彻底阻断跨手指差值震荡
+                for (auto& f : active_fingers_) {
+                    f.last_x = f.x;
+                    f.last_y = f.y;
+                }
+            }
         } else if (event.type == SDL_FINGERUP) {
             float x = event.tfinger.x * touch_w;
             float y = event.tfinger.y * touch_h;
-            io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
-            io.AddMousePosEvent(x, y);
-            io.AddMouseButtonEvent(0, false);
-            is_touch_scrolling_ = false;
+            SDL_FingerID fid = event.tfinger.fingerId;
+
+            auto it = std::find_if(active_fingers_.begin(), active_fingers_.end(),
+                                   [fid](const TouchFinger& f) { return f.id == fid; });
+            if (it != active_fingers_.end()) {
+                active_fingers_.erase(it);
+            }
+
             resetIdle();
+
+            if (active_fingers_.empty()) {
+                // 所有手指均已离开屏幕
+                io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
+                io.AddMousePosEvent(x, y);
+                io.AddMouseButtonEvent(0, false);
+                is_touch_scrolling_ = false;
+            } else {
+                // 仍有其它手指留在屏幕上 (例如两指抬起了一指)
+                // 重置剩余手指的 last 坐标，保证抬指瞬间无任何跳变 delta
+                for (auto& f : active_fingers_) {
+                    f.last_x = f.x;
+                    f.last_y = f.y;
+                }
+            }
         } else if (event.type == SDL_FINGERMOTION) {
             float x = event.tfinger.x * touch_w;
             float y = event.tfinger.y * touch_h;
-            float dy = y - touch_last_y_;
-            touch_accum_dy_ += std::abs(dy);
-            touch_last_y_ = y;
+            SDL_FingerID fid = event.tfinger.fingerId;
 
-            io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
-            io.AddMousePosEvent(x, y);
-
-            // 当手指单次拖拽垂直位移累积超过 6px 时，智能判定为列表滚动操作，而非误点击曲目
-            if (!is_touch_scrolling_ && touch_accum_dy_ > 6.0f) {
-                is_touch_scrolling_ = true;
-                // 立即释放鼠标按下状态，取消对下方列表项的按下高亮或误触
-                io.AddMouseButtonEvent(0, false);
+            auto it = std::find_if(active_fingers_.begin(), active_fingers_.end(),
+                                   [fid](const TouchFinger& f) { return f.id == fid; });
+            if (it == active_fingers_.end()) {
+                active_fingers_.push_back({fid, x, y, x, y});
+                it = active_fingers_.end() - 1;
             }
 
-            if (is_touch_scrolling_) {
-                // 将手指滑动距离映射为标准平滑鼠标滚轮事件 (dy > 0 手指向下滑，内容向下移动)
-                float wheel_delta = dy / 24.0f;
+            // 核心关键：仅与本手指自身历史坐标计算差值，绝对不与其它手指发生交叉差值计算！
+            float finger_dy = y - it->last_y;
+            it->x = x;
+            it->y = y;
+            it->last_x = x;
+            it->last_y = y;
+
+            // 单帧防突变安全钳位
+            finger_dy = std::clamp(finger_dy, -50.0f, 50.0f);
+
+            resetIdle();
+
+            if (active_fingers_.size() == 1) {
+                // 单指模式：常规追踪
+                touch_accum_dy_ += std::abs(finger_dy);
+
+                io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
+                io.AddMousePosEvent(x, y);
+
+                // 单指位移超过 8px 时识别为滚动，取消点击高亮
+                if (!is_touch_scrolling_ && touch_accum_dy_ > 8.0f) {
+                    is_touch_scrolling_ = true;
+                    io.AddMouseButtonEvent(0, false);
+                }
+
+                if (is_touch_scrolling_) {
+                    float wheel_delta = finger_dy / 24.0f;
+                    io.AddMouseWheelEvent(0.0f, wheel_delta);
+                    touch_scroll_velocity_ = finger_dy * 0.45f;
+                }
+            } else {
+                // 多指模式 (两指及以上双指平滑滚动)：
+                // 1. 确保鼠标保持释放状态
+                io.AddMouseButtonEvent(0, false);
+                is_touch_scrolling_ = true;
+
+                // 2. 双指/多指位移平滑融合：均分各手指贡献，手感与单指一样轻柔稳定
+                float weight = 1.0f / static_cast<float>(active_fingers_.size());
+                float smooth_dy = finger_dy * weight;
+                float wheel_delta = smooth_dy / 24.0f;
                 io.AddMouseWheelEvent(0.0f, wheel_delta);
-                // 记录手指滑动的动量速度
-                touch_scroll_velocity_ = dy * 0.45f;
+                touch_scroll_velocity_ = smooth_dy * 0.45f;
+
+                // 3. 虚拟指针平滑定位于所有活跃手指的几何重心
+                float avg_x = 0.0f, avg_y = 0.0f;
+                for (const auto& f : active_fingers_) {
+                    avg_x += f.x;
+                    avg_y += f.y;
+                }
+                avg_x /= active_fingers_.size();
+                avg_y /= active_fingers_.size();
+
+                io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
+                io.AddMousePosEvent(avg_x, avg_y);
+            }
+        } else if (event.type == SDL_WINDOWEVENT) {
+            if (event.window.event == SDL_WINDOWEVENT_LEAVE ||
+                event.window.event == SDL_WINDOWEVENT_FOCUS_LOST) {
+                active_fingers_.clear();
+                is_touch_scrolling_ = false;
             }
             resetIdle();
         } else if (event.type == SDL_MOUSEMOTION || event.type == SDL_MOUSEBUTTONDOWN ||

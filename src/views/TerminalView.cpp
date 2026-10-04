@@ -219,8 +219,10 @@ void TerminalView::renderConsoleWindow(float x0, float y0, float w, float h) {
     if (ImGui::BeginChild("##TerminalConsoleScroll", ImVec2(w - pad * 2.0f, h - pad * 2.0f), false, child_flags)) {
         // 触控屏上下拖拽滑屏
         if (ImGui::IsWindowHovered() && !ImGui::IsAnyItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 4.0f)) {
-            float drag_dy = ImGui::GetIO().MouseDelta.y;
-            ImGui::SetScrollY(ImGui::GetScrollY() - drag_dy);
+            float drag_dy = std::clamp(ImGui::GetIO().MouseDelta.y, -40.0f, 40.0f);
+            if (drag_dy != 0.0f) {
+                ImGui::SetScrollY(ImGui::GetScrollY() - drag_dy);
+            }
         }
 
         std::lock_guard<std::mutex> lock(log_mutex_);
