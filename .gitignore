@@ -46,3 +46,9 @@ build.ninja
 dist/
 *.dmg
 
+# 自动化测试日志与快照
+tests/*.log
+tests/snapshots/
+tests/*.ppm
+tests/*.png
+
