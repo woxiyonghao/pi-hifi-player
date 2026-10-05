@@ -60,7 +60,6 @@ void BottomBarView::renderProgressBar(ImDrawList* dl, float left_bound, float ri
     if (is_active && dur_time > 0.0) {
         float mouse_x = ImGui::GetIO().MousePos.x;
         float new_progress = std::clamp((mouse_x - track_x0) / track_w, 0.0f, 1.0f);
-        printf("[BottomBarView] Seek triggered: mouse_x=%.1f track_x0=%.1f new_prog=%.3f\n", mouse_x, track_x0, new_progress);
         player.seek(static_cast<double>(new_progress) * dur_time);
         progress = new_progress;
     }

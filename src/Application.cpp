@@ -267,6 +267,7 @@ void Application::initData() {
 void Application::resetIdle() {
     idle_timer_ = 0.0f;
     is_fullscreen_idle_ = false;
+    anim_progress_ = 0.0f;
 }
 
 void Application::pollEvents() {
@@ -280,8 +281,8 @@ void Application::pollEvents() {
         if (window_) {
             SDL_GetWindowSize(window_, &cur_w, &cur_h);
         }
-        float touch_w = (cur_w > 0) ? static_cast<float>(cur_w) : 1024.0f;
-        float touch_h = (cur_h > 0) ? static_cast<float>(cur_h) : 600.0f;
+        float touch_w = (io.DisplaySize.x > 0.0f) ? io.DisplaySize.x : ((cur_w > 0) ? static_cast<float>(cur_w) : 1024.0f);
+        float touch_h = (io.DisplaySize.y > 0.0f) ? io.DisplaySize.y : ((cur_h > 0) ? static_cast<float>(cur_h) : 600.0f);
 
         if (event.type == SDL_FINGERDOWN) {
             float x = event.tfinger.x * touch_w;

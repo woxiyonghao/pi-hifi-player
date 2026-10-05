@@ -70,7 +70,7 @@ private:
     int cpu_governor_ = 0;     // 0: Performance (纯音锁频), 1: Schedutil (动态平衡)
     float screen_brightness_ = 0.85f; // 10% ~ 100%
     int screen_timeout_mode_ = 0;     // 0: 从不, 1: 5分钟, 2: 15分钟, 3: 30分钟
-    int idle_fullscreen_mode_ = 0;    // 0: 15秒 (默认), 1: 30秒, 2: 1分钟, 3: 5分钟, 4: 永不
+    int idle_fullscreen_mode_ = 4;    // 0: 15秒, 1: 30秒, 2: 1分钟, 3: 5分钟, 4: 从不 (默认)
 
     NavigateTabCallback on_navigate_tab_;
     IdleFullscreenCallback on_idle_fullscreen_changed_;

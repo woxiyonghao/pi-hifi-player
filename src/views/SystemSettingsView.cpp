@@ -81,7 +81,7 @@ void SystemSettingsView::loadSettings() {
     std::string s_cpu = db.getSetting("setting_cpu_governor", "0");
     std::string s_br = db.getSetting("setting_brightness", "0.85");
     std::string s_to = db.getSetting("setting_screen_timeout", "0");
-    std::string s_idle = db.getSetting("setting_idle_fullscreen", "0");
+    std::string s_idle = db.getSetting("setting_idle_fullscreen", "4");
 
     try {
         sample_rate_mode_ = std::clamp(std::stoi(s_sr), 0, 2);
@@ -100,7 +100,7 @@ void SystemSettingsView::loadSettings() {
         cpu_governor_ = 0;
         screen_brightness_ = 0.85f;
         screen_timeout_mode_ = 0;
-        idle_fullscreen_mode_ = 0;
+        idle_fullscreen_mode_ = 4;
     }
 
     applyHardwareBufferSize(buffer_size_mode_);
@@ -631,7 +631,7 @@ float SystemSettingsView::renderPowerSection(ImDrawList* dl, float x0, float y0,
     // 1. 固件版本
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
     dl->AddText(ImVec2(x0 + 16.0f, y0 + 34.0f), UIConfig::Color::TextMuted,
-                "固件版本：PiHiFi Player OS v1.0.6 (ARMv8.2-A / 60fps Native Pure C++20)");
+                "固件版本：PiHiFi Player OS v1.0.7 (ARMv8.2-A / 60fps Native Pure C++20)");
 
     // 2. 实时网络与调试 IP
     std::string ip_str = net.is_connected ? (net.ip + " (" + net.interface_name + ")") : "未连接网络";

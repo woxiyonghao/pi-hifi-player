@@ -826,14 +826,6 @@ void AudioEngine::onSinkDataNeeded(float* output, size_t frame_count) {
         applyEqualizer(output, frame_count);
     }
 
-    // 实时频谱分析更新：直接基于音轨原生音频流 (Pre-Volume Stream) 进行声学分析，
-    // 保证视觉频谱、动圈表头与波形能够真实反映音乐本身的动态、节拍与全频段能量，不随音量滑块缩小
-    if (!muted && samples_read > 0) {
-        updateSpectrumAnalysis(output, frame_count);
-    } else {
-        updateSpectrumAnalysis(nullptr, 0);
-    }
-
     FadeState f_state = fade_state_.load(std::memory_order_acquire);
     bool fade_out_done = fade_out_completed_.load(std::memory_order_acquire);
 
@@ -888,6 +880,9 @@ void AudioEngine::onSinkDataNeeded(float* output, size_t frame_count) {
         }
         fade_current_frame_.store(f_curr, std::memory_order_relaxed);
     }
+
+    // 实时频谱分析更新 (与最终输出音量、静音及淡入淡出完全联动)
+    updateSpectrumAnalysis(output, frame_count);
 
     // 播放完毕检测
     if (is_eof_.load(std::memory_order_acquire) && ring_buffer_.available_read() == 0) {

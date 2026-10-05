@@ -29,67 +29,6 @@ void AllMusicPlaylistView::drawLiquidCard(ImDrawList* dl, ImVec2 p_min, ImVec2 p
     }
 }
 
-void AllMusicPlaylistView::rebuildCache(const std::vector<Track>& tracks) {
-    last_tracks_count_ = tracks.size();
-    last_first_track_id_ = tracks.empty() ? 0 : tracks.front().id;
-
-    // 1. 按格式分类
-    cached_format_groups_ = {
-        { "dsf", "DSD", "DSD 原生母带 (DSF / DFF)", {} },
-        { "flac", "FLAC", "FLAC 高解析无损母带", {} },
-        { "wav", "WAV", "WAV 广播级线性母带", {} },
-        { "alac", "ALAC", "Apple Lossless (ALAC)", {} },
-        { "mp3", "MP3", "MP3 经典流行音频", {} },
-        { "other", "RAW", "其它发烧音轨", {} }
-    };
-    for (const auto& t : tracks) {
-        if (t.format == AudioFormat::DSD_DSF || t.format == AudioFormat::DSD_DFF) {
-            cached_format_groups_[0].group_tracks.push_back(t);
-        } else if (t.format == AudioFormat::FLAC) {
-            cached_format_groups_[1].group_tracks.push_back(t);
-        } else if (t.format == AudioFormat::WAV) {
-            cached_format_groups_[2].group_tracks.push_back(t);
-        } else if (t.format == AudioFormat::ALAC) {
-            cached_format_groups_[3].group_tracks.push_back(t);
-        } else if (t.format == AudioFormat::MP3) {
-            cached_format_groups_[4].group_tracks.push_back(t);
-        } else {
-            cached_format_groups_[5].group_tracks.push_back(t);
-        }
-    }
-
-    // 2. 按艺术家/专辑分类
-    cached_artist_groups_.clear();
-    std::map<std::string, std::map<std::string, std::vector<Track>>> art_alb_map;
-    for (const auto& t : tracks) {
-        std::string art = t.artist.empty() ? "未知艺术家" : t.artist;
-        std::string alb = t.album.empty() ? "本地精选单曲" : t.album;
-        art_alb_map[art][alb].push_back(t);
-    }
-    for (auto& [art_name, albums] : art_alb_map) {
-        ArtistGroup ag;
-        ag.artist_name = art_name;
-        for (auto& [alb_name, alb_tracks] : albums) {
-            ag.all_tracks.insert(ag.all_tracks.end(), alb_tracks.begin(), alb_tracks.end());
-            ag.albums.push_back({alb_name, std::move(alb_tracks)});
-        }
-        cached_artist_groups_.push_back(std::move(ag));
-    }
-
-    // 3. 按存储目录分类
-    cached_dir_groups_.clear();
-    std::map<std::string, std::vector<Track>> dir_map;
-    for (const auto& t : tracks) {
-        std::filesystem::path fp(t.file_path);
-        std::string dir_name = fp.has_parent_path() ? fp.parent_path().filename().string() : "根目录";
-        if (dir_name.empty()) dir_name = "本地曲库";
-        dir_map[dir_name].push_back(t);
-    }
-    for (auto& [dir_name, dir_tracks] : dir_map) {
-        cached_dir_groups_.push_back({dir_name, std::move(dir_tracks)});
-    }
-}
-
 void AllMusicPlaylistView::render(float x, float y, float w, float h, const std::vector<Playlist>& playlists) {
     float margin_x = UIConfig::Layout::ContainerMarginX;
     float margin_y = UIConfig::Layout::ContainerMarginY;
@@ -103,11 +42,6 @@ void AllMusicPlaylistView::render(float x, float y, float w, float h, const std:
                 tracks.push_back(t);
             }
         }
-    }
-
-    uint64_t cur_first_id = tracks.empty() ? 0 : tracks.front().id;
-    if (tracks.size() != last_tracks_count_ || cur_first_id != last_first_track_id_) {
-        rebuildCache(tracks);
     }
 
     size_t total_count = tracks.size();
@@ -242,29 +176,19 @@ void AllMusicPlaylistView::render(float x, float y, float w, float h, const std:
 
         float dt = ImGui::GetIO().DeltaTime;
 
-        // 视口边界计算：用于视口裁剪 (Viewport Culling)，屏幕外的行跳过全部几何与文本提交
-        float win_y = ImGui::GetWindowPos().y;
-        float win_h = ImGui::GetWindowSize().y;
-
         // 通用曲目行渲染器
         auto renderTrackRow = [&](const Track& track, size_t row_idx, const std::vector<Track>& queue_context,
                                   size_t index_in_queue, float indent) {
+            bool is_current = current_track.has_value() && (current_track->id == track.id || current_track->file_path == track.file_path);
+            bool is_playing = is_current && player.isPlaying();
+
+            ImGui::PushID(static_cast<int>(track.id * 1000 + row_idx));
+
             float avail_w = ImGui::GetContentRegionAvail().x;
             float row_h = 30.0f; // 紧凑优雅行高
             ImVec2 row_pos = ImGui::GetCursorScreenPos();
             ImVec2 row_min(row_pos.x + indent, row_pos.y);
             ImVec2 row_max(row_pos.x + avail_w, row_pos.y + row_h);
-
-            // 视口裁剪：在可见窗口上下各预留 40px 缓冲区，超出视口直接 Dummy 占位跳过渲染
-            if (row_pos.y + row_h < win_y - 40.0f || row_pos.y > win_y + win_h + 40.0f) {
-                ImGui::Dummy(ImVec2(avail_w, row_h));
-                return;
-            }
-
-            bool is_current = current_track.has_value() && (current_track->id == track.id || current_track->file_path == track.file_path);
-            bool is_playing = is_current && player.isPlaying();
-
-            ImGui::PushID(static_cast<int>(track.id * 1000 + row_idx));
 
             bool clicked = ImGui::InvisibleButton("##TrackBtn", ImVec2(avail_w, row_h));
             bool hovered = ImGui::IsItemHovered();
@@ -301,7 +225,7 @@ void AllMusicPlaylistView::render(float x, float y, float w, float h, const std:
                 cur_dl->AddText(ImVec2(left_x, text_y), accent, "▶");
                 left_x += 16.0f;
             } else {
-                char num_buf[32];
+                char num_buf[16];
                 std::snprintf(num_buf, sizeof(num_buf), "%02zu.", row_idx + 1);
                 if (Fonts::Small) ImGui::PushFont(Fonts::Small);
                 cur_dl->AddText(ImVec2(left_x, text_y + 1.0f), IM_COL32(140, 155, 175, 200), num_buf);
@@ -332,6 +256,7 @@ void AllMusicPlaylistView::render(float x, float y, float w, float h, const std:
             float btn_x = right_x - btn_w;
             float btn_y = row_pos.y + 5.0f;
             bool btn_hov = ImGui::IsMouseHoveringRect(ImVec2(btn_x, btn_y), ImVec2(btn_x + btn_w, btn_y + btn_h));
+            bool btn_click = btn_hov && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
 
             cur_dl->AddRectFilled(ImVec2(btn_x, btn_y), ImVec2(btn_x + btn_w, btn_y + btn_h),
                                   btn_hov ? IM_COL32(r, g, b, 90) : IM_COL32(40, 48, 66, 170), 4.0f);
@@ -369,11 +294,8 @@ void AllMusicPlaylistView::render(float x, float y, float w, float h, const std:
             cur_dl->AddText(ImVec2(badge_x + 5.0f, badge_y + 1.0f), IM_COL32(65, 190, 255, 230), badge.c_str());
             if (Fonts::Small) ImGui::PopFont();
 
-            // 统一由整行按键响应点击，防抖且防拖拽误触
-            if (clicked && !ImGui::IsMouseDragging(ImGuiMouseButton_Left, 6.0f)) {
-                if (!is_playing) {
-                    player.playTracks(queue_context, index_in_queue);
-                }
+            if ((clicked || btn_click) && !ImGui::IsMouseDragging(ImGuiMouseButton_Left, 6.0f)) {
+                player.playTracks(queue_context, index_in_queue);
             }
 
             ImGui::PopID();
@@ -485,10 +407,42 @@ void AllMusicPlaylistView::render(float x, float y, float w, float h, const std:
             return is_open;
         };
 
-        // 直接读取已缓存的分组数据进行高效率渲染，零重复内存分配
+        // 根据当前的树分类模式渲染树形结构
         if (all_music_view_mode_ == 0) {
             // Mode 0: 按音频格式分类
-            for (const auto& g : cached_format_groups_) {
+            struct FormatGroup {
+                std::string key;
+                std::string badge;
+                std::string name;
+                std::vector<Track> group_tracks;
+            };
+
+            std::vector<FormatGroup> groups = {
+                { "dsf", "DSD", "DSD 原生母带 (DSF / DFF)", {} },
+                { "flac", "FLAC", "FLAC 高解析无损母带", {} },
+                { "wav", "WAV", "WAV 广播级线性母带", {} },
+                { "alac", "ALAC", "Apple Lossless (ALAC)", {} },
+                { "mp3", "MP3", "MP3 经典流行音频", {} },
+                { "other", "RAW", "其它发烧音轨", {} }
+            };
+
+            for (const auto& t : tracks) {
+                if (t.format == AudioFormat::DSD_DSF || t.format == AudioFormat::DSD_DFF) {
+                    groups[0].group_tracks.push_back(t);
+                } else if (t.format == AudioFormat::FLAC) {
+                    groups[1].group_tracks.push_back(t);
+                } else if (t.format == AudioFormat::WAV) {
+                    groups[2].group_tracks.push_back(t);
+                } else if (t.format == AudioFormat::ALAC) {
+                    groups[3].group_tracks.push_back(t);
+                } else if (t.format == AudioFormat::MP3) {
+                    groups[4].group_tracks.push_back(t);
+                } else {
+                    groups[5].group_tracks.push_back(t);
+                }
+            }
+
+            for (const auto& g : groups) {
                 if (g.group_tracks.empty()) continue;
                 bool open = renderTreeNodeHeader(g.key, g.name.c_str(), g.badge.c_str(), g.group_tracks.size(), g.group_tracks, 0.0f);
                 if (open) {
@@ -502,16 +456,28 @@ void AllMusicPlaylistView::render(float x, float y, float w, float h, const std:
 
         } else if (all_music_view_mode_ == 1) {
             // Mode 1: 按艺术家/专辑双层树
-            for (const auto& ag : cached_artist_groups_) {
-                std::string art_key = "art_" + ag.artist_name;
-                bool art_open = renderTreeNodeHeader(art_key, ag.artist_name.c_str(), "歌手", ag.all_tracks.size(), ag.all_tracks, 0.0f);
+            std::map<std::string, std::map<std::string, std::vector<Track>>> art_alb_map;
+            for (const auto& t : tracks) {
+                std::string art = t.artist.empty() ? "未知艺术家" : t.artist;
+                std::string alb = t.album.empty() ? "本地精选单曲" : t.album;
+                art_alb_map[art][alb].push_back(t);
+            }
+
+            for (const auto& [artist_name, albums] : art_alb_map) {
+                std::vector<Track> all_artist_tracks;
+                for (const auto& [alb, alb_tracks] : albums) {
+                    all_artist_tracks.insert(all_artist_tracks.end(), alb_tracks.begin(), alb_tracks.end());
+                }
+
+                std::string art_key = "art_" + artist_name;
+                bool art_open = renderTreeNodeHeader(art_key, artist_name.c_str(), "歌手", all_artist_tracks.size(), all_artist_tracks, 0.0f);
                 if (art_open) {
-                    for (const auto& alb : ag.albums) {
-                        std::string alb_key = "alb_" + ag.artist_name + "_" + alb.album_name;
-                        bool alb_open = renderTreeNodeHeader(alb_key, alb.album_name.c_str(), "专辑", alb.tracks.size(), alb.tracks, 16.0f);
+                    for (const auto& [album_name, alb_tracks] : albums) {
+                        std::string alb_key = "alb_" + artist_name + "_" + album_name;
+                        bool alb_open = renderTreeNodeHeader(alb_key, album_name.c_str(), "专辑", alb_tracks.size(), alb_tracks, 16.0f);
                         if (alb_open) {
-                            for (size_t i = 0; i < alb.tracks.size(); ++i) {
-                                renderTrackRow(alb.tracks[i], i, alb.tracks, i, 32.0f);
+                            for (size_t i = 0; i < alb_tracks.size(); ++i) {
+                                renderTrackRow(alb_tracks[i], i, alb_tracks, i, 32.0f);
                                 ImGui::Dummy(ImVec2(0.0f, 2.0f));
                             }
                         }
@@ -523,12 +489,20 @@ void AllMusicPlaylistView::render(float x, float y, float w, float h, const std:
 
         } else {
             // Mode 2: 按存储目录结构
-            for (const auto& dg : cached_dir_groups_) {
-                std::string dir_key = "dir_" + dg.dir_name;
-                bool dir_open = renderTreeNodeHeader(dir_key, dg.dir_name.c_str(), "目录", dg.tracks.size(), dg.tracks, 0.0f);
+            std::map<std::string, std::vector<Track>> dir_map;
+            for (const auto& t : tracks) {
+                std::filesystem::path fp(t.file_path);
+                std::string dir_name = fp.has_parent_path() ? fp.parent_path().filename().string() : "根目录";
+                if (dir_name.empty()) dir_name = "本地曲库";
+                dir_map[dir_name].push_back(t);
+            }
+
+            for (const auto& [dir_name, dir_tracks] : dir_map) {
+                std::string dir_key = "dir_" + dir_name;
+                bool dir_open = renderTreeNodeHeader(dir_key, dir_name.c_str(), "目录", dir_tracks.size(), dir_tracks, 0.0f);
                 if (dir_open) {
-                    for (size_t i = 0; i < dg.tracks.size(); ++i) {
-                        renderTrackRow(dg.tracks[i], i, dg.tracks, i, 20.0f);
+                    for (size_t i = 0; i < dir_tracks.size(); ++i) {
+                        renderTrackRow(dir_tracks[i], i, dir_tracks, i, 20.0f);
                         ImGui::Dummy(ImVec2(0.0f, 2.0f));
                     }
                 }
