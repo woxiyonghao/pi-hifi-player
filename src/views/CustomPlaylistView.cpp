@@ -294,7 +294,7 @@ void CustomPlaylistView::render(uint64_t pid, std::vector<Playlist>& playlists, 
                     break;
                 }
 
-                if ((clicked || play_click) && !ImGui::IsMouseDragging(ImGuiMouseButton_Left, 6.0f)) {
+                if ((clicked || play_click) && (ImGui::GetIO().MouseDragMaxDistanceSqr[0] < 36.0f)) {
                     player.playPlaylist(*target_playlist, i);
                 }
 

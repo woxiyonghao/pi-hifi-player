@@ -829,6 +829,14 @@ void AudioEngine::onSinkDataNeeded(float* output, size_t frame_count) {
     FadeState f_state = fade_state_.load(std::memory_order_acquire);
     bool fade_out_done = fade_out_completed_.load(std::memory_order_acquire);
 
+    // 实时频谱分析更新：提取衰减前的原生音频流，并结合等响度音量感知系数
+    // 既真实反映曲目本身的爆发力与动态节拍，又能实时跟随音量滑块与静音状态灵敏联动
+    if (!muted && !fade_out_done && samples_read > 0) {
+        updateSpectrumAnalysis(output, frame_count);
+    } else {
+        updateSpectrumAnalysis(nullptr, 0);
+    }
+
     if (muted || fade_out_done) {
         std::memset(output, 0, samples_needed * sizeof(float));
     } else if (f_state == FadeState::None && vol >= 0.9999f && !is_eq_enabled_.load(std::memory_order_relaxed)) {
@@ -880,9 +888,6 @@ void AudioEngine::onSinkDataNeeded(float* output, size_t frame_count) {
         }
         fade_current_frame_.store(f_curr, std::memory_order_relaxed);
     }
-
-    // 实时频谱分析更新 (与最终输出音量、静音及淡入淡出完全联动)
-    updateSpectrumAnalysis(output, frame_count);
 
     // 播放完毕检测
     if (is_eof_.load(std::memory_order_acquire) && ring_buffer_.available_read() == 0) {
@@ -1075,6 +1080,18 @@ void AudioEngine::updateSpectrumAnalysis(const float* samples, size_t frame_coun
         2.5f, 2.9f, 3.4f, 4.0f, 4.8f, 5.8f
     };
 
+    float vol = volume_.load(std::memory_order_relaxed);
+    // 视觉音量感知响应因子：静音/0音量时为0，随音量滑块实时灵敏联动，
+    // 在 30%~70% 正常发烧聆听音量下呈现饱满活跃的 40%~85% 满度激荡
+    float vol_factor = std::pow(std::clamp(vol, 0.0f, 1.0f), 0.45f);
+    if (vol_factor < 0.001f) {
+        std::lock_guard lock(spectrum_mutex_);
+        for (auto& lvl : spectrum_levels_) {
+            lvl *= 0.85f;
+        }
+        return;
+    }
+
     std::lock_guard lock(spectrum_mutex_);
     for (int b = 0; b < 12; ++b) {
         int b_start = band_bins[b][0];
@@ -1084,7 +1101,7 @@ void AudioEngine::updateSpectrumAnalysis(const float* samples, size_t frame_coun
             sum_mag += std::sqrt(re[k] * re[k] + im[k] * im[k]);
         }
         float avg_mag = sum_mag / (b_end - b_start + 1);
-        float target = std::clamp(avg_mag * band_weights[b] * 0.15f, 0.0f, 1.0f);
+        float target = std::clamp(avg_mag * band_weights[b] * 0.28f * vol_factor, 0.0f, 1.0f);
 
         // 动效弹道：快速起音 (Attack) + 平滑自然衰减 (Decay)
         if (target > spectrum_levels_[b]) {

@@ -225,7 +225,7 @@ void AllMusicPlaylistView::render(float x, float y, float w, float h, const std:
                 cur_dl->AddText(ImVec2(left_x, text_y), accent, "▶");
                 left_x += 16.0f;
             } else {
-                char num_buf[16];
+                char num_buf[32];
                 std::snprintf(num_buf, sizeof(num_buf), "%02zu.", row_idx + 1);
                 if (Fonts::Small) ImGui::PushFont(Fonts::Small);
                 cur_dl->AddText(ImVec2(left_x, text_y + 1.0f), IM_COL32(140, 155, 175, 200), num_buf);
@@ -294,7 +294,7 @@ void AllMusicPlaylistView::render(float x, float y, float w, float h, const std:
             cur_dl->AddText(ImVec2(badge_x + 5.0f, badge_y + 1.0f), IM_COL32(65, 190, 255, 230), badge.c_str());
             if (Fonts::Small) ImGui::PopFont();
 
-            if ((clicked || btn_click) && !ImGui::IsMouseDragging(ImGuiMouseButton_Left, 6.0f)) {
+            if ((clicked || btn_click) && (ImGui::GetIO().MouseDragMaxDistanceSqr[0] < 36.0f)) {
                 player.playTracks(queue_context, index_in_queue);
             }
 
@@ -328,7 +328,7 @@ void AllMusicPlaylistView::render(float x, float y, float w, float h, const std:
             bool clicked = ImGui::InvisibleButton("##NodeBtn", ImVec2(avail_w, node_h));
             bool hovered = ImGui::IsItemHovered();
 
-            if (clicked && !ImGui::IsMouseDragging(ImGuiMouseButton_Left, 6.0f)) {
+            if (clicked && (ImGui::GetIO().MouseDragMaxDistanceSqr[0] < 36.0f)) {
                 is_open = !is_open;
                 tree_expanded_[key] = is_open;
             }

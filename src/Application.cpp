@@ -16,7 +16,12 @@
 #include <SDL2/SDL_opengles2.h> // 树莓派 5 使用 OpenGL ES 2.0
 #endif
 
+#include <unistd.h>
+#include <fstream>
+#include <sstream>
+
 #include "imgui.h"
+#include "imgui_internal.h"
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_opengl3.h"
 
@@ -381,9 +386,10 @@ void Application::pollEvents() {
                 io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
                 io.AddMousePosEvent(x, y);
 
-                // 单指位移超过 8px 时识别为滚动，取消点击高亮
+                // 单指位移超过 8px 时识别为滚动，取消点击高亮并立即清除 ActiveID，防止抬指误触发
                 if (!is_touch_scrolling_ && touch_accum_dy_ > 8.0f) {
                     is_touch_scrolling_ = true;
+                    ImGui::ClearActiveID();
                     io.AddMouseButtonEvent(0, false);
                 }
 
@@ -394,7 +400,8 @@ void Application::pollEvents() {
                 }
             } else {
                 // 多指模式 (两指及以上双指平滑滚动)：
-                // 1. 确保鼠标保持释放状态
+                // 1. 确保鼠标保持释放状态并清除 ActiveID
+                ImGui::ClearActiveID();
                 io.AddMouseButtonEvent(0, false);
                 is_touch_scrolling_ = true;
 
@@ -436,6 +443,85 @@ void Application::pollEvents() {
         }
         if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE) {
             running_ = false;
+        }
+    }
+
+    // 自动化测试与外部控制指令 IPC 通道 (/tmp/pi_hifi_cmd)
+    static int cmd_check_counter = 0;
+    if (++cmd_check_counter % 5 == 0) {
+        if (access("/tmp/pi_hifi_cmd", F_OK) == 0) {
+            std::ifstream ifs("/tmp/pi_hifi_cmd");
+            std::string line;
+            if (std::getline(ifs, line)) {
+                ifs.close();
+                unlink("/tmp/pi_hifi_cmd");
+                std::istringstream iss(line);
+                std::string cmd;
+                iss >> cmd;
+                ImGuiIO& io = ImGui::GetIO();
+                if (cmd == "click") {
+                    float cx = 0.0f, cy = 0.0f;
+                    iss >> cx >> cy;
+                    io.AddMousePosEvent(cx, cy);
+                    io.AddMouseButtonEvent(0, true);
+                    io.AddMouseButtonEvent(0, false);
+                    resetIdle();
+                    std::cout << "[TestCMD] click (" << cx << ", " << cy << ")" << std::endl;
+                } else if (cmd == "scroll") {
+                    float dy = 0.0f;
+                    iss >> dy;
+                    io.AddMouseWheelEvent(0.0f, dy);
+                    resetIdle();
+                    std::cout << "[TestCMD] scroll dy=" << dy << std::endl;
+                } else if (cmd == "play") {
+                    PlayerAdmin::getInstance().play();
+                    resetIdle();
+                    std::cout << "[TestCMD] play" << std::endl;
+                } else if (cmd == "pause") {
+                    PlayerAdmin::getInstance().pause();
+                    resetIdle();
+                    std::cout << "[TestCMD] pause" << std::endl;
+                } else if (cmd == "toggle") {
+                    PlayerAdmin::getInstance().togglePlayPause();
+                    resetIdle();
+                    std::cout << "[TestCMD] toggle" << std::endl;
+                } else if (cmd == "next") {
+                    PlayerAdmin::getInstance().next();
+                    resetIdle();
+                    std::cout << "[TestCMD] next" << std::endl;
+                } else if (cmd == "prev") {
+                    PlayerAdmin::getInstance().previous();
+                    resetIdle();
+                    std::cout << "[TestCMD] prev" << std::endl;
+                } else if (cmd == "volume") {
+                    float v = 0.5f;
+                    iss >> v;
+                    PlayerAdmin::getInstance().setVolume(v);
+                    resetIdle();
+                    std::cout << "[TestCMD] volume=" << v << std::endl;
+                } else if (cmd == "tab") {
+                    int tid = 0;
+                    iss >> tid;
+                    sidebar_.setCurrentTab(static_cast<SidebarTab>(tid));
+                    resetIdle();
+                    std::cout << "[TestCMD] tab=" << tid << std::endl;
+                } else if (cmd == "theme") {
+                    int tid = 0;
+                    iss >> tid;
+                    ThemeManager::getInstance().setTheme(static_cast<ThemeId>(tid));
+                    resetIdle();
+                    std::cout << "[TestCMD] theme=" << tid << std::endl;
+                } else if (cmd == "visual") {
+                    int vid = 0;
+                    iss >> vid;
+                    ThemeManager::getInstance().setBackgroundVisualMode(static_cast<BackgroundVisualMode>(vid));
+                    resetIdle();
+                    std::cout << "[TestCMD] visual=" << vid << std::endl;
+                }
+            } else {
+                ifs.close();
+                unlink("/tmp/pi_hifi_cmd");
+            }
         }
     }
 }
@@ -491,8 +577,28 @@ void Application::renderBackground(float screen_w, float screen_h) {
     // 1. 铺设整个 App 的基准发烧底色 (全屏通透统一深空基底)
     bg_dl->AddRectFilled(ImVec2(0.0f, 0.0f), ImVec2(screen_w, screen_h), UIConfig::Color::MainStageBg);
 
+    // 侧边栏当前可见宽度 (未全屏时为 230px，全屏沉浸时平滑移至 0px)
+    float ease_t = anim_progress_ < 0.5f ? 4.0f * anim_progress_ * anim_progress_ * anim_progress_
+                                         : 1.0f - std::pow(-2.0f * anim_progress_ + 2.0f, 3.0f) * 0.5f;
+    float sidebar_bg_x = UIConfig::Layout::SidebarWidth * (1.0f - ease_t);
+
+    // 当未完全进入全屏时，将底层背景视觉特效严格限制在右侧主舞台区域，坚决不向左渗透到侧边栏
+    bool has_sidebar_clip = (sidebar_bg_x > 0.5f);
+    if (has_sidebar_clip) {
+        bg_dl->PushClipRect(ImVec2(sidebar_bg_x, 0.0f), ImVec2(screen_w, screen_h), true);
+    }
+
+    auto end_clip = [&]() {
+        if (has_sidebar_clip) {
+            bg_dl->PopClipRect();
+            // 彻底固化左侧侧边栏暗色基底，确保左侧零色块、零溢出
+            bg_dl->AddRectFilled(ImVec2(0.0f, 0.0f), ImVec2(sidebar_bg_x, screen_h), UIConfig::Color::WindowBg);
+        }
+    };
+
     auto bg_mode = ThemeManager::getInstance().getBackgroundVisualMode();
     if (bg_mode == BackgroundVisualMode::PureBlack) {
+        end_clip();
         return;
     }
 
@@ -511,6 +617,7 @@ void Application::renderBackground(float screen_w, float screen_h) {
         accuphase_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
         accuphase_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
         accuphase_renderer_.render(screen_w, screen_h, l, r);
+        end_clip();
         return;
     }
 
@@ -518,6 +625,7 @@ void Application::renderBackground(float screen_w, float screen_h) {
         vu_renderer_.setTheme(ThemeManager::getInstance().getMeterTheme());
         vu_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
         vu_renderer_.render(screen_w, screen_h, l, r);
+        end_clip();
         return;
     }
 
@@ -525,6 +633,7 @@ void Application::renderBackground(float screen_w, float screen_h) {
         tape_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
         tape_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
         tape_renderer_.render(screen_w, screen_h, is_playing, player.getProgress());
+        end_clip();
         return;
     }
 
@@ -532,6 +641,7 @@ void Application::renderBackground(float screen_w, float screen_h) {
         siri_wave_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
         siri_wave_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
         siri_wave_renderer_.render(screen_w, screen_h, is_playing, l, r);
+        end_clip();
         return;
     }
 
@@ -539,6 +649,7 @@ void Application::renderBackground(float screen_w, float screen_h) {
         siri_orb_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
         siri_orb_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
         siri_orb_renderer_.render(screen_w, screen_h, is_playing, l, r);
+        end_clip();
         return;
     }
 
@@ -546,6 +657,7 @@ void Application::renderBackground(float screen_w, float screen_h) {
         bubbles_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
         bubbles_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
         bubbles_renderer_.render(screen_w, screen_h, is_playing, levels12);
+        end_clip();
         return;
     }
 
@@ -553,6 +665,7 @@ void Application::renderBackground(float screen_w, float screen_h) {
         neon_wave_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
         neon_wave_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
         neon_wave_renderer_.render(screen_w, screen_h, is_playing, levels12, 12);
+        end_clip();
         return;
     }
 
@@ -560,6 +673,7 @@ void Application::renderBackground(float screen_w, float screen_h) {
         cyber_grid_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
         cyber_grid_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
         cyber_grid_renderer_.render(screen_w, screen_h, is_playing, levels12, 12);
+        end_clip();
         return;
     }
 
@@ -567,15 +681,20 @@ void Application::renderBackground(float screen_w, float screen_h) {
         glass_clock_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
         glass_clock_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
         glass_clock_renderer_.render(screen_w, screen_h, is_playing, l, r);
+        end_clip();
         return;
     }
 
-    // 几何排版参数：左右对齐发烧容器外边距 (16px ~ 1008px)
+    // 几何排版参数：
+    // 未全屏时紧密对齐主舞台视口 (sidebar_bg_x + 16px ~ screen_w - 16px)，绝不向左侵入侧边栏
+    // 全屏时随动画平滑展开至全屏 (16px ~ screen_w - 16px)
     const float margin_x = UIConfig::Layout::ContainerMarginX; // 16.0f
-    const float total_w = screen_w - margin_x * 2.0f;          // 992.0f
+    const float start_x = (sidebar_bg_x > 0.5f) ? (sidebar_bg_x + margin_x) : margin_x;
+    const float end_x = screen_w - margin_x;
+    const float total_w = std::max(end_x - start_x, 100.0f);
     const int num_cols = 48;                                   // 48 列超宽音轨点阵
-    const float gap_x = 4.0f;                                  // 列间距
-    const float col_w = (total_w - (num_cols - 1) * gap_x) / num_cols; // ~16.75px
+    const float gap_x = (total_w > 700.0f) ? 3.5f : 2.5f;      // 列间距
+    const float col_w = (total_w - (num_cols - 1) * gap_x) / num_cols;
     
     const float seg_h = 6.0f;                                  // 每个方块高度
     const float gap_y = 2.5f;                                  // 方块纵向间距
@@ -589,7 +708,7 @@ void Application::renderBackground(float screen_w, float screen_h) {
     if (!is_playing) {
         if ((unlit_color & IM_COL32_A_MASK) != 0) {
             for (int c = 0; c < num_cols; ++c) {
-                float x0 = margin_x + c * (col_w + gap_x);
+                float x0 = start_x + c * (col_w + gap_x);
                 float x1 = x0 + col_w;
                 for (int r_idx = 0; r_idx < num_rows; ++r_idx) {
                     float y1 = bot_y - r_idx * (seg_h + gap_y);
@@ -598,6 +717,7 @@ void Application::renderBackground(float screen_w, float screen_h) {
                 }
             }
         }
+        end_clip();
         return;
     }
 
@@ -615,8 +735,8 @@ void Application::renderBackground(float screen_w, float screen_h) {
     int glow_alpha = static_cast<int>(bass_energy * 32.0f);
     if (glow_alpha > 0) {
         bg_dl->AddRectFilledMultiColor(
-            ImVec2(margin_x, 0.0f),
-            ImVec2(screen_w - margin_x, screen_h),
+            ImVec2(start_x, 0.0f),
+            ImVec2(end_x, screen_h),
             IM_COL32(cr, cg, cb, 0),
             IM_COL32(cr, cg, cb, 0),
             IM_COL32(cr, cg, cb, glow_alpha),
@@ -626,7 +746,7 @@ void Application::renderBackground(float screen_w, float screen_h) {
 
     // 平滑插值绘制 48 列分段 LED 矩阵
     for (int c = 0; c < num_cols; ++c) {
-        float x0 = margin_x + c * (col_w + gap_x);
+        float x0 = start_x + c * (col_w + gap_x);
         float x1 = x0 + col_w;
 
         // 平滑余弦插值获取当前列的连续频段能量
@@ -659,6 +779,8 @@ void Application::renderBackground(float screen_w, float screen_h) {
             }
         }
     }
+
+    end_clip();
 }
 
 void Application::render() {
@@ -738,6 +860,31 @@ void Application::render() {
     glClear(GL_COLOR_BUFFER_BIT);
 
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+    // 自动化测试与截屏抓取通道 (通过 /tmp/dump_screen 触发，无指令时为零开销)
+    static int capture_counter = 0;
+    if (++capture_counter % 10 == 0) {
+        if (access("/tmp/dump_screen", F_OK) == 0) {
+            unlink("/tmp/dump_screen");
+            std::vector<unsigned char> pixels(display_w * display_h * 4);
+            glReadPixels(0, 0, display_w, display_h, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+            FILE* fp = fopen("/tmp/screenshot.ppm", "wb");
+            if (fp) {
+                fprintf(fp, "P6\n%d %d\n255\n", display_w, display_h);
+                for (int y = display_h - 1; y >= 0; --y) {
+                    for (int x = 0; x < display_w; ++x) {
+                        unsigned char* p = &pixels[(y * display_w + x) * 4];
+                        fputc(p[0], fp); // R
+                        fputc(p[1], fp); // G
+                        fputc(p[2], fp); // B
+                    }
+                }
+                fclose(fp);
+                std::cout << "[ScreenCapture] Dumped framebuffer to /tmp/screenshot.ppm (" << display_w << "x" << display_h << ")" << std::endl;
+            }
+        }
+    }
+
     SDL_GL_SwapWindow(window_);
 }
 
