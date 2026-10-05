@@ -474,7 +474,17 @@ void Application::pollEvents() {
                     resetIdle();
                     std::cout << "[TestCMD] scroll dy=" << dy << std::endl;
                 } else if (cmd == "play") {
-                    PlayerAdmin::getInstance().play();
+                    auto& pa = PlayerAdmin::getInstance();
+                    if (!pa.getCurrentTrack().has_value() && !playlists_.empty()) {
+                        for (const auto& pl : playlists_) {
+                            if (!pl.getTracks().empty()) {
+                                pa.playTrack(pl.getTracks()[0]);
+                                break;
+                            }
+                        }
+                    } else {
+                        pa.play();
+                    }
                     resetIdle();
                     std::cout << "[TestCMD] play" << std::endl;
                 } else if (cmd == "pause") {
