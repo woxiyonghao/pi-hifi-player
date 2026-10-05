@@ -475,12 +475,10 @@ void Application::pollEvents() {
                     std::cout << "[TestCMD] scroll dy=" << dy << std::endl;
                 } else if (cmd == "play") {
                     auto& pa = PlayerAdmin::getInstance();
-                    if (!pa.getCurrentTrack().has_value() && !playlists_.empty()) {
-                        for (const auto& pl : playlists_) {
-                            if (!pl.getTracks().empty()) {
-                                pa.playTrack(pl.getTracks()[0]);
-                                break;
-                            }
+                    if (!pa.getCurrentTrack().has_value()) {
+                        auto tracks = MusicScanManager::getInstance().getScannedTracks();
+                        if (!tracks.empty()) {
+                            pa.playTrack(tracks[0]);
                         }
                     } else {
                         pa.play();
