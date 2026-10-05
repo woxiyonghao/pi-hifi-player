@@ -487,17 +487,8 @@ void Application::update(float dt) {
 void Application::renderBackground(float screen_w, float screen_h) {
     ImDrawList* bg_dl = ImGui::GetBackgroundDrawList();
 
-    // 1. 铺设整个 App 的基准发烧底色 (完全对齐原设计的区域与色值规范)
-    float ease_t = anim_progress_ < 0.5f ? 4.0f * anim_progress_ * anim_progress_ * anim_progress_
-                                         : 1.0f - std::pow(-2.0f * anim_progress_ + 2.0f, 3.0f) * 0.5f;
-    float sidebar_bg_x = UIConfig::Layout::SidebarWidth * (1.0f - ease_t);
-
-    if (sidebar_bg_x > 0.5f) {
-        // 左侧侧边栏暗色基底 (0 ~ sidebar_bg_x)
-        bg_dl->AddRectFilled(ImVec2(0.0f, 0.0f), ImVec2(sidebar_bg_x, screen_h), IM_COL32(16, 20, 26, 255));
-    }
-    // 右侧主舞台深空基底 (sidebar_bg_x ~ screen_w)
-    bg_dl->AddRectFilled(ImVec2(sidebar_bg_x, 0.0f), ImVec2(screen_w, screen_h), UIConfig::Color::MainStageBg);
+    // 1. 铺设整个 App 的基准发烧底色 (全屏通透统一深空基底)
+    bg_dl->AddRectFilled(ImVec2(0.0f, 0.0f), ImVec2(screen_w, screen_h), UIConfig::Color::MainStageBg);
 
     auto bg_mode = ThemeManager::getInstance().getBackgroundVisualMode();
     if (bg_mode == BackgroundVisualMode::PureBlack) {
@@ -511,21 +502,14 @@ void Application::renderBackground(float screen_w, float screen_h) {
     float r = 0.0f;
     if (is_playing) {
         player.getSpectrumLevels(levels12, 12);
-        l = std::clamp((levels12[0] + levels12[1] + levels12[2] + levels12[3] + levels12[4]) * 0.28f, 0.0f, 1.0f);
-        r = std::clamp((levels12[2] + levels12[3] + levels12[4] + levels12[5] + levels12[6]) * 0.28f, 0.0f, 1.0f);
+        l = std::clamp((levels12[0] + levels12[1] + levels12[2] + levels12[3] + levels12[4]) * 0.32f, 0.0f, 1.0f);
+        r = std::clamp((levels12[2] + levels12[3] + levels12[4] + levels12[5] + levels12[6]) * 0.32f, 0.0f, 1.0f);
     }
-
-    auto render_sidebar_mask = [&]() {
-        if (sidebar_bg_x > 0.5f) {
-            bg_dl->AddRectFilled(ImVec2(0.0f, 0.0f), ImVec2(sidebar_bg_x, screen_h), IM_COL32(16, 20, 26, 255));
-        }
-    };
 
     if (bg_mode == BackgroundVisualMode::Accuphase) {
         accuphase_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
         accuphase_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
         accuphase_renderer_.render(screen_w, screen_h, l, r);
-        render_sidebar_mask();
         return;
     }
 
@@ -533,7 +517,6 @@ void Application::renderBackground(float screen_w, float screen_h) {
         vu_renderer_.setTheme(ThemeManager::getInstance().getMeterTheme());
         vu_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
         vu_renderer_.render(screen_w, screen_h, l, r);
-        render_sidebar_mask();
         return;
     }
 
@@ -541,7 +524,6 @@ void Application::renderBackground(float screen_w, float screen_h) {
         tape_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
         tape_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
         tape_renderer_.render(screen_w, screen_h, is_playing, player.getProgress());
-        render_sidebar_mask();
         return;
     }
 
@@ -549,7 +531,6 @@ void Application::renderBackground(float screen_w, float screen_h) {
         siri_wave_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
         siri_wave_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
         siri_wave_renderer_.render(screen_w, screen_h, is_playing, l, r);
-        render_sidebar_mask();
         return;
     }
 
@@ -557,7 +538,6 @@ void Application::renderBackground(float screen_w, float screen_h) {
         siri_orb_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
         siri_orb_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
         siri_orb_renderer_.render(screen_w, screen_h, is_playing, l, r);
-        render_sidebar_mask();
         return;
     }
 
@@ -565,7 +545,6 @@ void Application::renderBackground(float screen_w, float screen_h) {
         bubbles_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
         bubbles_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
         bubbles_renderer_.render(screen_w, screen_h, is_playing, levels12);
-        render_sidebar_mask();
         return;
     }
 
@@ -573,7 +552,6 @@ void Application::renderBackground(float screen_w, float screen_h) {
         neon_wave_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
         neon_wave_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
         neon_wave_renderer_.render(screen_w, screen_h, is_playing, levels12, 12);
-        render_sidebar_mask();
         return;
     }
 
@@ -581,7 +559,6 @@ void Application::renderBackground(float screen_w, float screen_h) {
         cyber_grid_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
         cyber_grid_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
         cyber_grid_renderer_.render(screen_w, screen_h, is_playing, levels12, 12);
-        render_sidebar_mask();
         return;
     }
 
@@ -589,7 +566,6 @@ void Application::renderBackground(float screen_w, float screen_h) {
         glass_clock_renderer_.setTheme(static_cast<int>(ThemeManager::getInstance().getCurrentTheme()));
         glass_clock_renderer_.setCustomColor(ThemeManager::getInstance().getCustomColor());
         glass_clock_renderer_.render(screen_w, screen_h, is_playing, l, r);
-        render_sidebar_mask();
         return;
     }
 
@@ -614,9 +590,6 @@ void Application::renderBackground(float screen_w, float screen_h) {
             for (int c = 0; c < num_cols; ++c) {
                 float x0 = margin_x + c * (col_w + gap_x);
                 float x1 = x0 + col_w;
-                if (x1 <= sidebar_bg_x) {
-                    continue; // 侧边栏下方不绘制点阵微光，避免非全屏时侧边栏被渲染主题色
-                }
                 for (int r_idx = 0; r_idx < num_rows; ++r_idx) {
                     float y1 = bot_y - r_idx * (seg_h + gap_y);
                     float y0 = y1 - seg_h;
@@ -624,7 +597,6 @@ void Application::renderBackground(float screen_w, float screen_h) {
                 }
             }
         }
-        render_sidebar_mask();
         return;
     }
 
@@ -637,30 +609,24 @@ void Application::renderBackground(float screen_w, float screen_h) {
     const ImU32 lit_color = ThemeManager::getInstance().getSpectrumLitColor();
     const ImU32 peak_color = ThemeManager::getInstance().getSpectrumPeakColor();
 
-    // 全屏全景氛围微辉光 (随着整体低频能量呼吸涌动，仅在主舞台区域渲染，不侵入侧边栏)
+    // 全屏全景氛围微辉光 (随着整体低频能量呼吸涌动)
     float bass_energy = (levels12[0] + levels12[1] + levels12[2]) / 3.0f;
     int glow_alpha = static_cast<int>(bass_energy * 32.0f);
     if (glow_alpha > 0) {
-        float glow_x0 = std::max(margin_x, sidebar_bg_x);
-        if (glow_x0 < screen_w - margin_x) {
-            bg_dl->AddRectFilledMultiColor(
-                ImVec2(glow_x0, 0.0f),
-                ImVec2(screen_w - margin_x, screen_h),
-                IM_COL32(cr, cg, cb, 0),
-                IM_COL32(cr, cg, cb, 0),
-                IM_COL32(cr, cg, cb, glow_alpha),
-                IM_COL32(cr, cg, cb, glow_alpha)
-            );
-        }
+        bg_dl->AddRectFilledMultiColor(
+            ImVec2(margin_x, 0.0f),
+            ImVec2(screen_w - margin_x, screen_h),
+            IM_COL32(cr, cg, cb, 0),
+            IM_COL32(cr, cg, cb, 0),
+            IM_COL32(cr, cg, cb, glow_alpha),
+            IM_COL32(cr, cg, cb, glow_alpha)
+        );
     }
 
     // 平滑插值绘制 48 列分段 LED 矩阵
     for (int c = 0; c < num_cols; ++c) {
         float x0 = margin_x + c * (col_w + gap_x);
         float x1 = x0 + col_w;
-        if (x1 <= sidebar_bg_x) {
-            continue; // 侧边栏下方不绘制点阵，避免非全屏时侧边栏被渲染主题色
-        }
 
         // 平滑余弦插值获取当前列的连续频段能量
         float norm_x = static_cast<float>(c) / static_cast<float>(num_cols - 1);
@@ -671,8 +637,8 @@ void Application::renderBackground(float screen_w, float screen_h) {
         float smooth_t = (1.0f - std::cos(frac * 3.14159265f)) * 0.5f;
         float level = levels12[idx0] * (1.0f - smooth_t) + levels12[idx1] * smooth_t;
 
-        // 真实声学动态曲线：去除过载过冲，保留真实的高低频落差与音乐跳动层次
-        float dynamic_level = std::clamp(std::pow(level, 0.85f) * 0.90f, 0.0f, 1.0f);
+        // 大动态激荡曲线：根据音频流真实能量全屏激荡跳动 (贯穿整个大屏，真实呈现高低频爆发)
+        float dynamic_level = std::clamp(std::pow(level, 0.65f) * 1.35f, 0.0f, 1.0f);
 
         int active_count = static_cast<int>(std::round(dynamic_level * num_rows));
         active_count = std::clamp(active_count, 0, num_rows);
@@ -692,8 +658,6 @@ void Application::renderBackground(float screen_w, float screen_h) {
             }
         }
     }
-
-    render_sidebar_mask();
 }
 
 void Application::render() {

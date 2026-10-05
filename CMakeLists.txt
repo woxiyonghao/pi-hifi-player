@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(PiHifiPlayer VERSION 1.0.5 LANGUAGES C CXX)
+project(PiHifiPlayer VERSION 1.0.6 LANGUAGES C CXX)
 
 # 1.强制使用 Moderin C++20 标准
 set(CMAKE_CXX_STANDARD 20)
