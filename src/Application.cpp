@@ -597,8 +597,8 @@ void Application::renderBackground(float screen_w, float screen_h) {
     float r = 0.0f;
     if (is_playing) {
         player.getSpectrumLevels(levels12, 12);
-        l = std::clamp((levels12[0] + levels12[1] + levels12[2] + levels12[3] + levels12[4]) * 0.32f, 0.0f, 1.0f);
-        r = std::clamp((levels12[2] + levels12[3] + levels12[4] + levels12[5] + levels12[6]) * 0.32f, 0.0f, 1.0f);
+        l = std::clamp((levels12[0] + levels12[1] + levels12[2] + levels12[3] + levels12[4]) * 0.20f, 0.0f, 1.0f);
+        r = std::clamp((levels12[2] + levels12[3] + levels12[4] + levels12[5] + levels12[6]) * 0.20f, 0.0f, 1.0f);
     }
 
     if (bg_mode == BackgroundVisualMode::Accuphase) {
@@ -732,8 +732,8 @@ void Application::renderBackground(float screen_w, float screen_h) {
         float smooth_t = (1.0f - std::cos(frac * 3.14159265f)) * 0.5f;
         float level = levels12[idx0] * (1.0f - smooth_t) + levels12[idx1] * smooth_t;
 
-        // 大动态激荡曲线：根据音频流真实能量全屏激荡跳动 (贯穿整个大屏，真实呈现高低频爆发)
-        float dynamic_level = std::clamp(std::pow(level, 0.65f) * 1.35f, 0.0f, 1.0f);
+        // 真实声学动态曲线：去除过载虚高，按照实际音量与物理能量呈现落差层次 (避免齐刷刷顶满)
+        float dynamic_level = std::clamp(std::pow(level, 0.85f) * 0.90f, 0.0f, 1.0f);
 
         int active_count = static_cast<int>(std::round(dynamic_level * num_rows));
         active_count = std::clamp(active_count, 0, num_rows);

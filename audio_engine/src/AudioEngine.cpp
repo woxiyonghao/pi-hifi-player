@@ -1081,9 +1081,8 @@ void AudioEngine::updateSpectrumAnalysis(const float* samples, size_t frame_coun
     };
 
     float vol = volume_.load(std::memory_order_relaxed);
-    // 视觉音量感知响应因子：静音/0音量时为0，随音量滑块实时灵敏联动，
-    // 在 30%~70% 正常发烧聆听音量下呈现饱满活跃的 40%~85% 满度激荡
-    float vol_factor = std::pow(std::clamp(vol, 0.0f, 1.0f), 0.45f);
+    // 真实声学音量正比联动：严格按实际音量大小与真实声学能量比例渲染高度，绝不虚高顶满
+    float vol_factor = std::clamp(vol, 0.0f, 1.0f);
     if (vol_factor < 0.001f) {
         std::lock_guard lock(spectrum_mutex_);
         for (auto& lvl : spectrum_levels_) {
@@ -1101,7 +1100,7 @@ void AudioEngine::updateSpectrumAnalysis(const float* samples, size_t frame_coun
             sum_mag += std::sqrt(re[k] * re[k] + im[k] * im[k]);
         }
         float avg_mag = sum_mag / (b_end - b_start + 1);
-        float target = std::clamp(avg_mag * band_weights[b] * 0.28f * vol_factor, 0.0f, 1.0f);
+        float target = std::clamp(avg_mag * band_weights[b] * 0.15f * vol_factor, 0.0f, 1.0f);
 
         // 动效弹道：快速起音 (Attack) + 平滑自然衰减 (Decay)
         if (target > spectrum_levels_[b]) {
