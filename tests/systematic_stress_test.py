@@ -5,6 +5,7 @@ import time
 import subprocess
 import signal
 import struct
+import zlib
 import random
 
 CMD_FILE = "/tmp/pi_hifi_cmd"
@@ -37,6 +38,28 @@ def send_cmd(cmd_str, timeout=3.0):
             return False
     return True
 
+def ppm_to_png(ppm_path, png_path):
+    with open(ppm_path, "rb") as f:
+        header = f.readline().decode().strip()
+        dims = f.readline().decode().strip()
+        while dims.startswith("#"):
+            dims = f.readline().decode().strip()
+        maxval = f.readline().decode().strip()
+        w, h = map(int, dims.split())
+        data = f.read()
+    raw = bytearray()
+    row_len = w * 3
+    for y in range(h):
+        raw.append(0)
+        raw.extend(data[y * row_len : (y + 1) * row_len])
+    def chunk(tag, d):
+        return struct.pack(">I", len(d)) + tag + d + struct.pack(">I", zlib.crc32(tag + d) & 0xffffffff)
+    ihdr = struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)
+    idat = zlib.compress(bytes(raw))
+    png = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr) + chunk(b"IDAT", idat) + chunk(b"IEND", b"")
+    with open(png_path, "wb") as out:
+        out.write(png)
+
 def capture_screenshot(save_name=None):
     if os.path.exists(SCREEN_PPM):
         try:
@@ -65,7 +88,10 @@ def capture_screenshot(save_name=None):
         if save_name:
             dst_ppm = os.path.join(SNAP_DIR, save_name + ".ppm")
             dst_png = os.path.join(SNAP_DIR, save_name + ".png")
-            os.system(f"cp {SCREEN_PPM} {dst_ppm} && sips -s format png {dst_ppm} --out {dst_png} >/dev/null 2>&1")
+            try:
+                ppm_to_png(SCREEN_PPM, dst_png)
+            except Exception as pe:
+                os.system(f"cp {SCREEN_PPM} {dst_ppm} && (sips -s format png {dst_ppm} --out {dst_png} 2>/dev/null || ffmpeg -y -i {dst_ppm} {dst_png} 2>/dev/null)")
         return size
     except Exception as e:
         log(f"[ERROR] Screenshot error: {e}")
@@ -79,6 +105,25 @@ def get_process_rss_mb(pid):
     except Exception:
         pass
     return 0.0
+
+def find_running_player_pid():
+    try:
+        out = subprocess.check_output(["pgrep", "-f", "PiHifiPlayer"]).decode().strip()
+        lines = [int(p) for p in out.splitlines() if p.strip()]
+        my_pid = os.getpid()
+        for p in lines:
+            if p != my_pid:
+                return p
+    except Exception:
+        pass
+    return None
+
+def is_pid_alive(pid):
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
 
 def main():
     duration_hours = 2.0
@@ -94,9 +139,6 @@ def main():
     log("===========================================================")
 
     bin_path = "./build/PiHifiPlayer"
-    if not os.path.exists(bin_path):
-        log(f"[FATAL] 未找到二进制文件: {bin_path}")
-        sys.exit(1)
 
     for f in [CMD_FILE, SCREEN_TRIGGER, SCREEN_PPM]:
         if os.path.exists(f):
@@ -105,15 +147,23 @@ def main():
             except OSError:
                 pass
 
-    log(f"[INIT] 启动 {bin_path}...")
-    proc = subprocess.Popen([bin_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    app_pid = proc.pid
-    log(f"[INIT] 播放器进程已启动，PID: {app_pid}")
-
-    time.sleep(1.5)
-    if proc.poll() is not None:
-        log(f"[FATAL] 播放器启动即崩溃，退出码: {proc.returncode}")
-        sys.exit(1)
+    existing_pid = find_running_player_pid()
+    proc = None
+    if existing_pid:
+        log(f"[INIT] 检测到已在运行的数播系统实例 (PID: {existing_pid})，直接挂载自动化测试与帧缓冲监控通道...")
+        app_pid = existing_pid
+    else:
+        if not os.path.exists(bin_path):
+            log(f"[FATAL] 未找到二进制文件: {bin_path}")
+            sys.exit(1)
+        log(f"[INIT] 启动 {bin_path}...")
+        proc = subprocess.Popen([bin_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        app_pid = proc.pid
+        log(f"[INIT] 播放器进程已启动，PID: {app_pid}")
+        time.sleep(1.5)
+        if proc.poll() is not None:
+            log(f"[FATAL] 播放器启动即崩溃，退出码: {proc.returncode}")
+            sys.exit(1)
 
     initial_rss = get_process_rss_mb(app_pid)
     log(f"[METRIC] 初始常驻内存 (RSS): {initial_rss:.2f} MB")
@@ -150,10 +200,15 @@ def main():
                 log(f"[COMPLETE] 自动化测试已圆满运行满 {duration_hours} 小时 ({elapsed:.1f} 秒)")
                 break
 
-            ret = proc.poll()
-            if ret is not None:
-                log(f"[FATAL] 进程意外崩溃或退出！退出码: {ret}")
-                sys.exit(2)
+            if proc is not None:
+                ret = proc.poll()
+                if ret is not None:
+                    log(f"[FATAL] 进程意外崩溃或退出！退出码: {ret}")
+                    sys.exit(2)
+            else:
+                if not is_pid_alive(app_pid):
+                    log(f"[FATAL] 监测到的数播进程 (PID: {app_pid}) 已意外终止！")
+                    sys.exit(2)
 
             iteration += 1
             cur_rss = get_process_rss_mb(app_pid)
@@ -203,13 +258,13 @@ def main():
     except KeyboardInterrupt:
         log("[INTERRUPT] 收到手动中断信号，安全停止测试")
     finally:
-        if proc.poll() is None:
+        if proc is not None and proc.poll() is None:
             proc.terminate()
             try:
                 proc.wait(timeout=3.0)
             except subprocess.TimeoutExpired:
                 proc.kill()
-        log("[SHUTDOWN] 测试进程已安全回收完毕")
+        log("[SHUTDOWN] 测试会话已安全退出")
 
 if __name__ == "__main__":
     main()
