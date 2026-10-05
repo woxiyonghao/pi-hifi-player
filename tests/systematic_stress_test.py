@@ -46,14 +46,20 @@ def capture_screenshot(save_name=None):
     with open(SCREEN_TRIGGER, "w") as f:
         pass
     start = time.time()
-    while not os.path.exists(SCREEN_PPM):
+    while True:
+        if os.path.exists(SCREEN_PPM):
+            try:
+                if os.path.getsize(SCREEN_PPM) >= 1843200:
+                    break
+            except OSError:
+                pass
         time.sleep(0.05)
-        if time.time() - start > 3.0:
-            log("[WARN] Screenshot dump timed out")
-            return None
+        if time.time() - start > 5.0:
+            log("[WARN] Screenshot dump timed out or file incomplete")
+            break
     try:
         size = os.path.getsize(SCREEN_PPM)
-        if size < 1000:
+        if size < 1800000:
             log(f"[WARN] Screenshot PPM file too small ({size} bytes)")
             return None
         if save_name:
