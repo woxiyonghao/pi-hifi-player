@@ -14,10 +14,12 @@
 #include "audio_engine/sinks/AlsaAudioSink.hpp"
 #else
 #include "audio_engine/sinks/AudioQueueSink.hpp"
+#include "audio_engine/sinks/RemoteIOSink.hpp"
 
 // 由 iPad 宿主实现。返回 true 表示该设置已作为 AVAudioSession 的
 // 硬件 I/O 缓冲偏好处理，不能再改写已经分配好的 AudioQueue 缓冲区。
 extern "C" bool HifiPadSetPreferredIOBufferFrames(uint32_t frames) __attribute__((weak_import));
+extern "C" uint32_t HifiPadGetBluetoothOutputSampleRate() __attribute__((weak_import));
 #endif
 
 #include <iostream>
@@ -61,6 +63,10 @@ static OSStatus onDefaultDeviceChangedThunk(AudioObjectID /*inObjectID*/, UInt32
 
 namespace audio_engine {
 
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+static std::atomic<uint64_t> g_iPadSinkUnderflowCount{0};
+#endif
+
 AudioEngine& AudioEngine::getInstance() {
     static AudioEngine instance;
     return instance;
@@ -97,6 +103,20 @@ std::unique_ptr<IAudioDecoder> AudioEngine::createDecoderForFile(const std::stri
     std::string ext = p.extension().string();
     std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return std::tolower(c); });
 
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+    // AirPods 实际工作在 AVAudioSession 的输出采样率（通常 48 kHz）。先在
+    // 解码线程用 ExtAudioFile 完成系统级重采样，再以同采样率打开 AudioQueue，
+    // 避免 AudioQueue/A2DP 在实时输出线程中隐式转换 44.1/192 kHz 音源。
+    if (HifiPadGetBluetoothOutputSampleRate) {
+        uint32_t bluetooth_rate = HifiPadGetBluetoothOutputSampleRate();
+        if (bluetooth_rate > 0) {
+            std::cout << "[AudioEngine] iPad Bluetooth output: decode/resample to "
+                      << bluetooth_rate << " Hz" << std::endl;
+            return std::make_unique<AppleAudioDecoder>(bluetooth_rate);
+        }
+    }
+#endif
+
     if (ext == ".flac") {
         return std::make_unique<FlacDecoder>();
     } else if (ext == ".wav") {
@@ -122,6 +142,10 @@ bool AudioEngine::openAndPlay(const std::string& filepath) {
     std::lock_guard lock_dev(device_mutex_);
     stop();
 
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+    g_iPadSinkUnderflowCount.store(0, std::memory_order_relaxed);
+#endif
+
     std::unique_ptr<IAudioDecoder> new_decoder = createDecoderForFile(filepath);
     if (!new_decoder) {
         std::cerr << "[AudioEngine] 不支持或无法识别的音频扩展名: " << filepath << std::endl;
@@ -143,6 +167,24 @@ bool AudioEngine::openAndPlay(const std::string& filepath) {
         return false;
 #endif
     }
+
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+    // 只在 iPad 当前使用 A2DP 时替换输出后端。iPhone、macOS、Linux、
+    // 树莓派以及 iPad 有线输出仍保留各自原来的 sink。
+    bool should_use_remote_io = HifiPadGetBluetoothOutputSampleRate
+        && HifiPadGetBluetoothOutputSampleRate() > 0;
+    if (should_use_remote_io != using_ipad_remote_io_) {
+        if (sink_) {
+            sink_->close();
+        }
+        sink_ = should_use_remote_io
+            ? std::unique_ptr<IAudioSink>(std::make_unique<RemoteIOSink>())
+            : std::unique_ptr<IAudioSink>(std::make_unique<AudioQueueSink>());
+        using_ipad_remote_io_ = should_use_remote_io;
+        std::cout << "[AudioEngine] iPad output backend: "
+                  << (using_ipad_remote_io_ ? "RemoteIO" : "AudioQueue") << std::endl;
+    }
+#endif
 
     {
         std::lock_guard lock(decoder_mutex_);
@@ -823,7 +865,26 @@ void AudioEngine::decodeWorker(std::stop_token stop_token) {
     constexpr size_t CHUNK_FRAMES = 8192;
     std::vector<float> decode_buf(CHUNK_FRAMES * current_spec_.channels);
 
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+    uint64_t reported_underflows = 0;
+    auto next_underflow_report = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+#endif
+
     while (!stop_token.stop_requested() && is_decoding_.load(std::memory_order_acquire)) {
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+        auto now = std::chrono::steady_clock::now();
+        if (now >= next_underflow_report) {
+            uint64_t count = g_iPadSinkUnderflowCount.load(std::memory_order_relaxed);
+            if (count != reported_underflows) {
+                std::cerr << "[AudioEngine][iPad] AudioQueue underflow count=" << count
+                          << ", new=" << (count - reported_underflows)
+                          << ", bufferedSamples=" << ring_buffer_.available_read() << std::endl;
+                reported_underflows = count;
+            }
+            next_underflow_report = now + std::chrono::seconds(2);
+        }
+#endif
+
         // 如果无锁环形缓冲区剩余空间不足 1 个 Block，休眠 5 毫秒等待声卡消费，避免突发忙轮询
         if (ring_buffer_.available_write() < (CHUNK_FRAMES * current_spec_.channels)) {
             std::this_thread::sleep_for(std::chrono::milliseconds(5));
@@ -858,6 +919,9 @@ void AudioEngine::onSinkDataNeeded(float* output, size_t frame_count) {
 
     // 若环形缓冲未填满 (或处于末尾)，平滑渐隐防止方波突变引起的爆音/沙沙声
     if (samples_read < samples_needed) {
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+        g_iPadSinkUnderflowCount.fetch_add(1, std::memory_order_relaxed);
+#endif
         float last_val = (samples_read > 0) ? output[samples_read - 1] : 0.0f;
         size_t ramp_len = std::min(samples_needed - samples_read, size_t(32));
         for (size_t i = 0; i < ramp_len; ++i) {

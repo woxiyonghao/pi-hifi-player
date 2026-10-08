@@ -115,6 +115,7 @@ private:
     ~AudioEngine();
 
     std::unique_ptr<IAudioSink> sink_;
+    bool using_ipad_remote_io_{false};
     std::unique_ptr<IAudioDecoder> decoder_;
     std::mutex decoder_mutex_; // 保护解码器切换与 Seek 操作
 

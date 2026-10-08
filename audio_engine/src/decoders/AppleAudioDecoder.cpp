@@ -7,7 +7,8 @@
 
 namespace audio_engine {
 
-AppleAudioDecoder::AppleAudioDecoder() = default;
+AppleAudioDecoder::AppleAudioDecoder(uint32_t output_sample_rate)
+    : requested_output_sample_rate_(output_sample_rate) {}
 
 AppleAudioDecoder::~AppleAudioDecoder() {
     close();
@@ -38,7 +39,10 @@ bool AppleAudioDecoder::open(const std::string& filepath) {
         return false;
     }
 
-    spec_.sample_rate = static_cast<uint32_t>(file_format.mSampleRate > 0 ? file_format.mSampleRate : 44100);
+    file_sample_rate_ = file_format.mSampleRate > 0 ? file_format.mSampleRate : 44100.0;
+    spec_.sample_rate = requested_output_sample_rate_ > 0
+        ? requested_output_sample_rate_
+        : static_cast<uint32_t>(file_sample_rate_);
     spec_.channels = file_format.mChannelsPerFrame > 0 ? file_format.mChannelsPerFrame : 2;
     spec_.bit_depth = file_format.mBitsPerChannel > 0 ? static_cast<uint8_t>(file_format.mBitsPerChannel) : 16;
     spec_.format = SampleFormat::Float32;
@@ -65,10 +69,13 @@ bool AppleAudioDecoder::open(const std::string& filepath) {
     prop_size = sizeof(total_frames);
     status = ExtAudioFileGetProperty(ext_file_, kExtAudioFileProperty_FileLengthFrames, &prop_size, &total_frames);
     total_frames_ = (status == noErr && total_frames > 0) ? static_cast<uint64_t>(total_frames) : 0;
-    duration_sec_ = (spec_.sample_rate > 0) ? (static_cast<double>(total_frames_) / spec_.sample_rate) : 0.0;
+    duration_sec_ = file_sample_rate_ > 0.0
+        ? (static_cast<double>(total_frames_) / file_sample_rate_)
+        : 0.0;
 
     std::cout << "[AppleAudioDecoder] 成功打开音频: " << filepath
-              << " | 采样率: " << spec_.sample_rate << "Hz | 声道: " << spec_.channels
+              << " | 源采样率: " << static_cast<uint32_t>(file_sample_rate_)
+              << "Hz | 输出采样率: " << spec_.sample_rate << "Hz | 声道: " << spec_.channels
               << " | 时长: " << duration_sec_ << "s" << std::endl;
 
     return true;
@@ -92,9 +99,10 @@ uint64_t AppleAudioDecoder::readFrames(float* buffer, uint64_t max_frames) {
 }
 
 bool AppleAudioDecoder::seek(double target_seconds) {
-    if (!ext_file_ || spec_.sample_rate == 0) return false;
+    if (!ext_file_ || file_sample_rate_ <= 0.0) return false;
     double clamped = std::clamp(target_seconds, 0.0, duration_sec_);
-    SInt64 target_frame = static_cast<SInt64>(clamped * spec_.sample_rate);
+    // ExtAudioFileSeek 使用源文件帧位置，而不是重采样后的客户端帧位置。
+    SInt64 target_frame = static_cast<SInt64>(clamped * file_sample_rate_);
     return ExtAudioFileSeek(ext_file_, target_frame) == noErr;
 }
 
@@ -112,6 +120,7 @@ void AppleAudioDecoder::close() {
         ext_file_ = nullptr;
     }
     total_frames_ = 0;
+    file_sample_rate_ = 0.0;
     duration_sec_ = 0.0;
 }
 

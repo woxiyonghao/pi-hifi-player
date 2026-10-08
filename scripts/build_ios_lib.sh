@@ -53,6 +53,7 @@ SOURCES=(
     "${ROOT_DIR}/audio_engine/src/decoders/Mp3Decoder.cpp"
     "${ROOT_DIR}/audio_engine/src/decoders/AppleAudioDecoder.cpp"
     "${ROOT_DIR}/audio_engine/src/sinks/AudioQueueSink.cpp"
+    "${ROOT_DIR}/audio_engine/src/sinks/RemoteIOSink.cpp"
     "${ROOT_DIR}/src/tools/MusicDatabase.cpp"
     "${ROOT_DIR}/src/tools/MusicScanManager.cpp"
     "${ROOT_DIR}/src/tools/PlayerAdmin.cpp"

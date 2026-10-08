@@ -14,7 +14,7 @@ namespace audio_engine {
  */
 class AppleAudioDecoder : public IAudioDecoder {
 public:
-    AppleAudioDecoder();
+    explicit AppleAudioDecoder(uint32_t output_sample_rate = 0);
     ~AppleAudioDecoder() override;
 
     bool open(const std::string& filepath) override;
@@ -28,6 +28,8 @@ private:
     ExtAudioFileRef ext_file_{nullptr};
     AudioFormatSpec spec_{};
     uint64_t total_frames_{0};
+    uint32_t requested_output_sample_rate_{0};
+    double file_sample_rate_{0.0};
     double duration_sec_{0.0};
 };
 
