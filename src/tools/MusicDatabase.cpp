@@ -145,6 +145,39 @@ bool MusicDatabase::saveScannedTracks(const std::vector<Track>& tracks) {
     return true;
 }
 
+std::string MusicDatabase::resolveTrackPath(const std::string& path) {
+    if (path.empty()) return path;
+
+    std::error_code ec;
+    // 1. 如果路径在当前文件系统上直接存在，直接返回
+    if (std::filesystem::exists(path, ec)) {
+        return path;
+    }
+
+    // 2. 处理 iOS / iPadOS / macOS 沙盒路径 (每次重新编译运行 UUID 变化导致的失效)
+    std::string current_music_dir = AppConfig::Path::getMusicDir();
+    if (!current_music_dir.empty()) {
+        // 查找 "/Documents/"
+        size_t doc_pos = path.find("/Documents/");
+        if (doc_pos != std::string::npos) {
+            std::string sub_path = path.substr(doc_pos + 11); // 跳过 "/Documents/"
+            std::filesystem::path remapped = std::filesystem::path(current_music_dir) / sub_path;
+            if (std::filesystem::exists(remapped, ec)) {
+                return remapped.string();
+            }
+        }
+
+        // 尝试直接提取文件名在当前音乐根目录下查找
+        std::filesystem::path p(path);
+        std::filesystem::path fallback = std::filesystem::path(current_music_dir) / p.filename();
+        if (std::filesystem::exists(fallback, ec)) {
+            return fallback.string();
+        }
+    }
+
+    return path;
+}
+
 std::vector<Track> MusicDatabase::loadScannedTracks() {
     std::vector<Track> tracks;
     if (!init()) return tracks;
@@ -156,6 +189,8 @@ std::vector<Track> MusicDatabase::loadScannedTracks() {
         return tracks;
     }
 
+    std::vector<std::pair<uint64_t, std::string>> paths_to_heal;
+
     while (sqlite3_step(stmt) == SQLITE_ROW) {
         Track t;
         t.id = static_cast<uint64_t>(sqlite3_column_int64(stmt, 0));
@@ -166,7 +201,13 @@ std::vector<Track> MusicDatabase::loadScannedTracks() {
         const unsigned char* album_str = sqlite3_column_text(stmt, 3);
         t.album = album_str ? reinterpret_cast<const char*>(album_str) : "";
         const unsigned char* path_str = sqlite3_column_text(stmt, 4);
-        t.file_path = path_str ? reinterpret_cast<const char*>(path_str) : "";
+        std::string raw_path = path_str ? reinterpret_cast<const char*>(path_str) : "";
+        
+        t.file_path = resolveTrackPath(raw_path);
+        if (t.file_path != raw_path && !t.file_path.empty()) {
+            paths_to_heal.emplace_back(t.id, t.file_path);
+        }
+
         t.format = static_cast<AudioFormat>(sqlite3_column_int(stmt, 5));
         t.sample_rate = static_cast<uint32_t>(sqlite3_column_int64(stmt, 6));
         t.bit_depth = static_cast<uint8_t>(sqlite3_column_int(stmt, 7));
@@ -176,6 +217,24 @@ std::vector<Track> MusicDatabase::loadScannedTracks() {
     }
 
     sqlite3_finalize(stmt);
+
+    // 自动自愈 SQLite 数据库：将更新后的沙盒绝对路径回写
+    if (!paths_to_heal.empty()) {
+        const char* up_sql = "UPDATE scanned_tracks SET file_path = ? WHERE id = ?;";
+        sqlite3_stmt* up_stmt = nullptr;
+        if (sqlite3_prepare_v2(db_, up_sql, -1, &up_stmt, nullptr) == SQLITE_OK) {
+            for (const auto& [id, new_path] : paths_to_heal) {
+                sqlite3_reset(up_stmt);
+                sqlite3_bind_text(up_stmt, 1, new_path.c_str(), -1, SQLITE_STATIC);
+                sqlite3_bind_int64(up_stmt, 2, static_cast<sqlite3_int64>(id));
+                sqlite3_step(up_stmt);
+            }
+            sqlite3_finalize(up_stmt);
+            std::cout << "[MusicDatabase] 检测到沙盒容器 UUID 迁移，已自动修复 " 
+                      << paths_to_heal.size() << " 首曲目的持久化路径！" << std::endl;
+        }
+    }
+
     return tracks;
 }
 
@@ -290,7 +349,8 @@ std::vector<Playlist> MusicDatabase::loadPlaylists() {
             const unsigned char* album_str = sqlite3_column_text(trk_stmt, 3);
             t.album = album_str ? reinterpret_cast<const char*>(album_str) : "";
             const unsigned char* path_str = sqlite3_column_text(trk_stmt, 4);
-            t.file_path = path_str ? reinterpret_cast<const char*>(path_str) : "";
+            std::string raw_path = path_str ? reinterpret_cast<const char*>(path_str) : "";
+            t.file_path = resolveTrackPath(raw_path);
             t.format = static_cast<AudioFormat>(sqlite3_column_int(trk_stmt, 5));
             t.sample_rate = static_cast<uint32_t>(sqlite3_column_int64(trk_stmt, 6));
             t.bit_depth = static_cast<uint8_t>(sqlite3_column_int(trk_stmt, 7));

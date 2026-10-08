@@ -1,4 +1,5 @@
 #include "PlayerAdmin.hpp"
+#include "tools/MusicDatabase.hpp"
 #include "imgui.h"
 #include "public/AppConfig.hpp"
 #include <random> // 提供随机数引擎供 Shuffle 模式使用
@@ -11,10 +12,9 @@
 PlayerAdmin::PlayerAdmin() {
     loadConfig();
 
-    // 注册音频底层 EOF 事件：曲目硬件推流完毕后自动切下一首
+    // 注册音频底层 EOF 事件：标记 eof_pending_，交由主线程 update() 驱动切歌，防止音频回调死锁
     audio_engine::AudioEngine::getInstance().setEofCallback([this]() {
-        std::cout << "[PlayerAdmin] setEofCallback triggered! calling next()..." << std::endl;
-        this->next();
+        this->eof_pending_.store(true, std::memory_order_release);
     });
 }
 
@@ -34,6 +34,7 @@ void PlayerAdmin::play() {
         engine.play();
     } else if (engine.isIdle()) {
         if (!current_track_->file_path.empty()) {
+            current_track_->file_path = MusicDatabase::resolveTrackPath(current_track_->file_path);
             engine.openAndPlay(current_track_->file_path);
             if (current_time_sec_ > 0.0) {
                 engine.seek(current_time_sec_);
@@ -124,14 +125,15 @@ void PlayerAdmin::switchTrack(const Track& track) {
 
 void PlayerAdmin::executeTrackSwitch(const Track& track) {
     current_track_ = track;
+    current_track_->file_path = MusicDatabase::resolveTrackPath(track.file_path);
     duration_sec_ = static_cast<double>(track.duration_sec);
     current_time_sec_ = 0.0;
-    state_ = PlaybackState::Playing;
 
-    if (!track.file_path.empty()) {
+    if (!current_track_->file_path.empty()) {
         auto& engine = audio_engine::AudioEngine::getInstance();
-        bool ok = engine.openAndPlay(track.file_path);
+        bool ok = engine.openAndPlay(current_track_->file_path);
         if (ok) {
+            state_ = PlaybackState::Playing;
             double engine_dur = engine.getDurationSec();
             if (engine_dur > 0.0) {
                 duration_sec_ = engine_dur;
@@ -139,7 +141,12 @@ void PlayerAdmin::executeTrackSwitch(const Track& track) {
             if (fade_duration_sec_ > 0.05f) {
                 engine.startFadeIn(fade_duration_sec_);
             }
+        } else {
+            std::cerr << "[PlayerAdmin] 播放失败: 无法打开文件 " << track.file_path << std::endl;
+            state_ = PlaybackState::Paused;
         }
+    } else {
+        state_ = PlaybackState::Playing;
     }
 }
 
@@ -250,6 +257,11 @@ void PlayerAdmin::seek(double target_sec) {
 
 void PlayerAdmin::update(double delta_time) {
     auto& engine = audio_engine::AudioEngine::getInstance();
+
+    // 异步安全执行 EOF 切歌逻辑 (脱离 CoreAudio 音频回调线程，防止死锁)
+    if (eof_pending_.exchange(false, std::memory_order_acq_rel)) {
+        this->next();
+    }
 
     // 处理切歌淡出完毕后的新曲载入与平滑淡入接力
     if (is_transitioning_) {

@@ -2,6 +2,7 @@
 #include "Font.hpp"
 #include "PlayerAdmin.hpp"
 #include "UIConfig.hpp"
+#include "public/Platform.hpp"
 #include "widgets/GlassCardRenderer.hpp"
 #include <algorithm>
 #include <cmath>
@@ -137,7 +138,8 @@ void BottomBarView::render(float screen_w, float screen_h, float offset_x, float
     const float rounding = height_ * 0.5f;                     // 24.0f (半高半圆)
 
     // 几何对齐 (支持向右下角移出)：
-    float left_x = UIConfig::Layout::SidebarWidth + margin_x + offset_x;
+    float sidebar_w = Platform::isIPad() ? 260.0f : UIConfig::Layout::SidebarWidth;
+    float left_x = sidebar_w + margin_x + offset_x;
     float right_x = screen_w - margin_x + offset_x;
     float bot_y = screen_h - margin_y + offset_y;
     float top_y = bot_y - height_;

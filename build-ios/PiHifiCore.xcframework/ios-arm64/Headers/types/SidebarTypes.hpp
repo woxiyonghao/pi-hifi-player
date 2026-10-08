@@ -11,7 +11,9 @@ enum class SidebarTab : uint8_t {
     ThemeSettings,  // 调色盘与液态玻璃主题风格
     SystemSettings, // 树莓派底层硬件与系统配置
     AllMusic,       // 全部曲库 (播放列表根视图)
-    CustomPlaylist  // 自定义实体歌单
+    CustomPlaylist, // 自定义实体歌单
+    Terminal,       // Linux 终端控制台
+    WifiTransfer    // WiFi 局域网无线传歌
 };
 
 // 通用指示器目标坐标 (供父容器绘制发光滑动胶囊)
@@ -29,7 +31,9 @@ enum class NavIcon : uint8_t {
     DAC,            // 芯片底座 (DAC)
     Theme,          // 调色板 (主题)
     System,         // 齿轮滑块 (系统)
+    WifiTransfer,   // 无线信号与音符 (WiFi传歌)
     Music,          // 音符 (所有音乐)
     Playlist,       // 列表横线 (播放列表)
-    Add             // 加号 (添加播放列表)
+    Add,            // 加号 (添加播放列表)
+    Terminal        // 终端提示符 (系统终端)
 };

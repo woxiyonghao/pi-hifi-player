@@ -51,6 +51,7 @@ SOURCES=(
     "${ROOT_DIR}/audio_engine/src/decoders/FlacDecoder.cpp"
     "${ROOT_DIR}/audio_engine/src/decoders/WavDecoder.cpp"
     "${ROOT_DIR}/audio_engine/src/decoders/Mp3Decoder.cpp"
+    "${ROOT_DIR}/audio_engine/src/decoders/AppleAudioDecoder.cpp"
     "${ROOT_DIR}/audio_engine/src/sinks/AudioQueueSink.cpp"
     "${ROOT_DIR}/src/tools/MusicDatabase.cpp"
     "${ROOT_DIR}/src/tools/MusicScanManager.cpp"
@@ -88,6 +89,12 @@ SOURCES=(
     "${ROOT_DIR}/src/widgets/SidebarDacWidget.cpp"
     "${ROOT_DIR}/src/widgets/LEDSpectrumWidget.cpp"
     "${ROOT_DIR}/src/widgets/GlassCardRenderer.cpp"
+    "${ROOT_DIR}/src/tools/AudioDeviceTool.cpp"
+    "${ROOT_DIR}/src/tools/NetworkTool.cpp"
+    "${ROOT_DIR}/src/tools/UpdateManager.cpp"
+    "${ROOT_DIR}/src/views/TerminalView.cpp"
+    "${ROOT_DIR}/src/views/WifiTransferView.cpp"
+    "${ROOT_DIR}/src/tools/WifiTransferServer.cpp"
     "${ROOT_DIR}/third_party/imgui/imgui.cpp"
     "${ROOT_DIR}/third_party/imgui/imgui_draw.cpp"
     "${ROOT_DIR}/third_party/imgui/imgui_tables.cpp"
@@ -96,6 +103,7 @@ SOURCES=(
 
 echo "=== [2/5] 编译 iOS Device 切片 (arm64-apple-ios17.0) ==="
 DEVICE_OBJS=()
+pids=()
 for src in "${SOURCES[@]}"; do
     bname="$(basename "${src}" .cpp)"
     obj="${OBJ_DEVICE_DIR}/${bname}.o"
@@ -104,15 +112,19 @@ for src in "${SOURCES[@]}"; do
         -std=c++20 -O3 -fPIC -DNDEBUG \
         "${INCLUDE_FLAGS[@]}" \
         -c "${src}" -o "${obj}" &
+    pids+=($!)
     DEVICE_OBJS+=("${obj}")
 done
-wait
+for pid in "${pids[@]}"; do
+    wait "${pid}"
+done
 echo "  [Device] 打包静态库: ${OUT_DEVICE_DIR}/libPiHifiCore.a"
 "${LIBTOOL}" -static -o "${OUT_DEVICE_DIR}/libPiHifiCore.a" "${DEVICE_OBJS[@]}"
 
 echo "=== [3/5] 并行编译 iOS Simulator arm64 与 x86_64 切片 ==="
 SIM_ARM64_OBJS=()
 SIM_X86_OBJS=()
+sim_pids=()
 for src in "${SOURCES[@]}"; do
     bname="$(basename "${src}" .cpp)"
     obj_arm="${OBJ_SIM_ARM64_DIR}/${bname}.o"
@@ -123,17 +135,21 @@ for src in "${SOURCES[@]}"; do
         -std=c++20 -O3 -fPIC -DNDEBUG \
         "${INCLUDE_FLAGS[@]}" \
         -c "${src}" -o "${obj_arm}" &
+    sim_pids+=($!)
 
     "${CLANG}" -target x86_64-apple-ios17.0-simulator \
         -isysroot "${SIMULATOR_SDK}" \
         -std=c++20 -O3 -fPIC -DNDEBUG \
         "${INCLUDE_FLAGS[@]}" \
         -c "${src}" -o "${obj_x86}" &
+    sim_pids+=($!)
 
     SIM_ARM64_OBJS+=("${obj_arm}")
     SIM_X86_OBJS+=("${obj_x86}")
 done
-wait
+for pid in "${sim_pids[@]}"; do
+    wait "${pid}"
+done
 
 echo "  [Simulator] 打包 arm64 与 x86_64 模拟器切片..."
 "${LIBTOOL}" -static -o "${BUILD_DIR}/libPiHifiCore_sim_arm64.a" "${SIM_ARM64_OBJS[@]}"
@@ -158,12 +174,19 @@ xcodebuild -create-xcframework \
 cp "${OUT_DEVICE_DIR}/libPiHifiCore.a" "${BUILD_DIR}/libPiHifiCore.a"
 
 # 同步到 PiHiEndMusic Xcode 工程
-DEST_PROJECT_CXX="/Users/mk10/Desktop/PiHiEndMusic/PiHiEndMusic/cxx"
-if [ -d "${DEST_PROJECT_CXX}" ]; then
-    echo "=== [5/5] 自动同步至 Xcode 项目 (${DEST_PROJECT_CXX}) ==="
-    mkdir -p "${DEST_PROJECT_CXX}/lib/iphoneos" "${DEST_PROJECT_CXX}/lib/iphonesimulator"
-    cp "${OUT_DEVICE_DIR}/libPiHifiCore.a" "${DEST_PROJECT_CXX}/lib/iphoneos/"
-    cp "${OUT_SIM_DIR}/libPiHifiCore.a" "${DEST_PROJECT_CXX}/lib/iphonesimulator/"
+DEST_PROJECT="/Users/mk10/Desktop/PiHiEndMusic/PiHiEndMusic"
+if [ -d "${DEST_PROJECT}" ]; then
+    echo "=== [5/5] 自动同步至 Xcode 项目 (${DEST_PROJECT}) ==="
+    mkdir -p "${DEST_PROJECT}/cxx/lib/iphoneos" "${DEST_PROJECT}/cxx/lib/iphonesimulator"
+    cp "${OUT_DEVICE_DIR}/libPiHifiCore.a" "${DEST_PROJECT}/cxx/lib/iphoneos/"
+    cp "${OUT_DEVICE_DIR}/libPiHifiCore.a" "${DEST_PROJECT}/cxx/lib/libPiHifiCore.a"
+    cp "${OUT_SIM_DIR}/libPiHifiCore.a" "${DEST_PROJECT}/cxx/lib/iphonesimulator/"
+    if [ -d "${DEST_PROJECT}/Frameworks" ]; then
+        rm -rf "${DEST_PROJECT}/Frameworks/PiHifiCore.xcframework"
+        cp -R "${OUT_XCFRAMEWORK}" "${DEST_PROJECT}/Frameworks/"
+    fi
+    mkdir -p "${DEST_PROJECT}/cxx/include"
+    cp -R "${HEADERS_DIR}/"* "${DEST_PROJECT}/cxx/include/"
 fi
 
 echo "=========================================================="

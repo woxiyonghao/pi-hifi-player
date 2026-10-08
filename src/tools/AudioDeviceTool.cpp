@@ -7,7 +7,10 @@
 #include <cctype>
 
 #if defined(__APPLE__)
+#include <TargetConditionals.h>
+#if TARGET_OS_OSX
 #include <CoreAudio/CoreAudio.h>
+#endif
 #endif
 
 namespace {

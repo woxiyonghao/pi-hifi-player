@@ -1,4 +1,7 @@
 #include "tools/NetworkTool.hpp"
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
 #include <ifaddrs.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -126,6 +129,11 @@ namespace {
                 info.wifi_ssid = iw_ssid;
                 info.wifi_signal = "已连接";
             }
+        }
+#elif defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
+        if (info.is_connected) {
+            info.wifi_ssid = "Wi-Fi 局域网";
+            info.wifi_signal = "良好";
         }
 #else
         // macOS 平台快速读取当前 Wi-Fi

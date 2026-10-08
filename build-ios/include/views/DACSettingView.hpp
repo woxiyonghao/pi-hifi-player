@@ -25,6 +25,7 @@ public:
     [[nodiscard]] DACType getCurrentDacType() const { return static_cast<DACType>(selected_chip_); }
     [[nodiscard]] std::string getCurrentChipName() const;
     [[nodiscard]] std::string getCurrentDacName() const { return getCurrentChipName(); }
+    [[nodiscard]] bool isDacConnected() const;
 
     void setSelectedChip(int index);
     void setCurrentDacType(DACType type) { setSelectedChip(static_cast<int>(type)); }
@@ -42,6 +43,7 @@ private:
     void renderHardwareStatusBar(ImDrawList* dl, float x0, float& cur_y, float w);
 
     // 芯片专属发烧设置子页面
+    void renderHardwareDeviceSettings(ImDrawList* dl, float x0, float& cur_y, float w);
     void renderAppleDirectSettings(ImDrawList* dl, float x0, float& cur_y, float w);
     void renderESSSabreSettings(ImDrawList* dl, float x0, float& cur_y, float w);
     void renderAKMVelvetSettings(ImDrawList* dl, float x0, float& cur_y, float w);

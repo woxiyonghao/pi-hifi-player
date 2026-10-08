@@ -5,6 +5,7 @@
 #include "audio_engine/DsfParser.hpp"
 
 #if defined(__APPLE__)
+#include "audio_engine/decoders/AppleAudioDecoder.hpp"
 #include <TargetConditionals.h>
 #endif
 
@@ -13,6 +14,10 @@
 #include "audio_engine/sinks/AlsaAudioSink.hpp"
 #else
 #include "audio_engine/sinks/AudioQueueSink.hpp"
+
+// 由 iPad 宿主实现。返回 true 表示该设置已作为 AVAudioSession 的
+// 硬件 I/O 缓冲偏好处理，不能再改写已经分配好的 AudioQueue 缓冲区。
+extern "C" bool HifiPadSetPreferredIOBufferFrames(uint32_t frames) __attribute__((weak_import));
 #endif
 
 #include <iostream>
@@ -61,7 +66,7 @@ AudioEngine& AudioEngine::getInstance() {
     return instance;
 }
 
-AudioEngine::AudioEngine() : ring_buffer_(262144) {
+AudioEngine::AudioEngine() : ring_buffer_(1048576) {
 #if !defined(TARGET_OS_IPHONE) || !TARGET_OS_IPHONE
     // 默认输出驱动：使用跨平台低延迟 SdlAudioSink
     sink_ = std::make_unique<SdlAudioSink>();
@@ -100,8 +105,17 @@ std::unique_ptr<IAudioDecoder> AudioEngine::createDecoderForFile(const std::stri
         return std::make_unique<Mp3Decoder>();
     } else if (ext == ".dsf" || ext == ".dff") {
         return std::make_unique<DsfParser>();
+#if defined(__APPLE__)
+    } else if (ext == ".m4a" || ext == ".alac" || ext == ".aac" || ext == ".aiff" || ext == ".aif" || ext == ".caf") {
+        return std::make_unique<AppleAudioDecoder>();
+#endif
     }
+#if defined(__APPLE__)
+    // 在 Apple 平台（macOS / iPadOS / iOS）上，对未能匹配扩展名的音频使用系统级 ExtAudioFile 兜底
+    return std::make_unique<AppleAudioDecoder>();
+#else
     return nullptr;
+#endif
 }
 
 bool AudioEngine::openAndPlay(const std::string& filepath) {
@@ -115,8 +129,19 @@ bool AudioEngine::openAndPlay(const std::string& filepath) {
     }
 
     if (!new_decoder->open(filepath)) {
+#if defined(__APPLE__)
+        // 在 Apple 平台上，若基础解码器打开失败，自动无缝降级尝试 Apple 原生 ExtAudioFile 硬件解码
+        auto apple_decoder = std::make_unique<AppleAudioDecoder>();
+        if (apple_decoder->open(filepath)) {
+            new_decoder = std::move(apple_decoder);
+        } else {
+            std::cerr << "[AudioEngine] 解码器打开音频文件失败: " << filepath << std::endl;
+            return false;
+        }
+#else
         std::cerr << "[AudioEngine] 解码器打开音频文件失败: " << filepath << std::endl;
         return false;
+#endif
     }
 
     {
@@ -129,6 +154,7 @@ bool AudioEngine::openAndPlay(const std::string& filepath) {
         frames_consumed_by_sink_.store(0, std::memory_order_relaxed);
         seek_base_time_.store(0.0, std::memory_order_relaxed);
         is_eof_.store(false, std::memory_order_relaxed);
+        eof_reported_.store(false, std::memory_order_relaxed);
     }
 
     // 1. 在打开音频设备前，如果是非蓝牙物理硬件且开启了独占，先同步硬件采样率
@@ -142,7 +168,7 @@ bool AudioEngine::openAndPlay(const std::string& filepath) {
 #endif
 
     // 2. 打开硬件输出设备 (根据音频文件的真实采样率和声道动态协商)
-    if (!sink_->isOpen() || sink_->getActualSpec().sample_rate != current_spec_.sample_rate) {
+    if (!sink_->isOpen() || sink_->getActualSpec().sample_rate != current_spec_.sample_rate || sink_->getActualSpec().channels != current_spec_.channels) {
         sink_->close();
         if (!sink_->open(current_spec_, [this](float* output, size_t frame_count) {
                 onSinkDataNeeded(output, frame_count);
@@ -164,8 +190,9 @@ bool AudioEngine::openAndPlay(const std::string& filepath) {
     is_paused_.store(false, std::memory_order_release);
     is_decoding_.store(true, std::memory_order_release);
 
-    // 预缓冲：在声卡推流前先预解码填充环形缓冲区，彻底消除起播断流与沙沙杂音
-    constexpr size_t PREBUFFER_FRAMES = 8192;
+    // 预缓冲：在声卡推流前先预解码充足的数据填充环形缓冲区，彻底消除起播断流与沙沙杂音
+    // 预读 65536 帧 (~1.5 秒)，确保喂饱 sink_ 初始的硬件缓冲区后，环形缓冲区仍留有海量安全冗余
+    constexpr size_t PREBUFFER_FRAMES = 65536;
     std::vector<float> prebuf(PREBUFFER_FRAMES * current_spec_.channels);
     uint64_t pre_read = 0;
     {
@@ -178,10 +205,19 @@ bool AudioEngine::openAndPlay(const std::string& filepath) {
         ring_buffer_.write(prebuf.data(), pre_read * current_spec_.channels);
     }
 
-    sink_->start();
-
-    // 启动后台无阻塞异步解码线程
+    // 立即启动后台无阻塞异步解码线程
     decode_thread_ = std::jthread([this](std::stop_token st) { decodeWorker(st); });
+
+    // 硬件推流前等待环形缓冲区积累足够的水位 (至少 32768 帧或已至 EOF)
+    size_t safe_watermark = std::min(static_cast<size_t>(32768 * current_spec_.channels),
+                                     static_cast<size_t>(duration_sec_ * current_spec_.sample_rate * current_spec_.channels));
+    int wait_cycles = 0;
+    while (ring_buffer_.available_read() < safe_watermark && !is_eof_.load(std::memory_order_acquire) && wait_cycles < 30) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        wait_cycles++;
+    }
+
+    sink_->start();
 
     return true;
 }
@@ -239,6 +275,7 @@ void AudioEngine::stop() {
         seek_base_time_.store(0.0, std::memory_order_relaxed);
         duration_sec_ = 0.0;
         is_eof_.store(false, std::memory_order_relaxed);
+        eof_reported_.store(false, std::memory_order_relaxed);
         resetFade();
     }
 }
@@ -250,6 +287,12 @@ void AudioEngine::seek(double target_seconds) {
     double clamped = std::clamp(target_seconds, 0.0, duration_sec_);
     if (decoder_->seek(clamped)) {
         ring_buffer_.reset();
+        constexpr size_t SEEK_PREBUFFER = 32768;
+        std::vector<float> prebuf(SEEK_PREBUFFER * current_spec_.channels);
+        uint64_t pre_read = decoder_->readFrames(prebuf.data(), SEEK_PREBUFFER);
+        if (pre_read > 0) {
+            ring_buffer_.write(prebuf.data(), pre_read * current_spec_.channels);
+        }
         frames_consumed_by_sink_.store(0, std::memory_order_release);
         seek_base_time_.store(clamped, std::memory_order_release);
         is_eof_.store(false, std::memory_order_release);
@@ -666,13 +709,17 @@ bool AudioEngine::isEqEnabled() const {
 }
 
 void AudioEngine::setEqBands(const std::array<float, 10>& gains_db) {
-    std::lock_guard lock(eq_mutex_);
-    eq_gains_ = gains_db;
+    for (size_t i = 0; i < 10; ++i) {
+        eq_gains_[i].store(gains_db[i], std::memory_order_relaxed);
+    }
 }
 
 std::array<float, 10> AudioEngine::getEqBands() const {
-    std::lock_guard lock(eq_mutex_);
-    return eq_gains_;
+    std::array<float, 10> res{};
+    for (size_t i = 0; i < 10; ++i) {
+        res[i] = eq_gains_[i].load(std::memory_order_relaxed);
+    }
+    return res;
 }
 
 bool AudioEngine::isPlaying() const {
@@ -720,6 +767,14 @@ void AudioEngine::resetFade() {
 }
 
 void AudioEngine::setHardwareBufferSize(uint32_t frames) {
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+    // iPadOS 的“硬件缓冲深度”属于 AVAudioSession，而 AudioQueue 自身的
+    // 推流缓冲必须保持为 open() 时的分配尺寸。在线改写后者会让回调尺寸
+    // 与已分配内存/队列状态不一致，最终造成爆音或整个队列断粮。
+    if (HifiPadSetPreferredIOBufferFrames && HifiPadSetPreferredIOBufferFrames(frames)) {
+        return;
+    }
+#endif
     if (sink_) {
         sink_->setBufferSize(frames);
     }
@@ -765,12 +820,12 @@ void AudioEngine::setEofCallback(std::function<void()> callback) {
 }
 
 void AudioEngine::decodeWorker(std::stop_token stop_token) {
-    constexpr size_t CHUNK_FRAMES = 1024;
+    constexpr size_t CHUNK_FRAMES = 8192;
     std::vector<float> decode_buf(CHUNK_FRAMES * current_spec_.channels);
 
     while (!stop_token.stop_requested() && is_decoding_.load(std::memory_order_acquire)) {
-        // 如果无锁环形缓冲区剩余空间不足 2 个 Block，休眠 5 毫秒等待声卡消费，避免突发忙轮询
-        if (ring_buffer_.available_write() < (CHUNK_FRAMES * current_spec_.channels * 2)) {
+        // 如果无锁环形缓冲区剩余空间不足 1 个 Block，休眠 5 毫秒等待声卡消费，避免突发忙轮询
+        if (ring_buffer_.available_write() < (CHUNK_FRAMES * current_spec_.channels)) {
             std::this_thread::sleep_for(std::chrono::milliseconds(5));
             continue;
         }
@@ -792,7 +847,7 @@ void AudioEngine::decodeWorker(std::stop_token stop_token) {
                           << frames_consumed_by_sink_.load() << std::endl;
             }
             is_eof_.store(true, std::memory_order_release);
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
         }
     }
 }
@@ -889,11 +944,20 @@ void AudioEngine::onSinkDataNeeded(float* output, size_t frame_count) {
         fade_current_frame_.store(f_curr, std::memory_order_relaxed);
     }
 
-    // 播放完毕检测
+    // 强制峰值限幅保护 [-1.0f, 1.0f]，杜绝母带超零真实峰值 (True Peak > 0dBFS) 在 DAC/蓝牙转换时溢出爆音
+    if (!muted && !fade_out_done) {
+        for (size_t i = 0; i < samples_needed; ++i) {
+            output[i] = std::clamp(output[i], -1.0f, 1.0f);
+        }
+    }
+
+    // 播放完毕检测 (单曲仅触发一次 EOF 回调，防止高频重复调用)
     if (is_eof_.load(std::memory_order_acquire) && ring_buffer_.available_read() == 0) {
-        std::cout << "[AudioEngine] onSinkDataNeeded: EOF and buffer drained, triggering eof_callback" << std::endl;
-        if (eof_callback_) {
-            eof_callback_();
+        if (!eof_reported_.exchange(true, std::memory_order_acq_rel)) {
+            std::cout << "[AudioEngine] onSinkDataNeeded: EOF and buffer drained, triggering eof_callback" << std::endl;
+            if (eof_callback_) {
+                eof_callback_();
+            }
         }
     }
 }
@@ -941,33 +1005,22 @@ void AudioEngine::applyEqualizer(float* samples, size_t frame_count) {
     uint32_t channels = current_spec_.channels;
     if (channels == 0 || frame_count == 0) return;
 
-    std::array<float, 10> gains;
-    {
-        std::lock_guard lock(eq_mutex_);
-        gains = eq_gains_;
-    }
-
-    bool all_zero = true;
-    for (float g : gains) {
-        if (std::abs(g) > 0.05f) {
-            all_zero = false;
-            break;
-        }
-    }
-    if (all_zero) return;
-
     float sample_rate = (current_spec_.sample_rate > 0) ? static_cast<float>(current_spec_.sample_rate) : 44100.0f;
 
     BiquadCoeffs coeffs[10];
     bool active[10];
+    bool all_zero = true;
     for (size_t b = 0; b < 10; ++b) {
-        if (std::abs(gains[b]) < 0.05f) {
-            active[b] = false;
-        } else {
+        float g = eq_gains_[b].load(std::memory_order_relaxed);
+        if (std::abs(g) > 0.05f) {
+            all_zero = false;
             active[b] = true;
-            coeffs[b] = calculatePeakingCoeffs(EQ_FREQS[b], sample_rate, gains[b]);
+            coeffs[b] = calculatePeakingCoeffs(EQ_FREQS[b], sample_rate, g);
+        } else {
+            active[b] = false;
         }
     }
+    if (all_zero) return;
 
     static thread_local BiquadState eq_states[2][10]{};
 
@@ -1030,9 +1083,9 @@ static void fft256(float* re, float* im) {
 
 void AudioEngine::updateSpectrumAnalysis(const float* samples, size_t frame_count) {
     if (!samples || frame_count == 0 || isMuted()) {
-        std::lock_guard lock(spectrum_mutex_);
         for (auto& lvl : spectrum_levels_) {
-            lvl *= 0.85f;
+            float cur = lvl.load(std::memory_order_relaxed);
+            lvl.store(cur * 0.85f, std::memory_order_relaxed);
         }
         return;
     }
@@ -1084,14 +1137,13 @@ void AudioEngine::updateSpectrumAnalysis(const float* samples, size_t frame_coun
     // 真实声学音量正比联动：严格按实际音量大小与真实声学能量比例渲染高度，绝不虚高顶满
     float vol_factor = std::clamp(vol, 0.0f, 1.0f);
     if (vol_factor < 0.001f) {
-        std::lock_guard lock(spectrum_mutex_);
         for (auto& lvl : spectrum_levels_) {
-            lvl *= 0.85f;
+            float cur = lvl.load(std::memory_order_relaxed);
+            lvl.store(cur * 0.85f, std::memory_order_relaxed);
         }
         return;
     }
 
-    std::lock_guard lock(spectrum_mutex_);
     for (int b = 0; b < 12; ++b) {
         int b_start = band_bins[b][0];
         int b_end = band_bins[b][1];
@@ -1103,10 +1155,11 @@ void AudioEngine::updateSpectrumAnalysis(const float* samples, size_t frame_coun
         float target = std::clamp(avg_mag * band_weights[b] * 0.15f * vol_factor, 0.0f, 1.0f);
 
         // 动效弹道：快速起音 (Attack) + 平滑自然衰减 (Decay)
-        if (target > spectrum_levels_[b]) {
-            spectrum_levels_[b] = target;
+        float cur = spectrum_levels_[b].load(std::memory_order_relaxed);
+        if (target > cur) {
+            spectrum_levels_[b].store(target, std::memory_order_relaxed);
         } else {
-            spectrum_levels_[b] = spectrum_levels_[b] * 0.85f + target * 0.15f;
+            spectrum_levels_[b].store(cur * 0.85f + target * 0.15f, std::memory_order_relaxed);
         }
     }
 }
@@ -1119,10 +1172,9 @@ void AudioEngine::getSpectrumLevels(float* out_levels, size_t count) {
         return;
     }
 
-    std::lock_guard lock(spectrum_mutex_);
     size_t copy_cnt = std::min(count, spectrum_levels_.size());
     for (size_t i = 0; i < copy_cnt; ++i) {
-        out_levels[i] = spectrum_levels_[i];
+        out_levels[i] = spectrum_levels_[i].load(std::memory_order_relaxed);
     }
     for (size_t i = copy_cnt; i < count; ++i) {
         out_levels[i] = 0.0f;

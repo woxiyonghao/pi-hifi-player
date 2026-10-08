@@ -138,15 +138,14 @@ private:
     std::atomic<double> seek_base_time_{0.0};
 
     std::function<void()> eof_callback_;
+    std::atomic<bool> eof_reported_{false};
 
-    // 实时频谱分析状态
-    std::array<float, 12> spectrum_levels_{};
-    mutable std::mutex spectrum_mutex_;
+    // 实时频谱分析状态 (无锁原子阵列，彻底杜绝 CoreAudio 实时线程与 UI 线程锁竞争导致的爆音)
+    std::array<std::atomic<float>, 12> spectrum_levels_{};
 
-    // 10段图形均衡器状态
+    // 10段图形均衡器状态 (无锁原子阵列)
     std::atomic<bool> is_eq_enabled_{false};
-    std::array<float, 10> eq_gains_{};
-    mutable std::mutex eq_mutex_;
+    std::array<std::atomic<float>, 10> eq_gains_{};
 
     // 淡入淡出实时状态
     std::atomic<FadeState> fade_state_{FadeState::None};

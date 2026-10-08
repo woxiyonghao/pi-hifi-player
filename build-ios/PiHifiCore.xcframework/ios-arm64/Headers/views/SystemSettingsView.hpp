@@ -41,10 +41,18 @@ private:
     void loadSettings();
     void saveSettings();
 
+    enum class ConfirmAction {
+        None,
+        Reboot,
+        Shutdown
+    };
+
     // 内部模块卡片渲染闭包
     void renderAudioSection(ImDrawList* dl, float x0, float y0, float w);
     void renderHardwareSection(ImDrawList* dl, float x0, float y0, float w);
-    void renderPowerSection(ImDrawList* dl, float x0, float y0, float w);
+    float renderUpdateSection(ImDrawList* dl, float x0, float y0, float w);
+    float renderPowerSection(ImDrawList* dl, float x0, float y0, float w);
+    void renderPowerConfirmModal();
 
     static void applyHardwareBufferSize(int mode);
     static void applyFadeDuration(int mode);
@@ -62,8 +70,12 @@ private:
     int cpu_governor_ = 0;     // 0: Performance (纯音锁频), 1: Schedutil (动态平衡)
     float screen_brightness_ = 0.85f; // 10% ~ 100%
     int screen_timeout_mode_ = 0;     // 0: 从不, 1: 5分钟, 2: 15分钟, 3: 30分钟
-    int idle_fullscreen_mode_ = 0;    // 0: 15秒 (默认), 1: 30秒, 2: 1分钟, 3: 5分钟, 4: 永不
+    int idle_fullscreen_mode_ = 4;    // 0: 15秒, 1: 30秒, 2: 1分钟, 3: 5分钟, 4: 从不 (默认)
 
     NavigateTabCallback on_navigate_tab_;
     IdleFullscreenCallback on_idle_fullscreen_changed_;
+
+    ConfirmAction confirm_action_ = ConfirmAction::None;
+    std::string power_status_msg_;
+    float network_refresh_feedback_timer_ = 0.0f;
 };

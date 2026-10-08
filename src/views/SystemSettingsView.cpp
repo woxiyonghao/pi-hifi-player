@@ -1,5 +1,6 @@
 #include "views/SystemSettingsView.hpp"
 #include "public/UIConfig.hpp"
+#include "public/Platform.hpp"
 #include "public/Font.hpp"
 #include "widgets/GlassCardRenderer.hpp"
 #include "tools/MusicDatabase.hpp"
@@ -13,6 +14,9 @@
 #include <cstdio>
 #include <cstring>
 #include <string>
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
 
 SystemSettingsView::SystemSettingsView() {
     loadSettings();
@@ -182,17 +186,22 @@ void SystemSettingsView::render(float x, float y, float w, float h) {
         ImGui::SetCursorScreenPos(ImVec2(p_hw.x, p_hw.y + 182.0f));
         ImGui::Dummy(ImVec2(0.0f, 10.0f));
 
-        // 板块三：固件与在线更新 (OTA)
-        ImVec2 p_update = ImGui::GetCursorScreenPos();
-        float update_card_h = renderUpdateSection(child_dl, p_update.x, p_update.y, section_w);
-        ImGui::SetCursorScreenPos(ImVec2(p_update.x, p_update.y + update_card_h));
-        ImGui::Dummy(ImVec2(0.0f, 10.0f));
+        // 仅在非 iPad / 非 iOS 平台 (如树莓派/Linux) 呈现底层固件更新与系统维护网络调试面板
+        if (!Platform::isIPad() && !Platform::isIOS()) {
+            // 板块三：固件与在线更新 (OTA)
+            ImVec2 p_update = ImGui::GetCursorScreenPos();
+            float update_card_h = renderUpdateSection(child_dl, p_update.x, p_update.y, section_w);
+            ImGui::SetCursorScreenPos(ImVec2(p_update.x, p_update.y + update_card_h));
+            ImGui::Dummy(ImVec2(0.0f, 10.0f));
 
-        // 板块四：系统维护、网络调试与电源管控
-        ImVec2 p_power = ImGui::GetCursorScreenPos();
-        float power_card_h = renderPowerSection(child_dl, p_power.x, p_power.y, section_w);
-        ImGui::SetCursorScreenPos(ImVec2(p_power.x, p_power.y + power_card_h));
-        ImGui::Dummy(ImVec2(0.0f, 16.0f)); // 底部缓冲留白
+            // 板块四：系统维护、网络调试与电源管控
+            ImVec2 p_power = ImGui::GetCursorScreenPos();
+            float power_card_h = renderPowerSection(child_dl, p_power.x, p_power.y, section_w);
+            ImGui::SetCursorScreenPos(ImVec2(p_power.x, p_power.y + power_card_h));
+            ImGui::Dummy(ImVec2(0.0f, 16.0f)); // 底部缓冲留白
+        } else {
+            ImGui::Dummy(ImVec2(0.0f, 16.0f)); // 底部缓冲留白
+        }
     }
     ImGui::EndChild();
     ImGui::PopStyleColor(4);
@@ -815,11 +824,15 @@ void SystemSettingsView::renderPowerConfirmModal() {
             if (is_reboot) {
                 power_status_msg_ = "正在执行重启指令...";
                 confirm_action_ = ConfirmAction::None;
+#if !defined(TARGET_OS_IPHONE) || !TARGET_OS_IPHONE
                 system("sudo reboot || reboot &");
+#endif
             } else {
                 power_status_msg_ = "正在执行关机指令，请待绿灯熄灭后拔电...";
                 confirm_action_ = ConfirmAction::None;
+#if !defined(TARGET_OS_IPHONE) || !TARGET_OS_IPHONE
                 system("sudo poweroff || shutdown -h now &");
+#endif
             }
         }
         ImGui::PopStyleColor(3);

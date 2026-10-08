@@ -71,6 +71,7 @@ public:
      */
     virtual void setBufferSize(uint32_t samples) { (void)samples; }
     virtual uint32_t getBufferSize() const { return 1024; }
+    virtual std::string getDeviceName() const { return "默认硬件输出"; }
 };
 
 } // namespace audio_engine

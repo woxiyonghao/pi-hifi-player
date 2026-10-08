@@ -26,9 +26,11 @@ public:
     AudioFormatSpec getActualSpec() const override;
     void setBufferSize(uint32_t samples) override { buffer_size_samples_ = samples; }
     uint32_t getBufferSize() const override { return buffer_size_samples_; }
+    std::string getDeviceName() const override { return active_device_name_; }
 
 private:
     SDL_AudioDeviceID device_id_ = 0;
+    std::string active_device_name_ = "系统默认音频输出";
     AudioCallback callback_;
     AudioFormatSpec actual_spec_;
     std::atomic<bool> is_running_{false};

@@ -16,6 +16,10 @@ set(AUDIO_ENGINE_SOURCES
     src/sinks/AlsaAudioSink.cpp
 )
 
+if(APPLE)
+    list(APPEND AUDIO_ENGINE_SOURCES src/decoders/AppleAudioDecoder.cpp)
+endif()
+
 # 生成发烧音频引擎静态库
 add_library(audio_engine STATIC ${AUDIO_ENGINE_SOURCES})
 

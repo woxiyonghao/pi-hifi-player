@@ -100,6 +100,7 @@ if(APPLE)
         SQLite3::SQLite3
         ${SDL2_LIBRARIES}
         OpenGL::GL
+        "-framework CoreText"
     )
 
     # 9. macOS DMG 独立安装包一键打包 Target (cmake --build build --target dmg)

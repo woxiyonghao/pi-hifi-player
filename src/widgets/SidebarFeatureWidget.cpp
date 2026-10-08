@@ -22,8 +22,8 @@ SidebarFeatureWidget::SidebarFeatureWidget() {
         { SidebarTab::SystemSettings, "设置" }
     };
 
-    // WiFi 无线传歌仅在树莓派等无头/便携 Linux 部署环境下启用，macOS 上不予显示
-    if (Platform::isRaspberryPi()) {
+    // WiFi 无线传歌在树莓派与 iPad 移动端启用
+    if (Platform::isRaspberryPi() || Platform::isIPad()) {
         features_.push_back({ SidebarTab::WifiTransfer, "WiFi传歌" });
     }
 }

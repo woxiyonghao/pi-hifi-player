@@ -357,13 +357,18 @@ function uploadSingleFile(item) {
 } // namespace
 
 WifiTransferServer::WifiTransferServer() {
-    // 默认保存路径：优先使用 ~/Music，若无则使用应用统一配置路径
-    const char* home = std::getenv("HOME");
-    if (home && home[0] != '\0') {
-        std::filesystem::path p = std::filesystem::path(home) / "Music";
-        target_music_dir_ = p.string();
+    // 默认保存路径：优先使用应用统一配置路径 (如 iOS 沙盒 Documents 目录)，若无则使用 ~/Music
+    std::string app_music_dir = AppConfig::Path::getMusicDir();
+    if (!app_music_dir.empty()) {
+        target_music_dir_ = app_music_dir;
     } else {
-        target_music_dir_ = AppConfig::Path::getMusicDir();
+        const char* home = std::getenv("HOME");
+        if (home && home[0] != '\0') {
+            std::filesystem::path p = std::filesystem::path(home) / "Music";
+            target_music_dir_ = p.string();
+        } else {
+            target_music_dir_ = "/tmp/music";
+        }
     }
 }
 
@@ -384,6 +389,8 @@ bool WifiTransferServer::start(int port, const std::string& music_dir) {
     port_ = port;
     if (!music_dir.empty()) {
         target_music_dir_ = music_dir;
+    } else if (target_music_dir_.empty() || !AppConfig::Path::getMusicDir().empty()) {
+        target_music_dir_ = AppConfig::Path::getMusicDir();
     }
 
     // 确保目标音乐目录存在

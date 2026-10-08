@@ -1,6 +1,8 @@
 #pragma once
 
 #include "imgui.h"
+#include <cstdint>
+#include <cmath>
 
 // ==============================================================================
 // 全局 UI 视觉与样式配置中心 (UI Configuration Center)

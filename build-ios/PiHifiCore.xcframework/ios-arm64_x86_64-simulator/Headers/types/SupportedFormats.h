@@ -25,6 +25,11 @@ inline constexpr std::array SUPPORTED_FORMATS = {
     FormatDescriptor{".dsf", AudioFormat::DSD_DSF, "audio/x-dsf", true, true},
     FormatDescriptor{".dff", AudioFormat::DSD_DFF, "audio/x-dff", true, true},
     FormatDescriptor{".alac", AudioFormat::ALAC, "audio/alac", true, false},
+    FormatDescriptor{".m4a", AudioFormat::ALAC, "audio/mp4", true, false},
+    FormatDescriptor{".aac", AudioFormat::MP3, "audio/aac", false, false},
+    FormatDescriptor{".aiff", AudioFormat::WAV, "audio/aiff", true, false},
+    FormatDescriptor{".aif", AudioFormat::WAV, "audio/aiff", true, false},
+    FormatDescriptor{".caf", AudioFormat::WAV, "audio/x-caf", true, false},
     FormatDescriptor{".mp3", AudioFormat::MP3, "audio/mpeg", false, false}};
 
 namespace AudioFormatUtils {

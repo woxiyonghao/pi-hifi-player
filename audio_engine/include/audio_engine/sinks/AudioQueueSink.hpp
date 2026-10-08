@@ -32,13 +32,14 @@ private:
     static void outputCallbackThunk(void* inUserData, AudioQueueRef inAQ, AudioQueueBufferRef inBuffer);
 
     AudioQueueRef audio_queue_{nullptr};
-    static constexpr int kNumBuffers = 3;
+    static constexpr int kNumBuffers = 4;
     AudioQueueBufferRef buffers_[kNumBuffers]{nullptr};
 
     AudioFormatSpec actual_spec_{};
     AudioCallback callback_;
     std::atomic<bool> is_running_{false};
-    uint32_t buffer_size_samples_{1024};
+    bool is_stopped_{true};
+    uint32_t buffer_size_samples_{2048};
     double buffer_latency_sec_{0.0};
 };
 

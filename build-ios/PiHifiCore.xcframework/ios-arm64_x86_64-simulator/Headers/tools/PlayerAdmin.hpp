@@ -7,6 +7,7 @@
 #include <optional>
 #include <cstdint>
 #include <algorithm>
+#include <atomic>
 
 // ==============================================================================
 // 1. 播放引擎核心状态枚举
@@ -145,6 +146,7 @@ private:
     bool is_transitioning_ = false;
     double transition_elapsed_ = 0.0;
     std::optional<Track> pending_track_ = std::nullopt;
+    std::atomic<bool> eof_pending_{false};
 
     void switchTrack(const Track& track);
     void executeTrackSwitch(const Track& track);

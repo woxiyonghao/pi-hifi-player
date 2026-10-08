@@ -5,7 +5,7 @@
 #include "public/UIConfig.hpp"
 #include "public/Font.hpp"
 #include "widgets/GlassCardRenderer.hpp"
-#include "themes/ThemeManager.hpp"
+#include "public/Platform.hpp"
 #include <cmath>
 #include <cstdio>
 
@@ -109,7 +109,11 @@ void WifiTransferView::renderServerCard(ImDrawList* dl, float x0, float y0, floa
     if (Fonts::Regular) ImGui::PopFont();
 
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-    std::string env_str = "Wi-Fi: " + net.wifi_ssid + " · 存储: " + WifiTransferServer::getInstance().getTargetDir();
+    std::string display_dir = WifiTransferServer::getInstance().getTargetDir();
+    if (Platform::isIOS()) {
+        display_dir = "App 文件 / Documents / music";
+    }
+    std::string env_str = "Wi-Fi: " + net.wifi_ssid + " · 存储: " + display_dir;
     dl->AddText(ImVec2(x0 + 16.0f, y0 + 68.0f), UIConfig::Color::TextMuted, env_str.c_str());
     if (Fonts::Small) ImGui::PopFont();
 
