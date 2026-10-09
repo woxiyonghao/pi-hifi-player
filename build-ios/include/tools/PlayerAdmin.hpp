@@ -66,9 +66,14 @@ public:
     // 获取当前播放队列
     const std::vector<Track>& getPlaybackQueue() const { return playback_queue_; }
     size_t getCurrentTrackIndex() const { return current_track_index_; }
+    void playQueueIndex(size_t index);
+    void addToQueue(const Track& track);
+    void removeTrackFromQueue(size_t index);
+    void clearQueue();
     // 切歌控制 (根据当前的 PlayMode 决定下一首逻辑)
     void next();
     void previous();
+    void replayCurrentTrack();
     // -------------------------------------------------------------------------
     // [时间与进度控制]
     // -------------------------------------------------------------------------

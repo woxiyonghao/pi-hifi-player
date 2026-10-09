@@ -12,8 +12,88 @@
 #include <cstdio>
 #include <string>
 
+static DACSettingView* s_dac_instance = nullptr;
+
+DACSettingView* DACSettingView::getInstance() {
+    return s_dac_instance;
+}
+
 DACSettingView::DACSettingView() {
+    s_dac_instance = this;
     loadSettings();
+}
+
+DACSettingView::~DACSettingView() {
+    if (s_dac_instance == this) {
+        s_dac_instance = nullptr;
+    }
+}
+
+int DACSettingView::getParam(const std::string& key) const {
+    if (key == "selected_chip") return selected_chip_;
+    if (key == "apple_exclusive") return apple_exclusive_mode_;
+    if (key == "apple_sample_rate") return apple_sample_rate_;
+    if (key == "apple_drive") return apple_headphone_drive_;
+    if (key == "apple_bit_depth") return apple_bit_depth_;
+    if (key == "pcm_filter") return pcm_filter_mode_;
+    if (key == "dsd_bypass") return dsd_bypass_mode_;
+    if (key == "dsd_cutoff") return dsd_filter_cutoff_;
+    if (key == "pcm_dpll") return pcm_dpll_band_;
+    if (key == "dsd_dpll") return dsd_dpll_band_;
+    if (key == "thd_comp") return thd_comp_mode_;
+    if (key == "mono_mode") return channel_mode_;
+    if (key == "output_mode") return output_level_mode_;
+    if (key == "phase") return phase_invert_;
+    if (key == "akm_filter") return akm_filter_mode_;
+    if (key == "akm_color") return akm_sound_color_;
+    if (key == "akm_dsd") return akm_dsd_mode_;
+    if (key == "akm_exdf") return akm_exdf_mode_;
+    if (key == "cs_filter") return cs_filter_mode_;
+    if (key == "cs_dsd") return cs_dsd_mode_;
+    if (key == "cs_drive") return cs_drive_mode_;
+    if (key == "cs_impedance") return cs_impedance_mode_;
+    if (key == "r2r_mode") return r2r_mode_;
+    if (key == "r2r_dsd") return r2r_dsd_mode_;
+    if (key == "r2r_clock") return r2r_clock_mode_;
+    if (key == "r2r_phase") return r2r_phase_mode_;
+    if (key == "rohm_filter") return rohm_filter_mode_;
+    if (key == "rohm_clock") return rohm_modulator_clock_;
+    if (key == "rohm_dsd") return rohm_dsd_path_;
+    return 0;
+}
+
+void DACSettingView::setParam(const std::string& key, int val) {
+    if (key == "selected_chip") { setSelectedChip(val); return; }
+    if (key == "apple_exclusive") apple_exclusive_mode_ = val;
+    else if (key == "apple_sample_rate") apple_sample_rate_ = val;
+    else if (key == "apple_drive") apple_headphone_drive_ = val;
+    else if (key == "apple_bit_depth") apple_bit_depth_ = val;
+    else if (key == "pcm_filter") pcm_filter_mode_ = val;
+    else if (key == "dsd_bypass") dsd_bypass_mode_ = val;
+    else if (key == "dsd_cutoff") dsd_filter_cutoff_ = val;
+    else if (key == "pcm_dpll") pcm_dpll_band_ = val;
+    else if (key == "dsd_dpll") dsd_dpll_band_ = val;
+    else if (key == "thd_comp") thd_comp_mode_ = val;
+    else if (key == "mono_mode") channel_mode_ = val;
+    else if (key == "output_mode") output_level_mode_ = val;
+    else if (key == "phase") phase_invert_ = val;
+    else if (key == "akm_filter") akm_filter_mode_ = val;
+    else if (key == "akm_color") akm_sound_color_ = val;
+    else if (key == "akm_dsd") akm_dsd_mode_ = val;
+    else if (key == "akm_exdf") akm_exdf_mode_ = val;
+    else if (key == "cs_filter") cs_filter_mode_ = val;
+    else if (key == "cs_dsd") cs_dsd_mode_ = val;
+    else if (key == "cs_drive") cs_drive_mode_ = val;
+    else if (key == "cs_impedance") cs_impedance_mode_ = val;
+    else if (key == "r2r_mode") r2r_mode_ = val;
+    else if (key == "r2r_dsd") r2r_dsd_mode_ = val;
+    else if (key == "r2r_clock") r2r_clock_mode_ = val;
+    else if (key == "r2r_phase") r2r_phase_mode_ = val;
+    else if (key == "rohm_filter") rohm_filter_mode_ = val;
+    else if (key == "rohm_clock") rohm_modulator_clock_ = val;
+    else if (key == "rohm_dsd") rohm_dsd_path_ = val;
+
+    saveSettings();
 }
 
 std::string DACSettingView::getCurrentChipName() const {

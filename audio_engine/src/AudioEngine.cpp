@@ -338,6 +338,7 @@ void AudioEngine::seek(double target_seconds) {
         frames_consumed_by_sink_.store(0, std::memory_order_release);
         seek_base_time_.store(clamped, std::memory_order_release);
         is_eof_.store(false, std::memory_order_release);
+        eof_reported_.store(false, std::memory_order_release);
     }
 }
 

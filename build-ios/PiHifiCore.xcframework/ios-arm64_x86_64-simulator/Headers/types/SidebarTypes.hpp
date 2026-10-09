@@ -13,7 +13,8 @@ enum class SidebarTab : uint8_t {
     AllMusic,       // 全部曲库 (播放列表根视图)
     CustomPlaylist, // 自定义实体歌单
     Terminal,       // Linux 终端控制台
-    WifiTransfer    // WiFi 局域网无线传歌
+    WifiTransfer,   // WiFi 局域网无线传歌
+    WebService      // Web 远程遥控服务 (WebSocket)
 };
 
 // 通用指示器目标坐标 (供父容器绘制发光滑动胶囊)
@@ -32,6 +33,7 @@ enum class NavIcon : uint8_t {
     Theme,          // 调色板 (主题)
     System,         // 齿轮滑块 (系统)
     WifiTransfer,   // 无线信号与音符 (WiFi传歌)
+    WebService,     // 网页与遥控信号 (Web服务)
     Music,          // 音符 (所有音乐)
     Playlist,       // 列表横线 (播放列表)
     Add,            // 加号 (添加播放列表)

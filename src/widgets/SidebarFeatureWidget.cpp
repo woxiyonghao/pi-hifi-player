@@ -19,13 +19,12 @@ SidebarFeatureWidget::SidebarFeatureWidget() {
         { SidebarTab::MSEBTuning,     "调音魔棒" },
         { SidebarTab::DACSettings,    "DAC" },
         { SidebarTab::ThemeSettings,  "主题" },
-        { SidebarTab::SystemSettings, "设置" }
+        { SidebarTab::SystemSettings, "设置" },
+        { SidebarTab::WebService,     "Web服务" }
     };
 
-    // WiFi 无线传歌在树莓派与 iPad 移动端启用
-    if (Platform::isRaspberryPi() || Platform::isIPad()) {
-        features_.push_back({ SidebarTab::WifiTransfer, "WiFi传歌" });
-    }
+    // 全平台开放核心发烧网络中枢 (包含 Mac、Windows、树莓派、iPad、iPhone、Android)
+    features_.push_back({ SidebarTab::WifiTransfer, "WiFi传歌" });
 }
 
 void SidebarFeatureWidget::drawFeatureIcon(ImDrawList* dl, ImVec2 center, SidebarTab tab, ImU32 color) {
@@ -97,6 +96,16 @@ void SidebarFeatureWidget::drawFeatureIcon(ImDrawList* dl, ImVec2 center, Sideba
             dl->PathStroke(color, 0, 1.4f);
             dl->PathArcTo(origin, 8.0f, -kPi * 0.75f, -kPi * 0.25f, 16);
             dl->PathStroke(color, 0, 1.5f);
+            break;
+        }
+        case SidebarTab::WebService: {
+            // Web远程遥控：智能显示器轮廓 + 顶部栏 + 屏幕内播放小三角
+            dl->AddRect(ImVec2(center.x - 6.5f, center.y - 5.5f), ImVec2(center.x + 6.5f, center.y + 3.5f), color, 2.0f, 0, 1.3f);
+            dl->AddLine(ImVec2(center.x - 6.5f, center.y - 2.5f), ImVec2(center.x + 6.5f, center.y - 2.5f), color, 1.0f);
+            // 播放三角
+            dl->AddTriangleFilled(ImVec2(center.x - 1.2f, center.y - 0.5f), ImVec2(center.x - 1.2f, center.y + 2.0f), ImVec2(center.x + 1.8f, center.y + 0.7f), color);
+            // 底座
+            dl->AddLine(ImVec2(center.x - 2.5f, center.y + 5.5f), ImVec2(center.x + 2.5f, center.y + 5.5f), color, 1.3f);
             break;
         }
         default:

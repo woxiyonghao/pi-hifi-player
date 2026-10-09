@@ -10,6 +10,7 @@
 #include "views/MagicTuningView.hpp"
 #include "views/TerminalView.hpp"
 #include "views/WifiTransferView.hpp"
+#include "views/WebServiceView.hpp"
 #include "imgui.h"
 #include "public/UIConfig.hpp"
 #include "types/MusicModel.hpp"
@@ -62,6 +63,7 @@ class MainStageView {
     CustomPlaylistView custom_playlist_view_;
     TerminalView terminal_view_;
     WifiTransferView wifi_transfer_view_;
+    WebServiceView web_service_view_;
 
     NavigateTabCallback on_navigate_tab_;
     SelectPlaylistCallback on_select_playlist_;

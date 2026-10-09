@@ -86,6 +86,7 @@ target_include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include/types
     ${CMAKE_CURRENT_SOURCE_DIR}/include/views
     ${CMAKE_CURRENT_SOURCE_DIR}/include/tools
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/services
     ${CMAKE_CURRENT_SOURCE_DIR}/include/themes
     ${CMAKE_CURRENT_SOURCE_DIR}/include/widgets
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/imgui

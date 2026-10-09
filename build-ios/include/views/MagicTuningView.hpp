@@ -22,9 +22,10 @@ public:
     };
 
     static const std::array<ParamDef, NUM_PARAMS>& getParamDefs();
+    static MagicTuningView* getInstance();
 
     MagicTuningView();
-    ~MagicTuningView() = default;
+    ~MagicTuningView();
 
     void render(float x, float y, float w, float h);
 
@@ -33,6 +34,7 @@ public:
 
     void setParamValue(size_t index, float val);
     float getParamValue(size_t index) const;
+    const std::array<float, NUM_PARAMS>& getParams() const { return params_; }
 
     void resetAll();
     void resetParam(size_t index);

@@ -5,6 +5,7 @@
 #include "tools/MusicDatabase.hpp"
 #include "tools/MusicScanManager.hpp"
 #include "themes/ThemeManager.hpp"
+#include "services/WebService.hpp"
 #include <iostream>
 #include <cmath>
 #include <algorithm>
@@ -267,6 +268,12 @@ void Application::initData() {
 
     // 初始化同步 DAC 硬件连接状态与当前芯片名
     sidebar_.setDacConnected(main_stage_.getDacView().isDacConnected(), main_stage_.getDacView().getCurrentChipName());
+
+    // 如果用户曾开启过 Web 远程控制服务，启动时自动恢复
+    std::string auto_start = MusicDatabase::getInstance().getSetting("setting_web_service_auto_start", "0");
+    if (auto_start == "1") {
+        WebService::getInstance().start(8088);
+    }
 }
 
 void Application::resetIdle() {

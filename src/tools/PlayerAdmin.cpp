@@ -165,6 +165,59 @@ void PlayerAdmin::playPlaylist(const Playlist& playlist, size_t start_index) {
     playTracks(playlist.getTracks(), start_index);
 }
 
+void PlayerAdmin::playQueueIndex(size_t index) {
+    if (index < playback_queue_.size()) {
+        current_track_index_ = index;
+        is_transitioning_ = false;
+        pending_track_ = std::nullopt;
+        executeTrackSwitch(playback_queue_[index]);
+    }
+}
+
+void PlayerAdmin::addToQueue(const Track& track) {
+    playback_queue_.push_back(track);
+    if (state_ == PlaybackState::Idle && playback_queue_.size() == 1) {
+        current_track_index_ = 0;
+        playTrack(track);
+    }
+}
+
+void PlayerAdmin::removeTrackFromQueue(size_t index) {
+    if (index >= playback_queue_.size()) return;
+    bool was_current = (index == current_track_index_);
+    playback_queue_.erase(playback_queue_.begin() + index);
+    if (playback_queue_.empty()) {
+        stop();
+    } else if (was_current) {
+        if (current_track_index_ >= playback_queue_.size()) {
+            current_track_index_ = 0;
+        }
+        playTrack(playback_queue_[current_track_index_]);
+    } else if (index < current_track_index_) {
+        current_track_index_--;
+    }
+}
+
+void PlayerAdmin::clearQueue() {
+    playback_queue_.clear();
+    current_track_index_ = 0;
+    stop();
+}
+
+void PlayerAdmin::replayCurrentTrack() {
+    if (!current_track_.has_value()) {
+        if (!playback_queue_.empty() && current_track_index_ < playback_queue_.size()) {
+            current_track_ = playback_queue_[current_track_index_];
+        } else {
+            return;
+        }
+    }
+    is_transitioning_ = false;
+    pending_track_ = std::nullopt;
+    current_time_sec_ = 0.0;
+    executeTrackSwitch(current_track_.value());
+}
+
 void PlayerAdmin::next() {
     std::cout << "[PlayerAdmin] next() called! queue_size=" << playback_queue_.size()
               << " cur_idx=" << current_track_index_
@@ -174,21 +227,18 @@ void PlayerAdmin::next() {
     }
 
     const size_t total_tracks = playback_queue_.size();
-    if (total_tracks == 1) {
-        std::cout << "[PlayerAdmin] only 1 track in queue, rewinding to 0.0" << std::endl;
-        seek(0.0);
-        play();
-        return;
-    }
 
     switch (play_mode_) {
         case PlayMode::LoopSingle: {
-            // 单曲循环：回到本首开头重播
-            seek(0.0);
-            play();
+            // 单曲循环：无论队列有几首，播毕均回到本首开头重播
+            replayCurrentTrack();
             return;
         }
         case PlayMode::Shuffle: {
+            if (total_tracks == 1) {
+                replayCurrentTrack();
+                return;
+            }
             // 随机播放：随机选取一首不同曲目
             size_t rand_idx = current_track_index_;
             while (rand_idx == current_track_index_) {
@@ -209,6 +259,10 @@ void PlayerAdmin::next() {
         }
         case PlayMode::LoopList:
         default: {
+            if (total_tracks == 1) {
+                replayCurrentTrack();
+                return;
+            }
             // 列表循环：取模回绕到首曲
             current_track_index_ = (current_track_index_ + 1) % total_tracks;
             break;
@@ -231,8 +285,7 @@ void PlayerAdmin::previous() {
 
     const size_t total_tracks = playback_queue_.size();
     if (total_tracks == 1) {
-        seek(0.0);
-        play();
+        replayCurrentTrack();
         return;
     }
 
@@ -243,7 +296,11 @@ void PlayerAdmin::previous() {
         current_track_index_--;
     }
 
-    playTrack(playback_queue_[current_track_index_]);
+    if (current_track_.has_value() && current_track_->id == playback_queue_[current_track_index_].id) {
+        replayCurrentTrack();
+    } else {
+        playTrack(playback_queue_[current_track_index_]);
+    }
 }
 
 // ==============================================================================

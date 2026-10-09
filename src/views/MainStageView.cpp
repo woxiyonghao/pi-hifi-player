@@ -128,6 +128,9 @@ void MainStageView::render(SidebarTab current_tab,
             case SidebarTab::WifiTransfer:
                 wifi_transfer_view_.render(stage_x, stage_y, stage_w, stage_h);
                 break;
+            case SidebarTab::WebService:
+                web_service_view_.render(stage_x, stage_y, stage_w, stage_h);
+                break;
         }
     }
     ImGui::End();

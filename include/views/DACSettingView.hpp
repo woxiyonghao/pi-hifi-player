@@ -15,8 +15,10 @@ class DACSettingView {
 public:
     using OnDacChangedCallback = std::function<void(DACType, const std::string&)>;
 
+    static DACSettingView* getInstance();
+
     DACSettingView();
-    ~DACSettingView() = default;
+    ~DACSettingView();
 
     void render(float x, float y, float w, float h);
 
@@ -29,6 +31,9 @@ public:
 
     void setSelectedChip(int index);
     void setCurrentDacType(DACType type) { setSelectedChip(static_cast<int>(type)); }
+
+    int getParam(const std::string& key) const;
+    void setParam(const std::string& key, int val);
 
 private:
     void loadSettings();

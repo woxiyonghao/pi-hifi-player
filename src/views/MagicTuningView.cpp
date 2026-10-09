@@ -27,8 +27,21 @@ const std::array<MagicTuningView::ParamDef, MagicTuningView::NUM_PARAMS>& MagicT
     return kDefs;
 }
 
+static MagicTuningView* s_magic_instance = nullptr;
+
+MagicTuningView* MagicTuningView::getInstance() {
+    return s_magic_instance;
+}
+
 MagicTuningView::MagicTuningView() {
+    s_magic_instance = this;
     loadConfig();
+}
+
+MagicTuningView::~MagicTuningView() {
+    if (s_magic_instance == this) {
+        s_magic_instance = nullptr;
+    }
 }
 
 void MagicTuningView::setEnabled(bool enabled) {
