@@ -22,37 +22,55 @@ void HifiPhoneRenderer::render(float screen_w, float screen_h) {
         bg_dl->AddRectFilled(ImVec2(0, 0), ImVec2(screen_w, screen_h), IM_COL32(8, 10, 14, 255));
     }
 
-    // 全屏 Now Playing 沉浸大页优先渲染
-    if (show_now_playing_) {
-        renderNowPlayingOverlay(screen_w, screen_h);
-        return;
+    ImGui::SetNextWindowPos(ImVec2(0, 0));
+    ImGui::SetNextWindowSize(ImVec2(screen_w, screen_h));
+    ImGuiWindowFlags root_flags = ImGuiWindowFlags_NoTitleBar |
+                                 ImGuiWindowFlags_NoResize |
+                                 ImGuiWindowFlags_NoMove |
+                                 ImGuiWindowFlags_NoScrollbar |
+                                 ImGuiWindowFlags_NoScrollWithMouse |
+                                 ImGuiWindowFlags_NoCollapse |
+                                 ImGuiWindowFlags_NoBackground |
+                                 ImGuiWindowFlags_NoSavedSettings |
+                                 ImGuiWindowFlags_NoBringToFrontOnFocus;
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+
+    if (ImGui::Begin("##HifiPhoneMasterRootWindow", nullptr, root_flags)) {
+        // 全屏 Now Playing 沉浸大页优先渲染
+        if (show_now_playing_) {
+            renderNowPlayingOverlay(screen_w, screen_h);
+        } else {
+            // 适配 iPhone 常见安全区域 (顶部刘海/灵动岛约 44pt，底部 Home Bar 约 34pt)
+            float top_inset = (screen_h > 700.0f) ? 44.0f : 20.0f;
+            float bottom_inset = (screen_h > 700.0f) ? 34.0f : 10.0f;
+
+            // 布局垂直切分：
+            // 1. Header (44pt)
+            float header_h = 44.0f;
+            renderHeader(screen_w, top_inset);
+
+            // 2. 底部 TabBar (50pt)
+            float tabbar_h = 50.0f;
+            float tabbar_y = screen_h - tabbar_h - bottom_inset;
+
+            // 3. 常驻 Mini Player (54pt，紧贴在 TabBar 上方)
+            float mini_h = 54.0f;
+            float mini_y = tabbar_y - mini_h - 8.0f;
+            renderMiniPlayer(screen_w, mini_y);
+            renderBottomTabBar(screen_w, tabbar_y, tabbar_h);
+
+            // 4. 中间主内容区 (从 Header 下方到 Mini Player 上方)
+            float content_y = top_inset + header_h + 6.0f;
+            float content_h = mini_y - content_y - 6.0f;
+            if (content_h > 100.0f) {
+                renderMainContent(screen_w, content_y, content_h);
+            }
+        }
     }
-
-    // 适配 iPhone 常见安全区域 (顶部刘海/灵动岛约 44pt，底部 Home Bar 约 34pt)
-    float top_inset = (screen_h > 700.0f) ? 44.0f : 20.0f;
-    float bottom_inset = (screen_h > 700.0f) ? 34.0f : 10.0f;
-
-    // 布局垂直切分：
-    // 1. Header (44pt)
-    float header_h = 44.0f;
-    renderHeader(screen_w, top_inset);
-
-    // 2. 底部 TabBar (50pt)
-    float tabbar_h = 50.0f;
-    float tabbar_y = screen_h - tabbar_h - bottom_inset;
-
-    // 3. 常驻 Mini Player (54pt，紧贴在 TabBar 上方)
-    float mini_h = 54.0f;
-    float mini_y = tabbar_y - mini_h - 8.0f;
-    renderMiniPlayer(screen_w, mini_y);
-    renderBottomTabBar(screen_w, tabbar_y, tabbar_h);
-
-    // 4. 中间主内容区 (从 Header 下方到 Mini Player 上方)
-    float content_y = top_inset + header_h + 6.0f;
-    float content_h = mini_y - content_y - 6.0f;
-    if (content_h > 100.0f) {
-        renderMainContent(screen_w, content_y, content_h);
-    }
+    ImGui::End();
+    ImGui::PopStyleVar(2);
 }
 
 void HifiPhoneRenderer::renderHeader(float screen_w, float top_inset) {

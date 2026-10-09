@@ -85,6 +85,7 @@
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
         ImGuiIO& io = ImGui::GetIO();
+        io.IniFilename = nullptr; // 移动端禁用 ini 窗口位置缓存，防止出现 Debug 浮窗
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
         ImGui::StyleColorsDark();
 
@@ -92,6 +93,7 @@
         ImGui_ImplMetal_Init(self.device);
     } else {
         ImGuiIO& io = ImGui::GetIO();
+        io.IniFilename = nullptr;
         if (io.BackendRendererUserData == nullptr) {
             ImGui_ImplMetal_Init(self.device);
         }
@@ -127,10 +129,12 @@
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
-    if (_currentMode == 1 && @available(iOS 16.0, *)) {
-        UIWindowSceneGeometryPreferencesIOS *geometryPreferences = [[UIWindowSceneGeometryPreferencesIOS alloc] initWithInterfaceOrientations:UIInterfaceOrientationMaskLandscape];
-        [self.view.window.windowScene requestGeometryUpdateWithPreferences:geometryPreferences errorHandler:nil];
-        [self setNeedsUpdateOfSupportedInterfaceOrientations];
+    if (_currentMode == 1) {
+        if (@available(iOS 16.0, *)) {
+            UIWindowSceneGeometryPreferencesIOS *geometryPreferences = [[UIWindowSceneGeometryPreferencesIOS alloc] initWithInterfaceOrientations:UIInterfaceOrientationMaskLandscape];
+            [self.view.window.windowScene requestGeometryUpdateWithPreferences:geometryPreferences errorHandler:nil];
+            [self setNeedsUpdateOfSupportedInterfaceOrientations];
+        }
     }
 }
 
@@ -247,115 +251,149 @@
 #pragma mark - 内部 ImGui 视图渲染
 
 - (void)renderRoleSelectionModal:(float)screen_w height:(float)screen_h {
-    ImDrawList* dl = ImGui::GetBackgroundDrawList();
-    if (!dl) return;
+    ImGui::SetNextWindowPos(ImVec2(0, 0));
+    ImGui::SetNextWindowSize(ImVec2(screen_w, screen_h));
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar |
+                             ImGuiWindowFlags_NoResize |
+                             ImGuiWindowFlags_NoMove |
+                             ImGuiWindowFlags_NoScrollbar |
+                             ImGuiWindowFlags_NoCollapse |
+                             ImGuiWindowFlags_NoBackground |
+                             ImGuiWindowFlags_NoSavedSettings |
+                             ImGuiWindowFlags_NoBringToFrontOnFocus;
 
-    // 磨砂全屏暗色遮罩
-    dl->AddRectFilled(ImVec2(0, 0), ImVec2(screen_w, screen_h), IM_COL32(0, 0, 0, 200));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
 
-    float card_w = std::min(screen_w - 40.0f, 420.0f);
-    float card_h = std::min(screen_h - 40.0f, 380.0f);
-    float card_x0 = (screen_w - card_w) * 0.5f;
-    float card_y0 = (screen_h - card_h) * 0.5f;
-    ImVec2 c_min(card_x0, card_y0);
-    ImVec2 c_max(card_x0 + card_w, card_y0 + card_h);
+    if (ImGui::Begin("##PhoneRoleSelectionModalRoot", nullptr, flags)) {
+        ImDrawList* dl = ImGui::GetWindowDrawList();
 
-    GlassCardRenderer::drawCard(dl, c_min, c_max, 16.0f, "role_modal");
+        // 磨砂全屏暗色遮罩
+        dl->AddRectFilled(ImVec2(0, 0), ImVec2(screen_w, screen_h), IM_COL32(0, 0, 0, 200));
 
-    // 标题与副标题
-    if (Fonts::Large) ImGui::PushFont(Fonts::Large);
-    ImVec2 t_sz = ImGui::CalcTextSize("PiHiEnd 发烧音频中枢");
-    dl->AddText(ImVec2(card_x0 + (card_w - t_sz.x) * 0.5f, card_y0 + 24.0f),
-                UIConfig::Color::TextActive, "PiHiEnd 发烧音频中枢");
-    if (Fonts::Large) ImGui::PopFont();
+        float card_w = std::min(screen_w - 40.0f, 420.0f);
+        float card_h = std::min(screen_h - 40.0f, 380.0f);
+        float card_x0 = (screen_w - card_w) * 0.5f;
+        float card_y0 = (screen_h - card_h) * 0.5f;
+        ImVec2 c_min(card_x0, card_y0);
+        ImVec2 c_max(card_x0 + card_w, card_y0 + card_h);
 
-    if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-    ImVec2 s_sz = ImGui::CalcTextSize("请为当前设备选择运行形态 (后续可在设置中随时切换)");
-    dl->AddText(ImVec2(card_x0 + (card_w - s_sz.x) * 0.5f, card_y0 + 60.0f),
-                UIConfig::Color::TextMuted, "请为当前设备选择运行形态 (后续可在设置中随时切换)");
-    if (Fonts::Small) ImGui::PopFont();
+        GlassCardRenderer::drawCard(dl, c_min, c_max, 16.0f, "role_modal");
 
-    // 选项 1：数播模式卡片
-    float btn_w = card_w - 40.0f;
-    float btn_h = 100.0f;
-    float btn1_y = card_y0 + 95.0f;
-    ImVec2 b1_min(card_x0 + 20.0f, btn1_y);
-    ImVec2 b1_max(card_x0 + 20.0f + btn_w, btn1_y + btn_h);
+        // 标题与副标题
+        if (Fonts::Large) ImGui::PushFont(Fonts::Large);
+        ImVec2 t_sz = ImGui::CalcTextSize("PiHiEnd 发烧音频中枢");
+        dl->AddText(ImVec2(card_x0 + (card_w - t_sz.x) * 0.5f, card_y0 + 24.0f),
+                    UIConfig::Color::TextActive, "PiHiEnd 发烧音频中枢");
+        if (Fonts::Large) ImGui::PopFont();
 
-    ImGui::SetCursorScreenPos(b1_min);
-    if (ImGui::InvisibleButton("##SelectStreamerRoleBtn", ImVec2(btn_w, btn_h))) {
-        [self switchToMode:1];
+        if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+        ImVec2 s_sz = ImGui::CalcTextSize("请为当前设备选择运行形态 (后续可在设置中随时切换)");
+        dl->AddText(ImVec2(card_x0 + (card_w - s_sz.x) * 0.5f, card_y0 + 60.0f),
+                    UIConfig::Color::TextMuted, "请为当前设备选择运行形态 (后续可在设置中随时切换)");
+        if (Fonts::Small) ImGui::PopFont();
+
+        // 选项 1：数播模式卡片
+        float btn_w = card_w - 40.0f;
+        float btn_h = 100.0f;
+        float btn1_y = card_y0 + 95.0f;
+        ImVec2 b1_min(card_x0 + 20.0f, btn1_y);
+        ImVec2 b1_max(card_x0 + 20.0f + btn_w, btn1_y + btn_h);
+
+        ImGui::SetCursorScreenPos(b1_min);
+        if (ImGui::InvisibleButton("##SelectStreamerRoleBtn", ImVec2(btn_w, btn_h))) {
+            [self switchToMode:1];
+        }
+        bool hov1 = ImGui::IsItemHovered();
+        ImU32 b1_bg = hov1 ? IM_COL32(250, 45, 72, 60) : IM_COL32(255, 255, 255, 18);
+        ImU32 b1_bd = hov1 ? UIConfig::Color::Accent : UIConfig::Color::GlassBorder;
+        dl->AddRectFilled(b1_min, b1_max, b1_bg, 12.0f);
+        dl->AddRect(b1_min, b1_max, b1_bd, 12.0f, 0, 1.2f);
+
+        if (Fonts::Medium) ImGui::PushFont(Fonts::Medium);
+        dl->AddText(ImVec2(b1_min.x + 16.0f, b1_min.y + 16.0f), UIConfig::Color::TextActive, "发烧数播模式 (Streamer)");
+        if (Fonts::Medium) ImGui::PopFont();
+
+        if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+        dl->AddText(ImVec2(b1_min.x + 16.0f, b1_min.y + 44.0f), UIConfig::Color::TextNormal,
+                    "耳放解码直连 · 强制横屏 · 绚丽发烧表头 · 自动开启Web遥控");
+        dl->AddText(ImVec2(b1_min.x + 16.0f, b1_min.y + 66.0f), UIConfig::Color::TextMuted,
+                    "适合将旧手机放置在音响架或桌面当独立转盘使用");
+        if (Fonts::Small) ImGui::PopFont();
+
+        // 选项 2：便携随身主端模式卡片
+        float btn2_y = btn1_y + btn_h + 16.0f;
+        ImVec2 b2_min(card_x0 + 20.0f, btn2_y);
+        ImVec2 b2_max(card_x0 + 20.0f + btn_w, btn2_y + btn_h);
+
+        ImGui::SetCursorScreenPos(b2_min);
+        if (ImGui::InvisibleButton("##SelectPlayerRoleBtn", ImVec2(btn_w, btn_h))) {
+            [self switchToMode:2];
+        }
+        bool hov2 = ImGui::IsItemHovered();
+        ImU32 b2_bg = hov2 ? IM_COL32(250, 45, 72, 60) : IM_COL32(255, 255, 255, 18);
+        ImU32 b2_bd = hov2 ? UIConfig::Color::Accent : UIConfig::Color::GlassBorder;
+        dl->AddRectFilled(b2_min, b2_max, b2_bg, 12.0f);
+        dl->AddRect(b2_min, b2_max, b2_bd, 12.0f, 0, 1.2f);
+
+        if (Fonts::Medium) ImGui::PushFont(Fonts::Medium);
+        dl->AddText(ImVec2(b2_min.x + 16.0f, b2_min.y + 16.0f), UIConfig::Color::TextActive, "便携主端模式 (Player)");
+        if (Fonts::Medium) ImGui::PopFont();
+
+        if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+        dl->AddText(ImVec2(b2_min.x + 16.0f, b2_min.y + 44.0f), UIConfig::Color::TextNormal,
+                    "单手竖屏握持 · 随身曲库 · 随身10段EQ & 魔棒微调");
+        dl->AddText(ImVec2(b2_min.x + 16.0f, b2_min.y + 66.0f), UIConfig::Color::TextMuted,
+                    "适合日常主力手机随时随地高保真聆听");
+        if (Fonts::Small) ImGui::PopFont();
     }
-    bool hov1 = ImGui::IsItemHovered();
-    ImU32 b1_bg = hov1 ? IM_COL32(250, 45, 72, 60) : IM_COL32(255, 255, 255, 18);
-    ImU32 b1_bd = hov1 ? UIConfig::Color::Accent : UIConfig::Color::GlassBorder;
-    dl->AddRectFilled(b1_min, b1_max, b1_bg, 12.0f);
-    dl->AddRect(b1_min, b1_max, b1_bd, 12.0f, 0, 1.2f);
-
-    if (Fonts::Medium) ImGui::PushFont(Fonts::Medium);
-    dl->AddText(ImVec2(b1_min.x + 16.0f, b1_min.y + 16.0f), UIConfig::Color::TextActive, "📻 发烧数播模式 (Streamer)");
-    if (Fonts::Medium) ImGui::PopFont();
-
-    if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-    dl->AddText(ImVec2(b1_min.x + 16.0f, b1_min.y + 44.0f), UIConfig::Color::TextNormal,
-                "耳放解码直连 · 强制横屏 · 绚丽发烧表头 · 自动开启Web遥控");
-    dl->AddText(ImVec2(b1_min.x + 16.0f, b1_min.y + 66.0f), UIConfig::Color::TextMuted,
-                "适合将旧手机放置在音响架或桌面当独立转盘使用");
-    if (Fonts::Small) ImGui::PopFont();
-
-    // 选项 2：便携随身主端模式卡片
-    float btn2_y = btn1_y + btn_h + 16.0f;
-    ImVec2 b2_min(card_x0 + 20.0f, btn2_y);
-    ImVec2 b2_max(card_x0 + 20.0f + btn_w, btn2_y + btn_h);
-
-    ImGui::SetCursorScreenPos(b2_min);
-    if (ImGui::InvisibleButton("##SelectPlayerRoleBtn", ImVec2(btn_w, btn_h))) {
-        [self switchToMode:2];
-    }
-    bool hov2 = ImGui::IsItemHovered();
-    ImU32 b2_bg = hov2 ? IM_COL32(250, 45, 72, 60) : IM_COL32(255, 255, 255, 18);
-    ImU32 b2_bd = hov2 ? UIConfig::Color::Accent : UIConfig::Color::GlassBorder;
-    dl->AddRectFilled(b2_min, b2_max, b2_bg, 12.0f);
-    dl->AddRect(b2_min, b2_max, b2_bd, 12.0f, 0, 1.2f);
-
-    if (Fonts::Medium) ImGui::PushFont(Fonts::Medium);
-    dl->AddText(ImVec2(b2_min.x + 16.0f, b2_min.y + 16.0f), UIConfig::Color::TextActive, "📱 便携主端模式 (Player)");
-    if (Fonts::Medium) ImGui::PopFont();
-
-    if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-    dl->AddText(ImVec2(b2_min.x + 16.0f, b2_min.y + 44.0f), UIConfig::Color::TextNormal,
-                "单手竖屏握持 · 随身曲库 · 随身10段EQ & 魔棒微调");
-    dl->AddText(ImVec2(b2_min.x + 16.0f, b2_min.y + 66.0f), UIConfig::Color::TextMuted,
-                "适合日常主力手机随时随地高保真聆听");
-    if (Fonts::Small) ImGui::PopFont();
+    ImGui::End();
+    ImGui::PopStyleVar(2);
 }
 
 - (void)renderModeSwitchButton:(float)screen_w height:(float)screen_h {
-    ImDrawList* dl = ImGui::GetForegroundDrawList();
-    if (!dl) return;
+    ImGui::SetNextWindowPos(ImVec2(0, 0));
+    ImGui::SetNextWindowSize(ImVec2(screen_w, screen_h));
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar |
+                             ImGuiWindowFlags_NoResize |
+                             ImGuiWindowFlags_NoMove |
+                             ImGuiWindowFlags_NoScrollbar |
+                             ImGuiWindowFlags_NoCollapse |
+                             ImGuiWindowFlags_NoBackground |
+                             ImGuiWindowFlags_NoSavedSettings |
+                             ImGuiWindowFlags_NoBringToFrontOnFocus;
 
-    // 位于右上角的轻盈毛玻璃切换胶囊
-    float btn_w = 90.0f;
-    float btn_h = 28.0f;
-    float btn_x = screen_w - btn_w - 16.0f;
-    float btn_y = 12.0f;
-    ImVec2 b_min(btn_x, btn_y);
-    ImVec2 b_max(btn_x + btn_w, btn_y + btn_h);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
 
-    ImGui::SetCursorScreenPos(b_min);
-    if (ImGui::InvisibleButton("##TopSwitchRoleBtn", ImVec2(btn_w, btn_h))) {
-        [self switchToMode:2];
+    if (ImGui::Begin("##PhoneModeSwitchButtonRoot", nullptr, flags)) {
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+
+        // 位于右上角的轻盈毛玻璃切换胶囊
+        float btn_w = 90.0f;
+        float btn_h = 28.0f;
+        float btn_x = screen_w - btn_w - 16.0f;
+        float btn_y = 12.0f;
+        ImVec2 b_min(btn_x, btn_y);
+        ImVec2 b_max(btn_x + btn_w, btn_y + btn_h);
+
+        ImGui::SetCursorScreenPos(b_min);
+        if (ImGui::InvisibleButton("##TopSwitchRoleBtn", ImVec2(btn_w, btn_h))) {
+            [self switchToMode:2];
+        }
+        bool hov = ImGui::IsItemHovered();
+        ImU32 fill = hov ? IM_COL32(250, 45, 72, 80) : IM_COL32(255, 255, 255, 26);
+        dl->AddRectFilled(b_min, b_max, fill, 14.0f);
+        dl->AddRect(b_min, b_max, hov ? UIConfig::Color::Accent : UIConfig::Color::GlassBorder, 14.0f, 0, 1.0f);
+
+        if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+        ImVec2 t_sz = ImGui::CalcTextSize("切换为竖屏");
+        dl->AddText(ImVec2(btn_x + (btn_w - t_sz.x) * 0.5f, btn_y + (btn_h - t_sz.y) * 0.5f),
+                    UIConfig::Color::TextActive, "切换为竖屏");
+        if (Fonts::Small) ImGui::PopFont();
     }
-    bool hov = ImGui::IsItemHovered();
-    ImU32 fill = hov ? IM_COL32(250, 45, 72, 80) : IM_COL32(255, 255, 255, 26);
-    dl->AddRectFilled(b_min, b_max, fill, 14.0f);
-    dl->AddRect(b_min, b_max, hov ? UIConfig::Color::Accent : UIConfig::Color::GlassBorder, 14.0f, 0, 1.0f);
-
-    if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-    ImVec2 t_sz = ImGui::CalcTextSize("切换为竖屏");
-    dl->AddText(ImVec2(btn_x + (btn_w - t_sz.x) * 0.5f, btn_y + (btn_h - t_sz.y) * 0.5f),
-                UIConfig::Color::TextActive, "切换为竖屏");
-    if (Fonts::Small) ImGui::PopFont();
+    ImGui::End();
+    ImGui::PopStyleVar(2);
 }
 
 - (void)renderMobilePlayerView:(float)screen_w height:(float)screen_h {

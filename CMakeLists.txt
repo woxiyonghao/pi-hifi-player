@@ -143,6 +143,14 @@ if(APPLE)
         COMMENT "📱 [iOS] 正在编译 iOS 核心库与 App..."
         USES_TERMINAL
     )
+
+    # 14. iOS iPhone 物理真机一键运行 Target (可在 CLion 中直接点击 ▶️ 运行)
+    add_custom_target(ios_device_iphone
+        COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_ios.sh device
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMENT "📲 [iOS] 正在编译并部署到物理 iPhone 真机..."
+        USES_TERMINAL
+    )
 else()
     target_link_libraries(${PROJECT_NAME} PRIVATE
         audio_engine

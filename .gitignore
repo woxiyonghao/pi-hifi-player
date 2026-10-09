@@ -31,7 +31,9 @@ xcuserdata/
 
 # IDE 与编辑器配置
 .vscode/
-.idea/
+.idea/**
+!.idea/runConfigurations/
+!.idea/runConfigurations/**
 *.sublime-project
 *.sublime-workspace
 *.swp
