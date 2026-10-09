@@ -166,11 +166,9 @@ extern "C" uint32_t HifiPadGetBluetoothOutputSampleRate() {
 
     if (windowScene) {
         self.window = [[UIWindow alloc] initWithWindowScene:windowScene];
-        if (IS_IPAD) {
-            if (@available(iOS 16.0, *)) {
-                UIWindowSceneGeometryPreferencesIOS *preferences = [[UIWindowSceneGeometryPreferencesIOS alloc] initWithInterfaceOrientations:UIInterfaceOrientationMaskLandscape];
-                [windowScene requestGeometryUpdateWithPreferences:preferences errorHandler:nil];
-            }
+        if (@available(iOS 16.0, *)) {
+            UIWindowSceneGeometryPreferencesIOS *preferences = [[UIWindowSceneGeometryPreferencesIOS alloc] initWithInterfaceOrientations:UIInterfaceOrientationMaskLandscape];
+            [windowScene requestGeometryUpdateWithPreferences:preferences errorHandler:nil];
         }
     } else {
         self.window = [[UIWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]];
@@ -198,10 +196,7 @@ extern "C" uint32_t HifiPadGetBluetoothOutputSampleRate() {
 }
 
 - (UIInterfaceOrientationMask)application:(UIApplication *)application supportedInterfaceOrientationsForWindow:(UIWindow *)window {
-    if (IS_IPAD) {
-        return UIInterfaceOrientationMaskLandscape;
-    }
-    return UIInterfaceOrientationMaskAllButUpsideDown;
+    return UIInterfaceOrientationMaskLandscape;
 }
 
 #pragma mark - UIWindowSceneDelegate (同体合一，满足 Apple SDK 强制检查，无需独立 SceneDelegate 文件)
