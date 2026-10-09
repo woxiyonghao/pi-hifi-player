@@ -36,6 +36,33 @@ EQConfigView::EQConfigView() {
     loadConfig();
 }
 
+// 静态推子交互状态与区域缓存 (供移动端触控手势感知，杜绝垂直推子被误判为列表滚动而释放按键)
+static bool s_is_any_slider_active = false;
+static uint64_t s_slider_render_frame_count = 0;
+static float s_slider_area_min_x = 0.0f;
+static float s_slider_area_min_y = 0.0f;
+static float s_slider_area_max_x = 0.0f;
+static float s_slider_area_max_y = 0.0f;
+
+bool EQConfigView::isSliderTouch(float x, float y) {
+    if (s_is_any_slider_active) return true;
+    if (ImGui::GetCurrentContext() == nullptr) return false;
+    int cur_frame = ImGui::GetFrameCount();
+    if (static_cast<uint64_t>(cur_frame) > s_slider_render_frame_count + 1) {
+        return false;
+    }
+    return (x >= s_slider_area_min_x && x <= s_slider_area_max_x &&
+            y >= s_slider_area_min_y && y <= s_slider_area_max_y);
+}
+
+bool EQConfigView::isAnySliderActive() {
+    return s_is_any_slider_active;
+}
+
+void EQConfigView::setSliderActive(bool active) {
+    s_is_any_slider_active = active;
+}
+
 void EQConfigView::setEnabled(bool enabled) {
     is_enabled_ = enabled;
     syncToAudioEngine();
@@ -47,6 +74,10 @@ void EQConfigView::setBandGain(size_t index, float gain_db) {
         band_gains_[index] = std::clamp(gain_db, -12.0f, 12.0f);
         current_preset_idx_ = static_cast<int>(presets_.size() - 1); // 自动标记为自定义
         presets_[current_preset_idx_].gains = band_gains_;
+        // 用户调节推子时，自动开启 EQ 激活态，确保曲线立即点亮发光
+        if (!is_enabled_) {
+            is_enabled_ = true;
+        }
         syncToAudioEngine();
         saveConfig();
     }
@@ -63,6 +94,12 @@ void EQConfigView::applyPreset(size_t preset_index) {
     if (preset_index < presets_.size()) {
         current_preset_idx_ = static_cast<int>(preset_index);
         band_gains_ = presets_[preset_index].gains;
+        // 选择预设方案自动激活 EQ（若选择第 0 项原音直通则转为直通）
+        if (preset_index == 0) {
+            is_enabled_ = false;
+        } else {
+            is_enabled_ = true;
+        }
         syncToAudioEngine();
         saveConfig();
     }
@@ -71,6 +108,7 @@ void EQConfigView::applyPreset(size_t preset_index) {
 void EQConfigView::resetToFlat() {
     applyPreset(0);
     presets_.back().gains.fill(0.0f);
+    is_enabled_ = false; // 复原重置自动转为 Direct 直通
     saveConfig();
 }
 
@@ -277,14 +315,20 @@ void EQConfigView::renderPresetChips(ImDrawList* dl, ImVec2 card_min, ImVec2 car
 
     const float start_x = card_min.x + 20.0f;
     const float total_w = card_max.x - card_min.x - 40.0f;
-    const float chip_y = is_iphone ? (card_min.y + 36.0f) : (card_min.y + 70.0f);
-    const float chip_h = is_iphone ? 20.0f : 26.0f;
-    const float chip_round = is_iphone ? 10.0f : 13.0f;
+    const float card_total_h = card_max.y - card_min.y;
+    const float chip_y = is_iphone ? (card_min.y + (card_total_h > 400.0f ? 35.0f : 32.0f)) : (card_min.y + 70.0f);
+    const float chip_h = is_iphone ? 22.0f : 26.0f;
+    const float chip_round = is_iphone ? 11.0f : 13.0f;
     const size_t count = presets_.size();
 
-    const float gap = is_iphone ? 5.0f : 7.0f;
+    const float gap = is_iphone ? 4.0f : 7.0f;
     const float max_chip_w = is_iphone ? 90.0f : 115.0f;
     const float chip_w = std::min((total_w - gap * (count - 1)) / static_cast<float>(count), max_chip_w);
+
+    static const char* const SHORT_PRESET_NAMES[8] = {
+        "直通", "流行", "摇滚", "人声", "古典", "低音", "高音", "自定"
+    };
+    const bool use_short_name = (is_iphone && total_w < 380.0f);
 
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
 
@@ -323,9 +367,10 @@ void EQConfigView::renderPresetChips(ImDrawList* dl, ImVec2 card_min, ImVec2 car
 
         ImU32 text_col = is_selected ? UIConfig::Color::TextActive :
                          (hov ? UIConfig::Color::TextActive : UIConfig::Color::TextMuted);
-        ImVec2 txt_sz = ImGui::CalcTextSize(presets_[i].name.c_str());
+        const char* disp_name = (use_short_name && i < 8) ? SHORT_PRESET_NAMES[i] : presets_[i].name.c_str();
+        ImVec2 txt_sz = ImGui::CalcTextSize(disp_name);
         ImVec2 txt_pos(x0 + (chip_w - txt_sz.x) * 0.5f, chip_y + (chip_h - txt_sz.y) * 0.5f);
-        dl->AddText(txt_pos, text_col, presets_[i].name.c_str());
+        dl->AddText(txt_pos, text_col, disp_name);
     }
 
     if (Fonts::Small) ImGui::PopFont();
@@ -344,13 +389,16 @@ void EQConfigView::renderCurveCanvas(ImDrawList* dl, ImVec2 card_min, ImVec2 car
     const float canvas_x0 = card_min.x + 20.0f;
     const float canvas_x1 = card_max.x - 20.0f;
     const float card_total_h = card_max.y - card_min.y;
-    // 动态适度放大曲线视窗高度 (iPhone 下收敛至 50px 消除过度挤压推子区，普通平台维持 138-240px)
-    const float canvas_h = is_iphone ? 50.0f : std::clamp(card_total_h * 0.28f, 138.0f, 240.0f);
-    const float y0 = is_iphone ? (card_min.y + 60.0f) : (card_min.y + 104.0f);
+
+    // 动态黄金比例计算曲线视窗高度：
+    // iPhone 竖屏 (card_total_h > 400px): ~92px；iPhone 横屏 (card_total_h < 350px): ~72px；普通平台: 138-240px
+    const float canvas_h = is_iphone ? std::clamp(card_total_h * (card_total_h > 400.0f ? 0.17f : 0.25f), 72.0f, 96.0f)
+                                     : std::clamp(card_total_h * 0.28f, 138.0f, 240.0f);
+    const float y0 = is_iphone ? (card_min.y + (card_total_h > 400.0f ? 62.0f : 58.0f)) : (card_min.y + 104.0f);
     const float y1 = y0 + canvas_h;
     const float h = canvas_h;
     const float y_mid = (y0 + y1) * 0.5f;
-    const float max_dev = h * (is_iphone ? 0.34f : 0.38f);
+    const float max_dev = h * 0.38f;
 
     // 1. 视窗容器毛玻璃底板
     dl->AddRectFilled(ImVec2(canvas_x0, y0), ImVec2(canvas_x1, y1), IM_COL32(12, 16, 24, 215), 8.0f);
@@ -364,7 +412,7 @@ void EQConfigView::renderCurveCanvas(ImDrawList* dl, ImVec2 card_min, ImVec2 car
     dl->AddText(ImVec2(db_txt_x, y_mid + max_dev - (is_iphone ? 5.0f : 6.0f)), IM_COL32(160, 175, 195, 150), "-12");
     if (Fonts::Small) ImGui::PopFont();
 
-    // 2. 计算 10 个频段的中心采样点坐标 (左右各再缩进 12px，使两端更收敛舒适，严格垂直对齐下方 10 个推子中心点)
+    // 2. 计算 10 个频段的中心采样点坐标
     const float indent_x = 12.0f;
     const float x0 = canvas_x0 + indent_x;
     const float x1 = canvas_x1 - indent_x;
@@ -374,19 +422,19 @@ void EQConfigView::renderCurveCanvas(ImDrawList* dl, ImVec2 card_min, ImVec2 car
 
     for (size_t i = 0; i < NUM_BANDS; ++i) {
         float cx = x0 + (static_cast<float>(i) + 0.5f) * col_w;
-        float gain = is_enabled_ ? band_gains_[i] : 0.0f;
+        // 始终呈现当前各频段增益真实频响，彻底杜绝调节后由于直通状态“不渲染曲线”的概率性断层
+        float gain = band_gains_[i];
         float cy = y_mid - (gain / 12.0f) * max_dev;
         pts[i] = ImVec2(cx, cy);
     }
 
-    // 3. 刻度基准参考线 (+12dB, 0dB, -12dB，严格对齐 10 个频段推子有效宽度)
+    // 3. 刻度基准参考线 (+12dB, 0dB, -12dB)
     const ImU32 col_grid = IM_COL32(255, 255, 255, 18);
     dl->AddLine(ImVec2(pts[0].x, y_mid - max_dev), ImVec2(pts[NUM_BANDS - 1].x, y_mid - max_dev), col_grid, 1.0f);
     dl->AddLine(ImVec2(pts[0].x, y_mid), ImVec2(pts[NUM_BANDS - 1].x, y_mid), IM_COL32(255, 255, 255, 38), 1.0f);
     dl->AddLine(ImVec2(pts[0].x, y_mid + max_dev), ImVec2(pts[NUM_BANDS - 1].x, y_mid + max_dev), col_grid, 1.0f);
 
     // 4. Catmull-Rom 三次样条插值生成高精细连续平滑频响曲线
-    // 起止点精准收束于 10 个频段推子中心范围 (从 31Hz 到 16kHz，不往视窗两侧多余延伸)
     constexpr int SUBDIV = 8;
     std::vector<ImVec2> curve_pts;
     curve_pts.reserve((NUM_BANDS - 1) * SUBDIV + 1);
@@ -410,10 +458,13 @@ void EQConfigView::renderCurveCanvas(ImDrawList* dl, ImVec2 card_min, ImVec2 car
                               (-p0.y + p2.y) * t +
                               (2.0f * p0.y - 5.0f * p1.y + 4.0f * p2.y - p3.y) * t2 +
                               (-p0.y + 3.0f * p1.y - 3.0f * p2.y + p3.y) * t3);
+            y = std::clamp(y, y0 + 2.0f, y1 - 2.0f);
             curve_pts.push_back(ImVec2(x, y));
         }
     }
     curve_pts.push_back(pts[NUM_BANDS - 1]);
+
+    dl->PushClipRect(ImVec2(canvas_x0, y0), ImVec2(canvas_x1, y1), true);
 
     // 5. 曲线下方发光半透渐变填充 (Gradient Fill under curve)
     if (is_enabled_) {
@@ -422,8 +473,6 @@ void EQConfigView::renderCurveCanvas(ImDrawList* dl, ImVec2 card_min, ImVec2 car
             ImVec2 c1 = curve_pts[i + 1];
             ImVec2 b0(c0.x, y_mid);
             ImVec2 b1(c1.x, y_mid);
-
-            // 四边形微元填充
             dl->AddQuadFilled(c0, c1, b1, b0, IM_COL32(r, g, b, 32));
         }
     }
@@ -436,7 +485,7 @@ void EQConfigView::renderCurveCanvas(ImDrawList* dl, ImVec2 card_min, ImVec2 car
         }
     }
     for (size_t i = 0; i < curve_pts.size() - 1; ++i) {
-        dl->AddLine(curve_pts[i], curve_pts[i + 1], stroke_col, 2.2f);
+        dl->AddLine(curve_pts[i], curve_pts[i + 1], stroke_col, is_enabled_ ? 2.5f : 1.8f);
     }
 
     // 7. 10 个频段频点发光圆环节点
@@ -449,6 +498,8 @@ void EQConfigView::renderCurveCanvas(ImDrawList* dl, ImVec2 card_min, ImVec2 car
             dl->AddCircleFilled(pts[i], 2.5f, IM_COL32(160, 175, 195, 160));
         }
     }
+
+    dl->PopClipRect();
 }
 
 // ==============================================================================
@@ -467,8 +518,11 @@ void EQConfigView::renderSliders(ImDrawList* dl, ImVec2 card_min, ImVec2 card_ma
     const float col_w = total_w / static_cast<float>(NUM_BANDS);
 
     const float card_total_h = card_max.y - card_min.y;
-    const float canvas_h = is_iphone ? 50.0f : std::clamp(card_total_h * 0.28f, 138.0f, 240.0f);
-    const float y0 = is_iphone ? (card_min.y + 114.0f) : (card_min.y + 104.0f + canvas_h + 12.0f);
+    const float canvas_h = is_iphone ? std::clamp(card_total_h * (card_total_h > 400.0f ? 0.17f : 0.25f), 72.0f, 96.0f)
+                                     : std::clamp(card_total_h * 0.28f, 138.0f, 240.0f);
+    const float curve_y0 = is_iphone ? (card_min.y + (card_total_h > 400.0f ? 62.0f : 58.0f)) : (card_min.y + 104.0f);
+    const float y0 = is_iphone ? (curve_y0 + canvas_h + (card_total_h > 400.0f ? 8.0f : 6.0f))
+                               : (card_min.y + 104.0f + canvas_h + 12.0f);
     const float y1 = is_iphone ? (card_max.y - 4.0f) : (card_max.y - 12.0f);
 
     const float label_top_h = is_iphone ? 14.0f : 24.0f;
@@ -479,6 +533,8 @@ void EQConfigView::renderSliders(ImDrawList* dl, ImVec2 card_min, ImVec2 card_ma
     const float rail_h = rail_bot - rail_top;
     const float rail_mid = (rail_top + rail_bot) * 0.5f;
 
+    bool any_active = false;
+
     for (size_t i = 0; i < NUM_BANDS; ++i) {
         float cx = start_x + (static_cast<float>(i) + 0.5f) * col_w;
         float gain = band_gains_[i];
@@ -486,18 +542,22 @@ void EQConfigView::renderSliders(ImDrawList* dl, ImVec2 card_min, ImVec2 card_ma
         // ---------------------------------------------------------------------
         // 1. 推子全高舒适交互热区
         // ---------------------------------------------------------------------
-        const float hit_w = col_w - 6.0f;
-        ImVec2 hit_min(cx - hit_w * 0.5f, rail_top - (is_iphone ? 6.0f : 10.0f));
-        ImVec2 hit_max(cx + hit_w * 0.5f, rail_bot + (is_iphone ? 6.0f : 10.0f));
+        const float hit_w = is_iphone ? (col_w - 2.0f) : (col_w - 6.0f);
+        const float hit_pad_y = is_iphone ? 12.0f : 10.0f;
+        ImVec2 hit_min(cx - hit_w * 0.5f, rail_top - hit_pad_y);
+        ImVec2 hit_max(cx + hit_w * 0.5f, rail_bot + hit_pad_y);
 
         ImGui::SetCursorScreenPos(hit_min);
         std::string slider_id = "##eq_fader_" + std::to_string(i);
-        ImGui::InvisibleButton(slider_id.c_str(), ImVec2(hit_w, (rail_bot - rail_top) + (is_iphone ? 12.0f : 20.0f)));
+        ImGui::InvisibleButton(slider_id.c_str(), ImVec2(hit_w, (rail_bot - rail_top) + hit_pad_y * 2.0f));
 
         bool hov = ImGui::IsItemHovered();
         bool act = ImGui::IsItemActive();
+        if (act) {
+            any_active = true;
+        }
 
-        // 鼠标点击或手指触控滑动实时调节
+        // 鼠标点击或手指触控滑动实时调节 (无论往上拉还是往下拉均精准 1:1 跟手响应)
         if (act && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
             float mouse_y = ImGui::GetIO().MousePos.y;
             float norm = std::clamp((rail_mid - mouse_y) / (rail_h * 0.5f), -1.0f, 1.0f);
@@ -506,8 +566,8 @@ void EQConfigView::renderSliders(ImDrawList* dl, ImVec2 card_min, ImVec2 card_ma
             gain = band_gains_[i];
         }
 
-        // 滚轮微调 (±0.5 dB)
-        if (hov && ImGui::GetIO().MouseWheel != 0.0f) {
+        // 桌面端滚轮微调 (±0.5 dB，移动端禁用防止误触冲突)
+        if (!is_iphone && hov && ImGui::GetIO().MouseWheel != 0.0f) {
             float new_gain = std::clamp(gain + ImGui::GetIO().MouseWheel * 0.5f, -12.0f, 12.0f);
             new_gain = std::round(new_gain * 10.0f) * 0.1f;
             setBandGain(i, new_gain);
@@ -586,7 +646,7 @@ void EQConfigView::renderSliders(ImDrawList* dl, ImVec2 card_min, ImVec2 card_ma
         // 5. 推子物理手柄 (Tactile Slider Thumb)
         // ---------------------------------------------------------------------
         const float thumb_w = is_iphone ? ((hov || act) ? 24.0f : 22.0f) : ((hov || act) ? 30.0f : 28.0f);
-        const float thumb_h = is_iphone ? ((hov || act) ? 12.0f : 10.0f) : ((hov || act) ? 14.0f : 12.0f);
+        const float thumb_h = is_iphone ? ((hov || act) ? 14.0f : 12.0f) : ((hov || act) ? 14.0f : 12.0f);
         const float r_thumb = thumb_h * 0.5f; // 纯圆润平滑胶囊
 
         ImVec2 th_min(cx - thumb_w * 0.5f, thumb_y - thumb_h * 0.5f);
@@ -604,7 +664,7 @@ void EQConfigView::renderSliders(ImDrawList* dl, ImVec2 card_min, ImVec2 card_ma
                               IM_COL32(r, g, b, 65), r_thumb + 3.0f);
         }
 
-        // 3. 手柄主体：blur 时保持原样深空曜石液态玻璃底色；hover 时变成纯正主题色 (无中间线、无边框线段)
+        // 3. 手柄主体
         ImU32 th_bg = (act || hov) ? accent : IM_COL32(32, 38, 50, 235);
         dl->AddRectFilled(th_min, th_max, th_bg, r_thumb);
 
@@ -613,15 +673,30 @@ void EQConfigView::renderSliders(ImDrawList* dl, ImVec2 card_min, ImVec2 card_ma
         dl->AddRectFilled(th_min, ImVec2(th_max.x, thumb_y), sheen_col, r_thumb);
 
         // ---------------------------------------------------------------------
-        // 6. 底部频段标签 (e.g. 31Hz, 1kHz, 16kHz)
+        // 6. 底部频段标签 (e.g. 31Hz, 1kHz, 16kHz；紧凑宽度自适应为 31, 62, 125 防止字体重叠)
         // ---------------------------------------------------------------------
+        static const char* const SHORT_BAND_LABELS[10] = {
+            "31", "62", "125", "250", "500", "1k", "2k", "4k", "8k", "16k"
+        };
+        const char* disp_freq = (is_iphone && col_w < 38.0f) ? SHORT_BAND_LABELS[i] : BAND_LABELS[i];
+
         if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-        ImVec2 freq_sz = ImGui::CalcTextSize(BAND_LABELS[i]);
+        ImVec2 freq_sz = ImGui::CalcTextSize(disp_freq);
         ImVec2 freq_pos(cx - freq_sz.x * 0.5f, is_iphone ? (rail_bot + 4.0f) : (rail_bot + 12.0f));
 
         ImU32 freq_col = (hov || act) ? UIConfig::Color::TextActive : UIConfig::Color::TextMuted;
-        dl->AddText(freq_pos, freq_col, BAND_LABELS[i]);
+        dl->AddText(freq_pos, freq_col, disp_freq);
         if (Fonts::Small) ImGui::PopFont();
+    }
+
+    // 记录推子交互状态与物理几何包围盒 (供触控手势防误判)
+    s_is_any_slider_active = any_active;
+    s_slider_area_min_x = start_x - 14.0f;
+    s_slider_area_max_x = start_x + total_w + 14.0f;
+    s_slider_area_min_y = rail_top - 20.0f;
+    s_slider_area_max_y = rail_bot + 20.0f;
+    if (ImGui::GetCurrentContext() != nullptr) {
+        s_slider_render_frame_count = static_cast<uint64_t>(ImGui::GetFrameCount());
     }
 }
 

@@ -35,6 +35,11 @@ public:
 
     void resetToFlat();
 
+    // 供移动端触控手势判定滑块交互区域与激活状态 (防止误判为纵向列表滚动而释放鼠标按键)
+    static bool isSliderTouch(float x, float y);
+    static bool isAnySliderActive();
+    static void setSliderActive(bool active);
+
 private:
     bool is_enabled_ = true;
     int current_preset_idx_ = 0;

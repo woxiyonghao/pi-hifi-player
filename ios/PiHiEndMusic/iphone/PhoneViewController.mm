@@ -19,6 +19,7 @@
 #import "tools/PlayerAdmin.hpp"
 #import "services/WebService.hpp"
 #import "views/HifiPhoneRenderer.hpp"
+#import "views/EQConfigView.hpp"
 #import "widgets/GlassCardRenderer.hpp"
 #import <memory>
 #import <string>
@@ -523,9 +524,16 @@
     self.touchStartPos = pt;
     self.lastTouchPos = pt;
     self.lastTouchTime = [NSDate timeIntervalSinceReferenceDate];
-    self.isScrolling = NO;
-    self.isItemDrag = NO;
     self.scrollVelocityY = 0.0f;
+
+    // 若手指触控命中 EQ 推子滑块区域，立即锁定为组件拖拽态，杜绝误判为纵向列表滚动而释放鼠标按键
+    if (EQConfigView::isSliderTouch((float)pt.x, (float)pt.y)) {
+        self.isItemDrag = YES;
+        self.isScrolling = NO;
+    } else {
+        self.isScrolling = NO;
+        self.isItemDrag = NO;
+    }
 
     ImGuiIO& io = ImGui::GetIO();
     io.AddMousePosEvent(pt.x, pt.y);
@@ -546,7 +554,13 @@
 
     if (!self.isScrolling && !self.isItemDrag) {
         if (totalDist > 7.0f) {
-            if (fabs(dy) > fabs(dx) * 0.7f) {
+            // 若滑块处于激活状态或触控起始点/当前点位于推子区域，严禁触发列表滚动，严禁释放鼠标左键！
+            if (EQConfigView::isSliderTouch((float)self.touchStartPos.x, (float)self.touchStartPos.y) ||
+                EQConfigView::isSliderTouch((float)pt.x, (float)pt.y) ||
+                EQConfigView::isAnySliderActive()) {
+                self.isItemDrag = YES;
+                self.isScrolling = NO;
+            } else if (fabs(dy) > fabs(dx) * 0.7f) {
                 self.isScrolling = YES;
                 io.AddMouseButtonEvent(0, false);
             } else {
@@ -580,6 +594,8 @@
     CGPoint pt = [touch locationInView:self.mtkView];
     ImGuiIO& io = ImGui::GetIO();
 
+    EQConfigView::setSliderActive(false);
+
     if (self.isScrolling) {
         if (self.scrollVelocityY > 2800.0f) self.scrollVelocityY = 2800.0f;
         if (self.scrollVelocityY < -2800.0f) self.scrollVelocityY = -2800.0f;
@@ -595,6 +611,7 @@
 }
 
 - (void)touchesCancelled:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    EQConfigView::setSliderActive(false);
     ImGuiIO& io = ImGui::GetIO();
     io.AddMouseButtonEvent(0, false);
     self.isScrolling = NO;

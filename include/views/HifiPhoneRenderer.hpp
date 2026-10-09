@@ -47,6 +47,13 @@ public:
         idle_timer_ = 0.0f;
     }
 
+    void setTab(PhoneTab tab) {
+        current_tab_ = tab;
+    }
+    PhoneTab getTab() const {
+        return current_tab_;
+    }
+
 private:
     void renderHeader(float screen_w, float top_inset);
     void renderMainContent(float screen_w, float content_y, float content_h);
