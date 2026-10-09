@@ -1,6 +1,7 @@
 #include "views/ThemeSettingView.hpp"
 #include "themes/ThemeManager.hpp"
 #include "public/Font.hpp"
+#include "public/Platform.hpp"
 #include "public/UIConfig.hpp"
 #include "widgets/GlassCardRenderer.hpp"
 #include <algorithm>
@@ -102,15 +103,18 @@ void ThemeSettingView::render(float x, float y, float w, float h) {
         float sec_w = ImGui::GetContentRegionAvail().x;
 
         // ==============================================================================
-        // 2. 板块一：预设 (8款名机经典主题，2列网格整齐排列)
+        // 2. 板块一：预设 (8款名机经典主题)
+        // iPhone 竖屏/横屏小屏幕下自适应为 1 列，桌面与平板维持 2 列网格
         // ==============================================================================
+        const bool is_iphone = Platform::isIPhone();
         const auto& presets = tm.getAllPresets();
         int num_presets = static_cast<int>(presets.size());
-        int rows = (num_presets + 1) / 2;
+        int cols = (is_iphone || sec_w < 560.0f) ? 1 : 2;
+        int rows = (num_presets + cols - 1) / cols;
         float c_inner_w = sec_w - 32.0f;
         float col_gap = 12.0f;
-        float c_w = (c_inner_w - col_gap) * 0.5f;
-        float c_h = 50.0f;
+        float c_w = (cols == 1) ? c_inner_w : ((c_inner_w - col_gap) * 0.5f);
+        float c_h = is_iphone ? 46.0f : 50.0f;
         float row_gap = 8.0f;
 
         float sec1_h = 36.0f + rows * c_h + (rows > 0 ? (rows - 1) * row_gap : 0.0f) + 14.0f;
@@ -125,8 +129,8 @@ void ThemeSettingView::render(float x, float y, float w, float h) {
 
         for (int i = 0; i < num_presets; ++i) {
             const auto& p = presets[i];
-            int r_idx = i / 2;
-            int c_idx = i % 2;
+            int r_idx = i / cols;
+            int c_idx = i % cols;
 
             float cx0 = p_sec1.x + 16.0f + c_idx * (c_w + col_gap);
             float cy0 = p_sec1.y + 36.0f + r_idx * (c_h + row_gap);
@@ -162,63 +166,84 @@ void ThemeSettingView::render(float x, float y, float w, float h) {
             // 主题色标点
             float dot_cx = cx0 + 16.0f;
             float dot_cy = cy0 + c_h * 0.5f;
-            cdl->AddCircleFilled(ImVec2(dot_cx, dot_cy), 6.5f, p.accent_color);
+            cdl->AddCircleFilled(ImVec2(dot_cx, dot_cy), is_iphone ? 5.5f : 6.5f, p.accent_color);
             if (is_current) {
-                cdl->AddCircle(ImVec2(dot_cx, dot_cy), 10.5f, p.accent_color, 24, 1.4f);
+                cdl->AddCircle(ImVec2(dot_cx, dot_cy), is_iphone ? 9.0f : 10.5f, p.accent_color, 24, 1.4f);
             }
 
-            // 主题名称与风格
-            float label_x = dot_cx + 16.0f;
-            if (Fonts::Regular) ImGui::PushFont(Fonts::Regular);
-            cdl->AddText(ImVec2(label_x, cy0 + 8.0f), is_current ? UIConfig::Color::TextActive : IM_COL32(220, 230, 245, 230), p.name.c_str());
-            if (Fonts::Regular) ImGui::PopFont();
-
-            if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-            cdl->AddText(ImVec2(label_x, cy0 + 28.0f), UIConfig::Color::TextMuted, p.sound_style.c_str());
-
-            // 右侧色块与状态标签
-            float chip_w = 13.0f;
-            float chip_h = 18.0f;
+            // 右侧色块与状态标签几何预计算
+            float chip_w = is_iphone ? 12.0f : 13.0f;
+            float chip_h = is_iphone ? 16.0f : 18.0f;
             float chip_r = 3.0f;
             float chip_y = cy0 + (c_h - chip_h) * 0.5f;
             float right_pos = cx1 - 12.0f;
 
+            float act_btn_x = 0.0f, act_btn_w = 0.0f;
+            bool has_tag = false;
+            const char* tag_text = nullptr;
+            ImU32 tag_bg = 0, tag_border = 0;
+
             if (is_current) {
-                const char* act_tag = "已激活";
-                float act_w = ImGui::CalcTextSize(act_tag).x + 10.0f;
-                float act_x = right_pos - act_w;
-                float act_y = cy0 + (c_h - 18.0f) * 0.5f;
-
-                cdl->AddRectFilled(ImVec2(act_x, act_y), ImVec2(act_x + act_w, act_y + 18.0f), IM_COL32(pr, pg, pb, 60), 4.0f);
-                cdl->AddRect(ImVec2(act_x, act_y), ImVec2(act_x + act_w, act_y + 18.0f), p.accent_color, 4.0f, 0, 1.0f);
-                cdl->AddText(ImVec2(act_x + 5.0f, act_y + 1.0f), UIConfig::Color::TextActive, act_tag);
-                right_pos = act_x - 8.0f;
+                tag_text = "已激活";
+                act_btn_w = ImGui::CalcTextSize(tag_text).x + 10.0f;
+                act_btn_x = right_pos - act_btn_w;
+                tag_bg = IM_COL32(pr, pg, pb, 60);
+                tag_border = p.accent_color;
+                right_pos = act_btn_x - 8.0f;
+                has_tag = true;
             } else if (is_hovered) {
-                const char* hov_tag = "启用";
-                float hov_w = ImGui::CalcTextSize(hov_tag).x + 10.0f;
-                float hov_x = right_pos - hov_w;
-                float hov_y = cy0 + (c_h - 18.0f) * 0.5f;
-
-                cdl->AddRectFilled(ImVec2(hov_x, hov_y), ImVec2(hov_x + hov_w, hov_y + 18.0f), IM_COL32(255, 255, 255, 22), 4.0f);
-                cdl->AddRect(ImVec2(hov_x, hov_y), ImVec2(hov_x + hov_w, hov_y + 18.0f), IM_COL32(255, 255, 255, 60), 4.0f, 0, 1.0f);
-                cdl->AddText(ImVec2(hov_x + 5.0f, hov_y + 1.0f), UIConfig::Color::TextActive, hov_tag);
-                right_pos = hov_x - 8.0f;
+                tag_text = "启用";
+                act_btn_w = ImGui::CalcTextSize(tag_text).x + 10.0f;
+                act_btn_x = right_pos - act_btn_w;
+                tag_bg = IM_COL32(255, 255, 255, 22);
+                tag_border = IM_COL32(255, 255, 255, 60);
+                right_pos = act_btn_x - 8.0f;
+                has_tag = true;
             }
 
             // 3 颗调色代表色条
             float chip3_x = right_pos - chip_w;
+            float chip2_x = chip3_x - chip_w - 4.0f;
+            float chip1_x = chip2_x - chip_w - 4.0f;
+
+            // 主题名称与风格 (使用 ClipRect 物理防穿透，绝对不与右侧色条重叠)
+            float label_x = dot_cx + (is_iphone ? 12.0f : 16.0f);
+            float max_text_x = chip1_x - 8.0f;
+            cdl->PushClipRect(ImVec2(label_x, cy0), ImVec2(max_text_x, cy1), true);
+
+            float name_y = is_iphone ? (cy0 + 6.0f) : (cy0 + 8.0f);
+            float style_y = is_iphone ? (cy0 + 26.0f) : (cy0 + 28.0f);
+
+            if (Fonts::Regular) ImGui::PushFont(Fonts::Regular);
+            cdl->AddText(ImVec2(label_x, name_y), is_current ? UIConfig::Color::TextActive : IM_COL32(220, 230, 245, 230), p.name.c_str());
+            if (Fonts::Regular) ImGui::PopFont();
+
+            if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+            cdl->AddText(ImVec2(label_x, style_y), UIConfig::Color::TextMuted, p.sound_style.c_str());
+            if (Fonts::Small) ImGui::PopFont();
+
+            cdl->PopClipRect();
+
+            // 渲染右侧激活状态与调色色条
+            if (has_tag) {
+                float tag_y = cy0 + (c_h - (is_iphone ? 16.0f : 18.0f)) * 0.5f;
+                float tag_h = is_iphone ? 16.0f : 18.0f;
+                cdl->AddRectFilled(ImVec2(act_btn_x, tag_y), ImVec2(act_btn_x + act_btn_w, tag_y + tag_h), tag_bg, 4.0f);
+                cdl->AddRect(ImVec2(act_btn_x, tag_y), ImVec2(act_btn_x + act_btn_w, tag_y + tag_h), tag_border, 4.0f, 0, 1.0f);
+                if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+                ImVec2 tsz = ImGui::CalcTextSize(tag_text);
+                cdl->AddText(ImVec2(act_btn_x + (act_btn_w - tsz.x) * 0.5f, tag_y + (tag_h - tsz.y) * 0.5f), UIConfig::Color::TextActive, tag_text);
+                if (Fonts::Small) ImGui::PopFont();
+            }
+
             cdl->AddRectFilled(ImVec2(chip3_x, chip_y), ImVec2(chip3_x + chip_w, chip_y + chip_h), p.peak_color, chip_r);
             cdl->AddRect(ImVec2(chip3_x, chip_y), ImVec2(chip3_x + chip_w, chip_y + chip_h), IM_COL32(255, 255, 255, 40), chip_r, 0, 1.0f);
 
-            float chip2_x = chip3_x - chip_w - 4.0f;
             cdl->AddRectFilled(ImVec2(chip2_x, chip_y), ImVec2(chip2_x + chip_w, chip_y + chip_h), p.lit_color, chip_r);
             cdl->AddRect(ImVec2(chip2_x, chip_y), ImVec2(chip2_x + chip_w, chip_y + chip_h), IM_COL32(255, 255, 255, 40), chip_r, 0, 1.0f);
 
-            float chip1_x = chip2_x - chip_w - 4.0f;
             cdl->AddRectFilled(ImVec2(chip1_x, chip_y), ImVec2(chip1_x + chip_w, chip_y + chip_h), p.accent_color, chip_r);
             cdl->AddRect(ImVec2(chip1_x, chip_y), ImVec2(chip1_x + chip_w, chip_y + chip_h), IM_COL32(255, 255, 255, 40), chip_r, 0, 1.0f);
-
-            if (Fonts::Small) ImGui::PopFont();
         }
 
         ImGui::SetCursorScreenPos(ImVec2(p_sec1.x, p_sec1.y + sec1_h));
@@ -227,17 +252,6 @@ void ThemeSettingView::render(float x, float y, float w, float h) {
         // ==============================================================================
         // 3. 板块二：背景律动 (标题改为「背景律动」，无 subtitle)
         // ==============================================================================
-        float sec2_h = 142.0f;
-        ImVec2 p_sec2 = ImGui::GetCursorScreenPos();
-        drawSectionFrostedCard(cdl, p_sec2, ImVec2(p_sec2.x + sec_w, p_sec2.y + sec2_h));
-
-        // [Header] 仅标题「背景律动」，去除 subtitle
-        float s2_head_y = p_sec2.y + 10.0f;
-        if (Fonts::Regular) ImGui::PushFont(Fonts::Regular);
-        cdl->AddText(ImVec2(p_sec2.x + 16.0f, s2_head_y), UIConfig::Color::TextActive, "背景律动");
-        if (Fonts::Regular) ImGui::PopFont();
-
-        // [Options] 11 个动效风格按钮 (第 1、2 行各 4 个，第 3 行 3 个)
         auto cur_bg_mode = tm.getBackgroundVisualMode();
         static const struct {
             BackgroundVisualMode mode;
@@ -256,16 +270,29 @@ void ThemeSettingView::render(float x, float y, float w, float h) {
             {BackgroundVisualMode::GlassClock,      "液态玻璃时钟"}
         };
 
+        int mode_cols = is_iphone ? 3 : 4;
+        int mode_rows = (11 + mode_cols - 1) / mode_cols;
         float mode_btn_gap = 10.0f;
-        float mode_btn_w = (c_inner_w - mode_btn_gap * 3.0f) / 4.0f;
-        float mode_btn_h = 28.0f;
+        float mode_btn_w = (c_inner_w - mode_btn_gap * (mode_cols - 1)) / static_cast<float>(mode_cols);
+        float mode_btn_h = is_iphone ? 26.0f : 28.0f;
+        float mode_row_step = mode_btn_h + 6.0f;
+        float sec2_h = 36.0f + mode_rows * mode_row_step + 10.0f;
+
+        ImVec2 p_sec2 = ImGui::GetCursorScreenPos();
+        drawSectionFrostedCard(cdl, p_sec2, ImVec2(p_sec2.x + sec_w, p_sec2.y + sec2_h));
+
+        // [Header] 仅标题「背景律动」，去除 subtitle
+        float s2_head_y = p_sec2.y + 10.0f;
+        if (Fonts::Regular) ImGui::PushFont(Fonts::Regular);
+        cdl->AddText(ImVec2(p_sec2.x + 16.0f, s2_head_y), UIConfig::Color::TextActive, "背景律动");
+        if (Fonts::Regular) ImGui::PopFont();
 
         for (int m = 0; m < 11; ++m) {
-            int row_idx = m / 4;
-            int col_idx = m % 4;
+            int row_idx = m / mode_cols;
+            int col_idx = m % mode_cols;
             float btn_w = mode_btn_w;
 
-            float my0 = p_sec2.y + 34.0f + static_cast<float>(row_idx) * 34.0f;
+            float my0 = p_sec2.y + 34.0f + static_cast<float>(row_idx) * mode_row_step;
             float mx0 = p_sec2.x + 16.0f + col_idx * (btn_w + mode_btn_gap);
 
             ImVec2 m_min(mx0, my0);

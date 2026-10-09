@@ -133,20 +133,22 @@ void SystemSettingsView::render(float x, float y, float w, float h) {
 
     ImDrawList* dl = ImGui::GetWindowDrawList();
 
+    const bool is_iphone = Platform::isIPhone();
+
     // 1. 渲染顶级深空高密度毛玻璃主卡片
     GlassCardRenderer::drawCard(dl, card_min, card_max, UIConfig::Layout::ContainerRounding, "main_stage");
 
     // 2. 绘制标题「系统设置」 (右上角无任何标签，完全对齐用户指令)
-    ImVec2 title_pos(card_min.x + 20.0f, card_min.y + 16.0f);
+    ImVec2 title_pos(card_min.x + (is_iphone ? 16.0f : 20.0f), card_min.y + (is_iphone ? 10.0f : 16.0f));
     if (Fonts::Medium) ImGui::PushFont(Fonts::Medium);
     dl->AddText(title_pos, UIConfig::Color::TextActive, "系统设置");
     if (Fonts::Medium) ImGui::PopFont();
 
     // 3. 开启独立滚动子区域 (覆盖四大发烧设置板块，支持滑轮、触控拖拽与半透明纤细滚动条)
-    float content_x = card_min.x + 16.0f;
-    float content_y = card_min.y + 54.0f;
-    float content_w = card_max.x - card_min.x - 32.0f;
-    float content_h = card_max.y - content_y - 12.0f;
+    float content_x = card_min.x + (is_iphone ? 12.0f : 16.0f);
+    float content_y = card_min.y + (is_iphone ? 36.0f : 54.0f);
+    float content_w = card_max.x - card_min.x - (is_iphone ? 24.0f : 32.0f);
+    float content_h = card_max.y - content_y - (is_iphone ? 6.0f : 12.0f);
 
     ImU32 accent = ThemeManager::getInstance().getAccentColor();
 
@@ -174,17 +176,19 @@ void SystemSettingsView::render(float x, float y, float w, float h) {
         ImDrawList* child_dl = ImGui::GetWindowDrawList();
         float section_w = ImGui::GetContentRegionAvail().x; // 扣除滚动条后的可用内容宽度
 
-        // 板块一：音频重放与时钟引擎 (182px, 含采样率/DSD/缓冲深度/切歌淡入淡出)
+        // 板块一：音频重放与时钟引擎 (iPhone 下 146px，非 iPhone 下 182px)
+        float card1_h = is_iphone ? 146.0f : 182.0f;
         ImVec2 p_audio = ImGui::GetCursorScreenPos();
         renderAudioSection(child_dl, p_audio.x, p_audio.y, section_w);
-        ImGui::SetCursorScreenPos(ImVec2(p_audio.x, p_audio.y + 182.0f));
-        ImGui::Dummy(ImVec2(0.0f, 10.0f));
+        ImGui::SetCursorScreenPos(ImVec2(p_audio.x, p_audio.y + card1_h));
+        ImGui::Dummy(ImVec2(0.0f, is_iphone ? 8.0f : 10.0f));
 
-        // 板块二：硬件性能与显示控制 (182px, 含空余时间显示全屏)
+        // 板块二：硬件性能与显示控制 (iPhone 下 146px，非 iPhone 下 182px)
+        float card2_h = is_iphone ? 146.0f : 182.0f;
         ImVec2 p_hw = ImGui::GetCursorScreenPos();
         renderHardwareSection(child_dl, p_hw.x, p_hw.y, section_w);
-        ImGui::SetCursorScreenPos(ImVec2(p_hw.x, p_hw.y + 182.0f));
-        ImGui::Dummy(ImVec2(0.0f, 10.0f));
+        ImGui::SetCursorScreenPos(ImVec2(p_hw.x, p_hw.y + card2_h));
+        ImGui::Dummy(ImVec2(0.0f, is_iphone ? 8.0f : 10.0f));
 
         // 仅在非 iPad / 非 iOS 平台 (如树莓派/Linux) 呈现底层固件更新与系统维护网络调试面板
         if (!Platform::isIPad() && !Platform::isIOS()) {
@@ -213,7 +217,8 @@ void SystemSettingsView::render(float x, float y, float w, float h) {
 }
 
 void SystemSettingsView::renderAudioSection(ImDrawList* dl, float x0, float y0, float w) {
-    float h = 182.0f;
+    const bool is_iphone = Platform::isIPhone();
+    float h = is_iphone ? 146.0f : 182.0f;
     ImVec2 p0(x0, y0);
     ImVec2 p1(x0 + w, y0 + h);
 
@@ -224,7 +229,7 @@ void SystemSettingsView::renderAudioSection(ImDrawList* dl, float x0, float y0, 
 
     // 板块标题
     if (Fonts::Regular) ImGui::PushFont(Fonts::Regular);
-    dl->AddText(ImVec2(x0 + 16.0f, y0 + 10.0f), UIConfig::Color::TextActive, "音频重放与时钟引擎");
+    dl->AddText(ImVec2(x0 + 16.0f, y0 + (is_iphone ? 8.0f : 10.0f)), UIConfig::Color::TextActive, "音频重放与时钟引擎");
     if (Fonts::Regular) ImGui::PopFont();
 
     ImU32 accent = ThemeManager::getInstance().getAccentColor();
@@ -234,14 +239,15 @@ void SystemSettingsView::renderAudioSection(ImDrawList* dl, float x0, float y0, 
 
     auto renderButtonGroup = [&](float row_y, const char* label, const char* const options[], int count, int& current_val, const char* id_prefix) {
         if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-        dl->AddText(ImVec2(x0 + 16.0f, row_y + 4.0f), UIConfig::Color::TextMuted, label);
+        dl->AddText(ImVec2(x0 + (is_iphone ? 12.0f : 16.0f), row_y + (is_iphone ? 3.0f : 4.0f)), UIConfig::Color::TextMuted, label);
         if (Fonts::Small) ImGui::PopFont();
 
-        float btn_start_x = x0 + 140.0f;
-        float btn_gap = 8.0f;
+        float label_alloc_w = is_iphone ? 95.0f : 140.0f;
+        float btn_start_x = x0 + label_alloc_w;
+        float btn_gap = is_iphone ? 6.0f : 8.0f;
         const float max_btn_w = 200.0f;
-        float btn_w = std::min((w - 156.0f - btn_gap * (count - 1)) / static_cast<float>(count), max_btn_w);
-        float btn_h = 26.0f;
+        float btn_w = std::min((w - label_alloc_w - 16.0f - btn_gap * (count - 1)) / static_cast<float>(count), max_btn_w);
+        float btn_h = is_iphone ? 22.0f : 26.0f;
 
         for (int i = 0; i < count; ++i) {
             float bx0 = btn_start_x + i * (btn_w + btn_gap);
@@ -281,25 +287,29 @@ void SystemSettingsView::renderAudioSection(ImDrawList* dl, float x0, float y0, 
         }
     };
 
+    float row_step = is_iphone ? 28.0f : 36.0f;
+    float start_y = is_iphone ? (y0 + 30.0f) : (y0 + 36.0f);
+
     // 1. 采样率输出策略
     const char* sr_opts[] = { "Bit-Perfect 源码直出", "超采样 192kHz/24Bit", "极频 384kHz/32Bit" };
-    renderButtonGroup(y0 + 36.0f, "输出采样率", sr_opts, 3, sample_rate_mode_, "SRMode");
+    renderButtonGroup(start_y, "输出采样率", sr_opts, 3, sample_rate_mode_, "SRMode");
 
     // 2. DSD 解码通道
     const char* dsd_opts[] = { "DoP (DSD over PCM)", "Native 原生直通", "DSD 软解 PCM" };
-    renderButtonGroup(y0 + 72.0f, "DSD 播放模式", dsd_opts, 3, dsd_mode_, "DSDMode");
+    renderButtonGroup(start_y + row_step, "DSD 播放模式", dsd_opts, 3, dsd_mode_, "DSDMode");
 
     // 3. 硬件缓冲深度
     const char* buf_opts[] = { "64 帧 (极低延迟)", "256 帧 (标准发烧)", "512 帧 (防爆音深缓冲)" };
-    renderButtonGroup(y0 + 108.0f, "硬件缓冲深度", buf_opts, 3, buffer_size_mode_, "BufMode");
+    renderButtonGroup(start_y + row_step * 2.0f, "硬件缓冲深度", buf_opts, 3, buffer_size_mode_, "BufMode");
 
     // 4. 切歌平滑过渡 (淡入淡出)
     const char* fade_opts[] = { "关闭 (直接切歌)", "0.3 秒 (极速)", "0.5 秒 (发烧标准)", "1.0 秒 (悠扬慢淡)" };
-    renderButtonGroup(y0 + 144.0f, "切歌过渡效果", fade_opts, 4, fade_duration_mode_, "FadeMode");
+    renderButtonGroup(start_y + row_step * 3.0f, "切歌过渡效果", fade_opts, 4, fade_duration_mode_, "FadeMode");
 }
 
 void SystemSettingsView::renderHardwareSection(ImDrawList* dl, float x0, float y0, float w) {
-    float h = 182.0f;
+    const bool is_iphone = Platform::isIPhone();
+    float h = is_iphone ? 146.0f : 182.0f;
     ImVec2 p0(x0, y0);
     ImVec2 p1(x0 + w, y0 + h);
 
@@ -308,7 +318,7 @@ void SystemSettingsView::renderHardwareSection(ImDrawList* dl, float x0, float y
     dl->AddLine(ImVec2(p0.x + 10.0f, p0.y), ImVec2(p1.x - 10.0f, p0.y), IM_COL32(255, 255, 255, 38), 1.0f);
 
     if (Fonts::Regular) ImGui::PushFont(Fonts::Regular);
-    dl->AddText(ImVec2(x0 + 16.0f, y0 + 10.0f), UIConfig::Color::TextActive, "硬件性能与显示控制");
+    dl->AddText(ImVec2(x0 + 16.0f, y0 + (is_iphone ? 8.0f : 10.0f)), UIConfig::Color::TextActive, "硬件性能与显示控制");
     if (Fonts::Regular) ImGui::PopFont();
 
     ImU32 accent = ThemeManager::getInstance().getAccentColor();
@@ -316,20 +326,25 @@ void SystemSettingsView::renderHardwareSection(ImDrawList* dl, float x0, float y
     const ImU32 g = (accent >> IM_COL32_G_SHIFT) & 0xFF;
     const ImU32 b = (accent >> IM_COL32_B_SHIFT) & 0xFF;
 
+    float label_alloc_w = is_iphone ? 95.0f : 140.0f;
+    float btn_start_x = x0 + label_alloc_w;
+    float row_step = is_iphone ? 28.0f : 36.0f;
+    float start_y = is_iphone ? (y0 + 30.0f) : (y0 + 40.0f);
+    float btn_h = is_iphone ? 22.0f : 26.0f;
+    float btn_gap = is_iphone ? 6.0f : 8.0f;
+
     // 1. CPU 调频策略
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-    dl->AddText(ImVec2(x0 + 16.0f, y0 + 40.0f), UIConfig::Color::TextMuted, "CPU 调频策略");
+    dl->AddText(ImVec2(x0 + (is_iphone ? 12.0f : 16.0f), start_y + (is_iphone ? 3.0f : 0.0f)), UIConfig::Color::TextMuted, "CPU 调频策略");
     if (Fonts::Small) ImGui::PopFont();
 
     const char* cpu_opts[] = { "Performance (纯音锁频最高)", "Schedutil (动态温控平衡)" };
-    float btn_start_x = x0 + 140.0f;
-    float btn_w = (w - 156.0f - 8.0f) * 0.5f;
-    float btn_h = 26.0f;
+    float btn_w = (w - label_alloc_w - 16.0f - btn_gap) * 0.5f;
 
     for (int i = 0; i < 2; ++i) {
-        float bx0 = btn_start_x + i * (btn_w + 8.0f);
-        ImVec2 b_min(bx0, y0 + 36.0f);
-        ImVec2 b_max(bx0 + btn_w, y0 + 36.0f + btn_h);
+        float bx0 = btn_start_x + i * (btn_w + btn_gap);
+        ImVec2 b_min(bx0, start_y);
+        ImVec2 b_max(bx0 + btn_w, start_y + btn_h);
 
         bool is_act = (cpu_governor_ == i);
         std::string btn_id = "##CPUGov_" + std::to_string(i);
@@ -352,19 +367,20 @@ void SystemSettingsView::renderHardwareSection(ImDrawList* dl, float x0, float y
 
         if (Fonts::Small) ImGui::PushFont(Fonts::Small);
         ImVec2 txt_sz = ImGui::CalcTextSize(cpu_opts[i]);
-        dl->AddText(ImVec2(bx0 + (btn_w - txt_sz.x) * 0.5f, y0 + 36.0f + (btn_h - txt_sz.y) * 0.5f),
+        dl->AddText(ImVec2(bx0 + (btn_w - txt_sz.x) * 0.5f, start_y + (btn_h - txt_sz.y) * 0.5f),
                     is_act ? UIConfig::Color::TextActive : UIConfig::Color::TextNormal, cpu_opts[i]);
         if (Fonts::Small) ImGui::PopFont();
     }
 
     // 2. 屏幕背光亮度 (交互滑条)
+    float row2_y = start_y + row_step;
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-    dl->AddText(ImVec2(x0 + 16.0f, y0 + 76.0f), UIConfig::Color::TextMuted, "屏幕背光亮度");
+    dl->AddText(ImVec2(x0 + (is_iphone ? 12.0f : 16.0f), row2_y + (is_iphone ? 3.0f : -4.0f)), UIConfig::Color::TextMuted, "屏幕背光亮度");
     if (Fonts::Small) ImGui::PopFont();
 
-    float slider_x0 = x0 + 140.0f;
-    float slider_w = w - 210.0f;
-    float slider_y = y0 + 82.0f;
+    float slider_x0 = btn_start_x;
+    float slider_w = w - label_alloc_w - (is_iphone ? 56.0f : 70.0f);
+    float slider_y = row2_y + (is_iphone ? 8.0f : 6.0f);
     float slider_h = 6.0f;
 
     ImVec2 s_min(slider_x0, slider_y);
@@ -389,29 +405,30 @@ void SystemSettingsView::renderHardwareSection(ImDrawList* dl, float x0, float y
         applyScreenBrightness(screen_brightness_);
     }
 
-    dl->AddCircleFilled(ImVec2(thumb_x, thumb_y), 7.0f, IM_COL32(255, 255, 255, 255));
-    dl->AddCircle(ImVec2(thumb_x, thumb_y), 7.0f, accent, 16, 1.2f);
+    dl->AddCircleFilled(ImVec2(thumb_x, thumb_y), is_iphone ? 5.5f : 7.0f, IM_COL32(255, 255, 255, 255));
+    dl->AddCircle(ImVec2(thumb_x, thumb_y), is_iphone ? 5.5f : 7.0f, accent, 16, 1.2f);
 
     char br_buf[16];
     std::snprintf(br_buf, sizeof(br_buf), "%d%%", static_cast<int>(std::round(screen_brightness_ * 100.0f)));
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-    dl->AddText(ImVec2(slider_x0 + slider_w + 14.0f, y0 + 76.0f), UIConfig::Color::TextActive, br_buf);
+    dl->AddText(ImVec2(slider_x0 + slider_w + (is_iphone ? 10.0f : 14.0f), row2_y + (is_iphone ? 2.0f : -4.0f)), UIConfig::Color::TextActive, br_buf);
     if (Fonts::Small) ImGui::PopFont();
 
     // 3. 屏幕息屏待机
+    float row3_y = start_y + row_step * 2.0f;
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-    dl->AddText(ImVec2(x0 + 16.0f, y0 + 112.0f), UIConfig::Color::TextMuted, "自动息屏待机");
+    dl->AddText(ImVec2(x0 + (is_iphone ? 12.0f : 16.0f), row3_y + (is_iphone ? 3.0f : 4.0f)), UIConfig::Color::TextMuted, "自动息屏待机");
     if (Fonts::Small) ImGui::PopFont();
 
     const char* to_opts[] = { "从不", "5 分钟", "15 分钟", "30 分钟" };
-    float to_gap = 8.0f;
+    float to_gap = is_iphone ? 6.0f : 8.0f;
     const float max_to_w = 140.0f;
-    float to_w = std::min((w - 156.0f - to_gap * 3.0f) / 4.0f, max_to_w);
+    float to_w = std::min((w - label_alloc_w - 16.0f - to_gap * 3.0f) / 4.0f, max_to_w);
 
     for (int i = 0; i < 4; ++i) {
         float bx0 = btn_start_x + i * (to_w + to_gap);
-        ImVec2 b_min(bx0, y0 + 108.0f);
-        ImVec2 b_max(bx0 + to_w, y0 + 108.0f + btn_h);
+        ImVec2 b_min(bx0, row3_y);
+        ImVec2 b_max(bx0 + to_w, row3_y + btn_h);
 
         bool is_act = (screen_timeout_mode_ == i);
         std::string btn_id = "##ScreenTimeout_" + std::to_string(i);
@@ -433,25 +450,26 @@ void SystemSettingsView::renderHardwareSection(ImDrawList* dl, float x0, float y
 
         if (Fonts::Small) ImGui::PushFont(Fonts::Small);
         ImVec2 txt_sz = ImGui::CalcTextSize(to_opts[i]);
-        dl->AddText(ImVec2(bx0 + (to_w - txt_sz.x) * 0.5f, y0 + 108.0f + (btn_h - txt_sz.y) * 0.5f),
+        dl->AddText(ImVec2(bx0 + (to_w - txt_sz.x) * 0.5f, row3_y + (btn_h - txt_sz.y) * 0.5f),
                     is_act ? UIConfig::Color::TextActive : UIConfig::Color::TextNormal, to_opts[i]);
         if (Fonts::Small) ImGui::PopFont();
     }
 
-    // 4. 空余时间显示全屏 (默认 15 秒)
+    // 4. 空余时间显示全屏
+    float row4_y = start_y + row_step * 3.0f;
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-    dl->AddText(ImVec2(x0 + 16.0f, y0 + 148.0f), UIConfig::Color::TextMuted, "空余时间显示全屏");
+    dl->AddText(ImVec2(x0 + (is_iphone ? 12.0f : 16.0f), row4_y + (is_iphone ? 3.0f : 4.0f)), UIConfig::Color::TextMuted, is_iphone ? "空余时间全屏" : "空余时间显示全屏");
     if (Fonts::Small) ImGui::PopFont();
 
     const char* idle_opts[] = { "15 秒", "30 秒", "1 分钟", "5 分钟", "永不" };
-    float idle_gap = 8.0f;
+    float idle_gap = is_iphone ? 6.0f : 8.0f;
     const float max_idle_btn_w = 120.0f;
-    float idle_btn_w = std::min((w - 156.0f - idle_gap * 4.0f) / 5.0f, max_idle_btn_w);
+    float idle_btn_w = std::min((w - label_alloc_w - 16.0f - idle_gap * 4.0f) / 5.0f, max_idle_btn_w);
 
     for (int i = 0; i < 5; ++i) {
         float bx0 = btn_start_x + i * (idle_btn_w + idle_gap);
-        ImVec2 b_min(bx0, y0 + 144.0f);
-        ImVec2 b_max(bx0 + idle_btn_w, y0 + 144.0f + btn_h);
+        ImVec2 b_min(bx0, row4_y);
+        ImVec2 b_max(bx0 + idle_btn_w, row4_y + btn_h);
 
         bool is_act = (idle_fullscreen_mode_ == i);
         std::string btn_id = "##IdleFullscreen_" + std::to_string(i);
@@ -476,7 +494,7 @@ void SystemSettingsView::renderHardwareSection(ImDrawList* dl, float x0, float y
 
         if (Fonts::Small) ImGui::PushFont(Fonts::Small);
         ImVec2 txt_sz = ImGui::CalcTextSize(idle_opts[i]);
-        dl->AddText(ImVec2(bx0 + (idle_btn_w - txt_sz.x) * 0.5f, y0 + 144.0f + (btn_h - txt_sz.y) * 0.5f),
+        dl->AddText(ImVec2(bx0 + (idle_btn_w - txt_sz.x) * 0.5f, row4_y + (btn_h - txt_sz.y) * 0.5f),
                     is_act ? UIConfig::Color::TextActive : UIConfig::Color::TextNormal, idle_opts[i]);
         if (Fonts::Small) ImGui::PopFont();
     }

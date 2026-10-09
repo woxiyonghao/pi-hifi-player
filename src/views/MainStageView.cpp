@@ -1,5 +1,6 @@
 #include "views/MainStageView.hpp"
 #include "public/Font.hpp"
+#include "public/Platform.hpp"
 #include "public/UIConfig.hpp"
 #include "widgets/GlassCardRenderer.hpp"
 #include <algorithm>
@@ -47,7 +48,8 @@ void MainStageView::drawLiquidCard(ImDrawList* dl, ImVec2 p_min, ImVec2 p_max, c
 
     // 绘制标题
     if (title) {
-        ImVec2 title_pos = ImVec2(p_min.x + 20.0f, p_min.y + 16.0f);
+        bool is_iphone = Platform::isIPhone();
+        ImVec2 title_pos = ImVec2(p_min.x + (is_iphone ? 16.0f : 20.0f), p_min.y + (is_iphone ? 10.0f : 16.0f));
         if (Fonts::Medium) ImGui::PushFont(Fonts::Medium);
         dl->AddText(title_pos, UIConfig::Color::TextActive, title);
         if (Fonts::Medium) ImGui::PopFont();
@@ -69,7 +71,8 @@ void MainStageView::renderEqualizerView(float x, float y, float w, float h) {
     ImVec2 card_max(x + w - margin_x, y + h - 86.0f);
 
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    drawLiquidCard(dl, card_min, card_max, "图形均衡器", "10 段专业频段精调 · 纯净硬件直通");
+    const char* sub = Platform::isIPhone() ? nullptr : "10 段专业频段精调 · 纯净硬件直通";
+    drawLiquidCard(dl, card_min, card_max, "图形均衡器", sub);
 
     // 委托给独立专业 EQ 调音组件渲染
     eq_view_.render(dl, card_min, card_max);

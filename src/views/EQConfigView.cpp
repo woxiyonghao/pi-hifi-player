@@ -1,6 +1,7 @@
 #include "views/EQConfigView.hpp"
 #include "public/AppConfig.hpp"
 #include "public/Font.hpp"
+#include "public/Platform.hpp"
 #include "public/UIConfig.hpp"
 #include "tools/PlayerAdmin.hpp"
 #include <algorithm>
@@ -176,16 +177,17 @@ void EQConfigView::loadConfig() {
 // 1. 顶部操作区 (EQ 开关 / Direct 直通与重置归零)
 // ==============================================================================
 void EQConfigView::renderTopActions(ImDrawList* dl, ImVec2 card_min, ImVec2 card_max) {
+    const bool is_iphone = Platform::isIPhone();
     const ImU32 accent = UIConfig::Color::Accent;
     const ImU32 r = (accent >> IM_COL32_R_SHIFT) & 0xFF;
     const ImU32 g = (accent >> IM_COL32_G_SHIFT) & 0xFF;
     const ImU32 b = (accent >> IM_COL32_B_SHIFT) & 0xFF;
 
-    const float top_y = card_min.y + 16.0f;
-    const float btn_h = 30.0f;
+    const float top_y = is_iphone ? (card_min.y + 8.0f) : (card_min.y + 16.0f);
+    const float btn_h = is_iphone ? 24.0f : 30.0f;
 
     // 1. 右侧 EQ 直通/启用胶囊开关
-    const float toggle_w = 120.0f;
+    const float toggle_w = is_iphone ? 98.0f : 120.0f;
     float toggle_x0 = card_max.x - 20.0f - toggle_w;
     ImVec2 toggle_min(toggle_x0, top_y);
     ImVec2 toggle_max(toggle_x0 + toggle_w, top_y + btn_h);
@@ -199,42 +201,46 @@ void EQConfigView::renderTopActions(ImDrawList* dl, ImVec2 card_min, ImVec2 card
         setEnabled(!is_enabled_);
     }
 
+    float radius = is_iphone ? 12.0f : 15.0f;
+    float dot_x = is_iphone ? (toggle_min.x + 12.0f) : (toggle_min.x + 16.0f);
+    float text_x = is_iphone ? (toggle_min.x + 22.0f) : (toggle_min.x + 28.0f);
+
     if (is_enabled_) {
         // 开启态：主题色流光胶囊底板 + 1px 折射边框
         ImU32 fill_col = (hov_toggle || act_toggle) ? IM_COL32(r, g, b, 75) : IM_COL32(r, g, b, 50);
-        dl->AddRectFilled(toggle_min, toggle_max, fill_col, 15.0f);
-        dl->AddRect(toggle_min, toggle_max, IM_COL32(r, g, b, 200), 15.0f, 0, 1.0f);
+        dl->AddRectFilled(toggle_min, toggle_max, fill_col, radius);
+        dl->AddRect(toggle_min, toggle_max, IM_COL32(r, g, b, 200), radius, 0, 1.0f);
 
         // 绿色状态圆点
-        dl->AddCircleFilled(ImVec2(toggle_min.x + 16.0f, top_y + btn_h * 0.5f), 4.0f, IM_COL32(76, 217, 100, 255));
-        dl->AddCircleFilled(ImVec2(toggle_min.x + 16.0f, top_y + btn_h * 0.5f), 7.0f, IM_COL32(76, 217, 100, 50));
+        dl->AddCircleFilled(ImVec2(dot_x, top_y + btn_h * 0.5f), is_iphone ? 3.0f : 4.0f, IM_COL32(76, 217, 100, 255));
+        dl->AddCircleFilled(ImVec2(dot_x, top_y + btn_h * 0.5f), is_iphone ? 5.5f : 7.0f, IM_COL32(76, 217, 100, 50));
 
         // 文字
         if (Fonts::Small) ImGui::PushFont(Fonts::Small);
         ImVec2 text_sz = ImGui::CalcTextSize("EQ 已激活");
-        dl->AddText(ImVec2(toggle_min.x + 28.0f, top_y + (btn_h - text_sz.y) * 0.5f),
+        dl->AddText(ImVec2(text_x, top_y + (btn_h - text_sz.y) * 0.5f),
                     UIConfig::Color::TextActive, "EQ 已激活");
         if (Fonts::Small) ImGui::PopFont();
     } else {
         // 直通态 (Direct 100% 纯净源码直出)
         ImU32 fill_col = (hov_toggle || act_toggle) ? IM_COL32(255, 255, 255, 28) : IM_COL32(255, 255, 255, 14);
-        dl->AddRectFilled(toggle_min, toggle_max, fill_col, 15.0f);
-        dl->AddRect(toggle_min, toggle_max, UIConfig::Color::GlassBorder, 15.0f, 0, 1.0f);
+        dl->AddRectFilled(toggle_min, toggle_max, fill_col, radius);
+        dl->AddRect(toggle_min, toggle_max, UIConfig::Color::GlassBorder, radius, 0, 1.0f);
 
         // 灰色状态圆点
-        dl->AddCircle(ImVec2(toggle_min.x + 16.0f, top_y + btn_h * 0.5f), 4.0f, UIConfig::Color::TextMuted, 16, 1.2f);
+        dl->AddCircle(ImVec2(dot_x, top_y + btn_h * 0.5f), is_iphone ? 3.0f : 4.0f, UIConfig::Color::TextMuted, 16, 1.2f);
 
         // 文字
         if (Fonts::Small) ImGui::PushFont(Fonts::Small);
         ImVec2 text_sz = ImGui::CalcTextSize("Direct 直通");
-        dl->AddText(ImVec2(toggle_min.x + 28.0f, top_y + (btn_h - text_sz.y) * 0.5f),
+        dl->AddText(ImVec2(text_x, top_y + (btn_h - text_sz.y) * 0.5f),
                     UIConfig::Color::TextMuted, "Direct 直通");
         if (Fonts::Small) ImGui::PopFont();
     }
 
     // 2. 复原重置按钮
-    const float reset_w = 58.0f;
-    float reset_x0 = toggle_x0 - 10.0f - reset_w;
+    const float reset_w = is_iphone ? 46.0f : 58.0f;
+    float reset_x0 = toggle_x0 - (is_iphone ? 8.0f : 10.0f) - reset_w;
     ImVec2 reset_min(reset_x0, top_y);
     ImVec2 reset_max(reset_x0 + reset_w, top_y + btn_h);
 
@@ -248,9 +254,9 @@ void EQConfigView::renderTopActions(ImDrawList* dl, ImVec2 card_min, ImVec2 card
     }
 
     ImU32 reset_fill = (hov_reset || act_reset) ? IM_COL32(255, 255, 255, 26) : IM_COL32(255, 255, 255, 12);
-    dl->AddRectFilled(reset_min, reset_max, reset_fill, 15.0f);
+    dl->AddRectFilled(reset_min, reset_max, reset_fill, radius);
     dl->AddRect(reset_min, reset_max, (hov_reset || act_reset) ? IM_COL32(r, g, b, 160) : UIConfig::Color::GlassBorder,
-                15.0f, 0, 1.0f);
+                radius, 0, 1.0f);
 
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
     ImVec2 r_sz = ImGui::CalcTextSize("复原");
@@ -263,6 +269,7 @@ void EQConfigView::renderTopActions(ImDrawList* dl, ImVec2 card_min, ImVec2 card
 // 2. 预设方案水平胶囊栏 (Preset Chips)
 // ==============================================================================
 void EQConfigView::renderPresetChips(ImDrawList* dl, ImVec2 card_min, ImVec2 card_max) {
+    const bool is_iphone = Platform::isIPhone();
     const ImU32 accent = UIConfig::Color::Accent;
     const ImU32 r = (accent >> IM_COL32_R_SHIFT) & 0xFF;
     const ImU32 g = (accent >> IM_COL32_G_SHIFT) & 0xFF;
@@ -270,12 +277,13 @@ void EQConfigView::renderPresetChips(ImDrawList* dl, ImVec2 card_min, ImVec2 car
 
     const float start_x = card_min.x + 20.0f;
     const float total_w = card_max.x - card_min.x - 40.0f;
-    const float chip_y = card_min.y + 70.0f;
-    const float chip_h = 26.0f;
+    const float chip_y = is_iphone ? (card_min.y + 36.0f) : (card_min.y + 70.0f);
+    const float chip_h = is_iphone ? 20.0f : 26.0f;
+    const float chip_round = is_iphone ? 10.0f : 13.0f;
     const size_t count = presets_.size();
 
-    const float gap = 7.0f;
-    const float max_chip_w = 115.0f;
+    const float gap = is_iphone ? 5.0f : 7.0f;
+    const float max_chip_w = is_iphone ? 90.0f : 115.0f;
     const float chip_w = std::min((total_w - gap * (count - 1)) / static_cast<float>(count), max_chip_w);
 
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
@@ -299,18 +307,18 @@ void EQConfigView::renderPresetChips(ImDrawList* dl, ImVec2 card_min, ImVec2 car
 
         if (is_selected) {
             // 选中胶囊：主题色流体发光
-            dl->AddRectFilled(p0, p1, IM_COL32(r, g, b, 65), 13.0f);
-            dl->AddRect(p0, p1, IM_COL32(r, g, b, 210), 13.0f, 0, 1.0f);
+            dl->AddRectFilled(p0, p1, IM_COL32(r, g, b, 65), chip_round);
+            dl->AddRect(p0, p1, IM_COL32(r, g, b, 210), chip_round, 0, 1.0f);
             if (UIConfig::Animation::EnableGlow) {
                 dl->AddRect(ImVec2(p0.x - 1.5f, p0.y - 1.5f), ImVec2(p1.x + 1.5f, p1.y + 1.5f),
-                            IM_COL32(r, g, b, 45), 14.5f, 0, 1.5f);
+                            IM_COL32(r, g, b, 45), chip_round + 1.5f, 0, 1.5f);
             }
         } else {
             // 普通胶囊：轻盈微透毛玻璃
             ImU32 fill_col = (hov || act) ? IM_COL32(255, 255, 255, 24) : IM_COL32(255, 255, 255, 12);
-            dl->AddRectFilled(p0, p1, fill_col, 13.0f);
+            dl->AddRectFilled(p0, p1, fill_col, chip_round);
             dl->AddRect(p0, p1, (hov || act) ? IM_COL32(r, g, b, 120) : UIConfig::Color::GlassBorder,
-                        13.0f, 0, 1.0f);
+                        chip_round, 0, 1.0f);
         }
 
         ImU32 text_col = is_selected ? UIConfig::Color::TextActive :
@@ -327,6 +335,7 @@ void EQConfigView::renderPresetChips(ImDrawList* dl, ImVec2 card_min, ImVec2 car
 // 3. 动态频响拟合贝塞尔响应曲线视窗 (Curve Canvas)
 // ==============================================================================
 void EQConfigView::renderCurveCanvas(ImDrawList* dl, ImVec2 card_min, ImVec2 card_max) {
+    const bool is_iphone = Platform::isIPhone();
     const ImU32 accent = UIConfig::Color::Accent;
     const ImU32 r = (accent >> IM_COL32_R_SHIFT) & 0xFF;
     const ImU32 g = (accent >> IM_COL32_G_SHIFT) & 0xFF;
@@ -335,13 +344,13 @@ void EQConfigView::renderCurveCanvas(ImDrawList* dl, ImVec2 card_min, ImVec2 car
     const float canvas_x0 = card_min.x + 20.0f;
     const float canvas_x1 = card_max.x - 20.0f;
     const float card_total_h = card_max.y - card_min.y;
-    // 动态适度放大曲线视窗高度 (基础由 86px 扩大至 138px，且随窗口拉高平滑延展，消除压抑矮长感)
-    const float canvas_h = std::clamp(card_total_h * 0.28f, 138.0f, 240.0f);
-    const float y0 = card_min.y + 104.0f;
+    // 动态适度放大曲线视窗高度 (iPhone 下收敛至 50px 消除过度挤压推子区，普通平台维持 138-240px)
+    const float canvas_h = is_iphone ? 50.0f : std::clamp(card_total_h * 0.28f, 138.0f, 240.0f);
+    const float y0 = is_iphone ? (card_min.y + 60.0f) : (card_min.y + 104.0f);
     const float y1 = y0 + canvas_h;
     const float h = canvas_h;
     const float y_mid = (y0 + y1) * 0.5f;
-    const float max_dev = h * 0.38f;
+    const float max_dev = h * (is_iphone ? 0.34f : 0.38f);
 
     // 1. 视窗容器毛玻璃底板
     dl->AddRectFilled(ImVec2(canvas_x0, y0), ImVec2(canvas_x1, y1), IM_COL32(12, 16, 24, 215), 8.0f);
@@ -349,9 +358,10 @@ void EQConfigView::renderCurveCanvas(ImDrawList* dl, ImVec2 card_min, ImVec2 car
 
     // 左侧微型 dB 刻度标字
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-    dl->AddText(ImVec2(canvas_x0 + 8.0f, y_mid - max_dev - 6.0f), IM_COL32(160, 175, 195, 150), "+12");
-    dl->AddText(ImVec2(canvas_x0 + 8.0f, y_mid - 6.0f), IM_COL32(160, 175, 195, 190), " 0dB");
-    dl->AddText(ImVec2(canvas_x0 + 8.0f, y_mid + max_dev - 6.0f), IM_COL32(160, 175, 195, 150), "-12");
+    float db_txt_x = canvas_x0 + (is_iphone ? 4.0f : 8.0f);
+    dl->AddText(ImVec2(db_txt_x, y_mid - max_dev - (is_iphone ? 5.0f : 6.0f)), IM_COL32(160, 175, 195, 150), "+12");
+    dl->AddText(ImVec2(db_txt_x, y_mid - (is_iphone ? 5.0f : 6.0f)), IM_COL32(160, 175, 195, 190), " 0dB");
+    dl->AddText(ImVec2(db_txt_x, y_mid + max_dev - (is_iphone ? 5.0f : 6.0f)), IM_COL32(160, 175, 195, 150), "-12");
     if (Fonts::Small) ImGui::PopFont();
 
     // 2. 计算 10 个频段的中心采样点坐标 (左右各再缩进 12px，使两端更收敛舒适，严格垂直对齐下方 10 个推子中心点)
@@ -445,6 +455,7 @@ void EQConfigView::renderCurveCanvas(ImDrawList* dl, ImVec2 card_min, ImVec2 car
 // 4. 10 段发烧级图形推子控制区 (Fader Sliders)
 // ==============================================================================
 void EQConfigView::renderSliders(ImDrawList* dl, ImVec2 card_min, ImVec2 card_max) {
+    const bool is_iphone = Platform::isIPhone();
     const ImU32 accent = UIConfig::Color::Accent;
     const ImU32 r = (accent >> IM_COL32_R_SHIFT) & 0xFF;
     const ImU32 g = (accent >> IM_COL32_G_SHIFT) & 0xFF;
@@ -456,15 +467,15 @@ void EQConfigView::renderSliders(ImDrawList* dl, ImVec2 card_min, ImVec2 card_ma
     const float col_w = total_w / static_cast<float>(NUM_BANDS);
 
     const float card_total_h = card_max.y - card_min.y;
-    const float canvas_h = std::clamp(card_total_h * 0.28f, 138.0f, 240.0f);
-    const float y0 = card_min.y + 104.0f + canvas_h + 12.0f;
-    const float y1 = card_max.y - 12.0f;
+    const float canvas_h = is_iphone ? 50.0f : std::clamp(card_total_h * 0.28f, 138.0f, 240.0f);
+    const float y0 = is_iphone ? (card_min.y + 114.0f) : (card_min.y + 104.0f + canvas_h + 12.0f);
+    const float y1 = is_iphone ? (card_max.y - 4.0f) : (card_max.y - 12.0f);
 
-    const float label_top_h = 24.0f;
-    const float label_bot_h = 24.0f;
+    const float label_top_h = is_iphone ? 14.0f : 24.0f;
+    const float label_bot_h = is_iphone ? 14.0f : 24.0f;
 
-    const float rail_top = y0 + label_top_h + 8.0f;
-    const float rail_bot = y1 - label_bot_h - 8.0f;
+    const float rail_top = is_iphone ? (y0 + label_top_h + 4.0f) : (y0 + label_top_h + 8.0f);
+    const float rail_bot = is_iphone ? (y1 - label_bot_h - 4.0f) : (y1 - label_bot_h - 8.0f);
     const float rail_h = rail_bot - rail_top;
     const float rail_mid = (rail_top + rail_bot) * 0.5f;
 
@@ -473,15 +484,15 @@ void EQConfigView::renderSliders(ImDrawList* dl, ImVec2 card_min, ImVec2 card_ma
         float gain = band_gains_[i];
 
         // ---------------------------------------------------------------------
-        // 1. 推子全高舒适交互热区 (覆盖整列 48px 宽 × 230px 高)
+        // 1. 推子全高舒适交互热区
         // ---------------------------------------------------------------------
         const float hit_w = col_w - 6.0f;
-        ImVec2 hit_min(cx - hit_w * 0.5f, rail_top - 10.0f);
-        ImVec2 hit_max(cx + hit_w * 0.5f, rail_bot + 10.0f);
+        ImVec2 hit_min(cx - hit_w * 0.5f, rail_top - (is_iphone ? 6.0f : 10.0f));
+        ImVec2 hit_max(cx + hit_w * 0.5f, rail_bot + (is_iphone ? 6.0f : 10.0f));
 
         ImGui::SetCursorScreenPos(hit_min);
         std::string slider_id = "##eq_fader_" + std::to_string(i);
-        ImGui::InvisibleButton(slider_id.c_str(), ImVec2(hit_w, (rail_bot - rail_top) + 20.0f));
+        ImGui::InvisibleButton(slider_id.c_str(), ImVec2(hit_w, (rail_bot - rail_top) + (is_iphone ? 12.0f : 20.0f)));
 
         bool hov = ImGui::IsItemHovered();
         bool act = ImGui::IsItemActive();
@@ -523,7 +534,7 @@ void EQConfigView::renderSliders(ImDrawList* dl, ImVec2 card_min, ImVec2 card_ma
 
         if (Fonts::Small) ImGui::PushFont(Fonts::Small);
         ImVec2 db_sz = ImGui::CalcTextSize(db_buf);
-        ImVec2 db_pos(cx - db_sz.x * 0.5f, y0 + 6.0f);
+        ImVec2 db_pos(cx - db_sz.x * 0.5f, is_iphone ? (y0 + 2.0f) : (y0 + 6.0f));
 
         ImU32 db_col = UIConfig::Color::TextMuted;
         if (is_enabled_) {
@@ -574,8 +585,8 @@ void EQConfigView::renderSliders(ImDrawList* dl, ImVec2 card_min, ImVec2 card_ma
         // ---------------------------------------------------------------------
         // 5. 推子物理手柄 (Tactile Slider Thumb)
         // ---------------------------------------------------------------------
-        const float thumb_w = (hov || act) ? 30.0f : 28.0f;
-        const float thumb_h = (hov || act) ? 14.0f : 12.0f;
+        const float thumb_w = is_iphone ? ((hov || act) ? 24.0f : 22.0f) : ((hov || act) ? 30.0f : 28.0f);
+        const float thumb_h = is_iphone ? ((hov || act) ? 12.0f : 10.0f) : ((hov || act) ? 14.0f : 12.0f);
         const float r_thumb = thumb_h * 0.5f; // 纯圆润平滑胶囊
 
         ImVec2 th_min(cx - thumb_w * 0.5f, thumb_y - thumb_h * 0.5f);
@@ -606,7 +617,7 @@ void EQConfigView::renderSliders(ImDrawList* dl, ImVec2 card_min, ImVec2 card_ma
         // ---------------------------------------------------------------------
         if (Fonts::Small) ImGui::PushFont(Fonts::Small);
         ImVec2 freq_sz = ImGui::CalcTextSize(BAND_LABELS[i]);
-        ImVec2 freq_pos(cx - freq_sz.x * 0.5f, rail_bot + 12.0f);
+        ImVec2 freq_pos(cx - freq_sz.x * 0.5f, is_iphone ? (rail_bot + 4.0f) : (rail_bot + 12.0f));
 
         ImU32 freq_col = (hov || act) ? UIConfig::Color::TextActive : UIConfig::Color::TextMuted;
         dl->AddText(freq_pos, freq_col, BAND_LABELS[i]);

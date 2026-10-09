@@ -137,12 +137,12 @@ void initialize(ImGuiIO& io) {
     float sz_medium  = UIConfig::FontSize::Medium;
     float sz_large   = UIConfig::FontSize::Large;
 
-    // 当运行在 iPhone 设备架构时，全局字体等比例紧凑缩小，完美适配手机小屏，彻底杜绝所有字体溢出
+    // 当运行在 iPhone 设备架构时，全局字体等比例紧凑精致缩小，完美适配手机小屏，彻底杜绝所有字体溢出与偏大
     if (Platform::isIPhone()) {
-        sz_small   = 10.5f; // 12.0px -> 10.5px
-        sz_regular = 13.0f; // 15.0px -> 13.0px
-        sz_medium  = 16.5f; // 20.0px -> 16.5px
-        sz_large   = 22.0f; // 28.0px -> 22.0px
+        sz_small   = 9.5f;  // 12.0px -> 9.5px (精致微标/辅助文字/按钮)
+        sz_regular = 11.5f; // 15.0px -> 11.5px (正文字体/选项正文)
+        sz_medium  = 14.5f; // 20.0px -> 14.5px (页面与板块大标题)
+        sz_large   = 18.0f; // 28.0px -> 18.0px (醒目标题)
 
         UIConfig::FontSize::Small   = sz_small;
         UIConfig::FontSize::Regular = sz_regular;
