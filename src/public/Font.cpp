@@ -1,5 +1,6 @@
 #include "Font.hpp"
 #include "UIConfig.hpp"
+#include "public/Platform.hpp"
 #include <iostream>
 #include <vector>
 #include <string>
@@ -131,11 +132,29 @@ void initialize(ImGuiIO& io) {
 
     const ImWchar* glyph_ranges = io.Fonts->GetGlyphRangesChineseSimplifiedCommon();
 
-    // 根据 UIConfig::FontSize 中的字号配置，依序烘焙不同字阶的矢量字模
-    Small   = io.Fonts->AddFontFromFileTTF(matched_path.c_str(), UIConfig::FontSize::Small,   &cfg, glyph_ranges);
-    Regular = io.Fonts->AddFontFromFileTTF(matched_path.c_str(), UIConfig::FontSize::Regular, &cfg, glyph_ranges);
-    Medium  = io.Fonts->AddFontFromFileTTF(matched_path.c_str(), UIConfig::FontSize::Medium,  &cfg, glyph_ranges);
-    Large   = io.Fonts->AddFontFromFileTTF(matched_path.c_str(), UIConfig::FontSize::Large,   &cfg, glyph_ranges);
+    float sz_small   = UIConfig::FontSize::Small;
+    float sz_regular = UIConfig::FontSize::Regular;
+    float sz_medium  = UIConfig::FontSize::Medium;
+    float sz_large   = UIConfig::FontSize::Large;
+
+    // 当运行在 iPhone 设备架构时，全局字体等比例紧凑缩小，完美适配手机小屏，彻底杜绝所有字体溢出
+    if (Platform::isIPhone()) {
+        sz_small   = 10.5f; // 12.0px -> 10.5px
+        sz_regular = 13.0f; // 15.0px -> 13.0px
+        sz_medium  = 16.5f; // 20.0px -> 16.5px
+        sz_large   = 22.0f; // 28.0px -> 22.0px
+
+        UIConfig::FontSize::Small   = sz_small;
+        UIConfig::FontSize::Regular = sz_regular;
+        UIConfig::FontSize::Medium  = sz_medium;
+        UIConfig::FontSize::Large   = sz_large;
+    }
+
+    // 根据字阶配置，依序烘焙矢量字模
+    Small   = io.Fonts->AddFontFromFileTTF(matched_path.c_str(), sz_small,   &cfg, glyph_ranges);
+    Regular = io.Fonts->AddFontFromFileTTF(matched_path.c_str(), sz_regular, &cfg, glyph_ranges);
+    Medium  = io.Fonts->AddFontFromFileTTF(matched_path.c_str(), sz_medium,  &cfg, glyph_ranges);
+    Large   = io.Fonts->AddFontFromFileTTF(matched_path.c_str(), sz_large,   &cfg, glyph_ranges);
 
     // 严密降级保护：若字体文件解析失败，强制挂载 ImGui 默认字库，严禁让未初始化的 GiantClock 夺取默认字体
     if (!Regular) {
@@ -176,8 +195,9 @@ void initialize(ImGuiIO& io) {
         ':', ':',
         0
     };
-    // 用户指定：字号再大 24px (原 145px + 24px = 169.0f)
-    GiantClock = io.Fonts->AddFontFromFileTTF(clock_font_path.c_str(), 169.0f, &cfg, clock_ranges);
+    // 用户指定：字号再大 24px (原 145px + 24px = 169.0f)，iPhone 上适配横屏高度 (96.0f)
+    float clock_sz = Platform::isIPhone() ? 96.0f : 169.0f;
+    GiantClock = io.Fonts->AddFontFromFileTTF(clock_font_path.c_str(), clock_sz, &cfg, clock_ranges);
 
     // 设置默认全局字体
     io.FontDefault = Regular;

@@ -44,12 +44,21 @@ void WifiTransferView::render(float x, float y, float w, float h) {
     // 2. 绘制标题栏「WiFi 局域网传歌」
     ImVec2 title_pos(card_min.x + 20.0f, card_min.y + 16.0f);
     if (Fonts::Medium) ImGui::PushFont(Fonts::Medium);
-    dl->AddText(title_pos, UIConfig::Color::TextActive, "WiFi 局域网传歌");
+    const char* title_text = "WiFi 局域网传歌";
+    dl->AddText(title_pos, UIConfig::Color::TextActive, title_text);
+    ImVec2 title_sz = ImGui::CalcTextSize(title_text);
     if (Fonts::Medium) ImGui::PopFont();
 
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-    dl->AddText(ImVec2(title_pos.x + 160.0f, title_pos.y + 3.0f), UIConfig::Color::TextMuted,
-                "同一局域网下电脑或手机免线拖拽传输 · 即传即播 · 自动扫描入库");
+    if (!Platform::isIPhone()) {
+        dl->AddText(ImVec2(title_pos.x + title_sz.x + 16.0f, title_pos.y + 3.0f), UIConfig::Color::TextMuted,
+                    "同一局域网下电脑或手机免线拖拽传输 · 即传即播 · 自动扫描入库");
+    } else {
+        if (card_max.x - (title_pos.x + title_sz.x + 16.0f) > 110.0f) {
+            dl->AddText(ImVec2(title_pos.x + title_sz.x + 12.0f, title_pos.y + 3.0f), UIConfig::Color::TextMuted,
+                        "免线传输 · 即传即播");
+        }
+    }
     if (Fonts::Small) ImGui::PopFont();
 
     anim_pulse_ += ImGui::GetIO().DeltaTime * 3.0f;
@@ -57,19 +66,49 @@ void WifiTransferView::render(float x, float y, float w, float h) {
     float content_x = card_min.x + 16.0f;
     float content_y = card_min.y + 46.0f;
     float content_w = card_max.x - card_min.x - 32.0f;
-    float cur_y = content_y;
+    float content_h = card_max.y - content_y - 10.0f;
 
-    // 板块一：服务端状态与启停控制卡片 (紧凑高 96px)
-    renderServerCard(dl, content_x, cur_y, content_w);
-    cur_y += 96.0f + 10.0f;
+    ImGui::SetCursorScreenPos(ImVec2(content_x, content_y));
+    ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 5.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarRounding, 2.5f);
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarBg, IM_COL32(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarGrab, IM_COL32(255, 255, 255, 45));
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarGrabHovered, IM_COL32(255, 255, 255, 90));
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarGrabActive, UIConfig::Color::Accent);
 
-    // 板块二：实时传输进度看板 (紧凑高 84px)
-    renderLiveProgressCard(dl, content_x, cur_y, content_w);
-    cur_y += 84.0f + 10.0f;
+    if (ImGui::BeginChild("##WifiTransferScrollArea", ImVec2(content_w, content_h), false, ImGuiWindowFlags_NoBackground)) {
+        if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem) &&
+            !ImGui::IsAnyItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 4.0f)) {
+            float drag_dy = std::clamp(ImGui::GetIO().MouseDelta.y, -40.0f, 40.0f);
+            if (drag_dy != 0.0f) {
+                ImGui::SetScrollY(ImGui::GetScrollY() - drag_dy);
+            }
+        }
 
-    // 板块三：已接收曲目历史清单看板 (自适应填满剩余高度，无外层滚动条)
-    float history_h = std::max(60.0f, card_max.y - cur_y - 12.0f);
-    renderHistoryCard(dl, content_x, cur_y, content_w, history_h);
+        ImDrawList* child_dl = ImGui::GetWindowDrawList();
+        float section_w = ImGui::GetContentRegionAvail().x;
+        float cur_x = ImGui::GetCursorScreenPos().x;
+        float cur_y = ImGui::GetCursorScreenPos().y;
+
+        // 板块一：服务端状态与启停控制卡片 (紧凑高 96px)
+        renderServerCard(child_dl, cur_x, cur_y, section_w);
+        cur_y += 96.0f + 10.0f;
+
+        // 板块二：实时传输进度看板 (紧凑高 84px)
+        renderLiveProgressCard(child_dl, cur_x, cur_y, section_w);
+        cur_y += 84.0f + 10.0f;
+
+        // 板块三：已接收曲目历史清单看板 (自适应填满剩余高度，内部拥有独立历史记录列表)
+        float history_h = std::max(120.0f, content_h - (cur_y - ImGui::GetCursorScreenPos().y) - 10.0f);
+        renderHistoryCard(child_dl, cur_x, cur_y, section_w, history_h);
+        cur_y += history_h + 10.0f;
+
+        ImGui::SetCursorScreenPos(ImVec2(cur_x, cur_y));
+        ImGui::Dummy(ImVec2(0.0f, 10.0f));
+    }
+    ImGui::EndChild();
+    ImGui::PopStyleColor(4);
+    ImGui::PopStyleVar(2);
 }
 
 void WifiTransferView::renderServerCard(ImDrawList* dl, float x0, float y0, float w) {

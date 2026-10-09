@@ -59,14 +59,16 @@
     AppConfig::Path::setConfigDir([configDir UTF8String]);
     AppConfig::Path::setMusicDir([docsDir UTF8String]);
 
-    // 0.2 读取已保存的设备运行形态角色 (0: 未设置, 1: 数播模式, 2: 主端模式)
-    std::string role_str = MusicDatabase::getInstance().getSetting("setting_mobile_app_role", "0");
-    _currentMode = role_str.empty() ? 0 : std::atoi(role_str.c_str());
+    // 0.2 每次打开 App 均主动询问用户进入哪一个运行形态 (0: 引导选择弹窗, 1: 数播横屏模式, 2: 随身主端模式)
+    _currentMode = 0;
 
-    if (_currentMode == 1) {
-        // 数播模式默认启动 Web 远程控制服务
-        WebService::getInstance().start(8080);
-    }
+    // 0.3 针对 iPhone 紧凑屏幕优化全局布局尺寸与边距，彻底杜绝左侧菜单截断与滚动
+    UIConfig::Layout::NavItemHeight = 25.0f;
+    UIConfig::Layout::DacCardHeight = 32.0f;
+    UIConfig::Layout::ContainerMarginX = 8.0f;
+    UIConfig::Layout::ContainerMarginY = 8.0f;
+    UIConfig::Layout::ContainerGap = 6.0f;
+    UIConfig::Layout::SidebarWidth  = 180.0f;
 
     // 1. 初始化 Metal 绘图引擎
     self.device = MTLCreateSystemDefaultDevice();
@@ -146,10 +148,8 @@
     if (_currentMode == 1) {
         return UIInterfaceOrientationMaskLandscape;
     }
-    if (_currentMode == 2) {
-        return UIInterfaceOrientationMaskPortrait;
-    }
-    return UIInterfaceOrientationMaskAllButUpsideDown;
+    // 引导选择模式 (0) 或随身主端模式 (2)：均为垂直竖屏
+    return UIInterfaceOrientationMaskPortrait;
 }
 
 - (UIInterfaceOrientation)preferredInterfaceOrientationForPresentation {
@@ -172,7 +172,7 @@
     MusicDatabase::getInstance().setSetting("setting_mobile_app_role", std::to_string(mode));
 
     if (mode == 1) {
-        WebService::getInstance().start(8080);
+        WebService::getInstance().start(8088);
         if (@available(iOS 16.0, *)) {
             UIWindowSceneGeometryPreferencesIOS *geom = [[UIWindowSceneGeometryPreferencesIOS alloc] initWithInterfaceOrientations:UIInterfaceOrientationMaskLandscape];
             [self.view.window.windowScene requestGeometryUpdateWithPreferences:geom errorHandler:nil];
@@ -228,9 +228,14 @@
     } else if (_currentMode == 1) {
         // [数播模式] 强制横屏，运行 iPad 缩小自适应版
         if (_pad_renderer) {
+            UIEdgeInsets insets = UIEdgeInsetsZero;
+            if (@available(iOS 11.0, *)) {
+                insets = view.safeAreaInsets;
+            }
+            _pad_renderer->setSafeArea(insets.left, insets.top, insets.right, insets.bottom);
             _pad_renderer->render(screen_w, screen_h);
         }
-        // 浮动模式切换按钮 (右上角小齿轮)
+        // 浮动模式切换按钮 (右上角切换胶囊)
         [self renderModeSwitchButton:screen_w height:screen_h];
     } else {
         // [主端模式] 竖屏 Dear ImGui 移动端重构版
@@ -271,8 +276,8 @@
         // 磨砂全屏暗色遮罩
         dl->AddRectFilled(ImVec2(0, 0), ImVec2(screen_w, screen_h), IM_COL32(0, 0, 0, 200));
 
-        float card_w = std::min(screen_w - 40.0f, 420.0f);
-        float card_h = std::min(screen_h - 40.0f, 380.0f);
+        float card_w = std::min(screen_w - 32.0f, 380.0f);
+        float card_h = 360.0f;
         float card_x0 = (screen_w - card_w) * 0.5f;
         float card_y0 = (screen_h - card_h) * 0.5f;
         ImVec2 c_min(card_x0, card_y0);
@@ -283,22 +288,23 @@
         // 标题与副标题
         if (Fonts::Large) ImGui::PushFont(Fonts::Large);
         ImVec2 t_sz = ImGui::CalcTextSize("PiHiEnd 发烧音频中枢");
-        dl->AddText(ImVec2(card_x0 + (card_w - t_sz.x) * 0.5f, card_y0 + 24.0f),
+        dl->AddText(ImVec2(card_x0 + (card_w - t_sz.x) * 0.5f, card_y0 + 20.0f),
                     UIConfig::Color::TextActive, "PiHiEnd 发烧音频中枢");
         if (Fonts::Large) ImGui::PopFont();
 
         if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-        ImVec2 s_sz = ImGui::CalcTextSize("请为当前设备选择运行形态 (后续可在设置中随时切换)");
-        dl->AddText(ImVec2(card_x0 + (card_w - s_sz.x) * 0.5f, card_y0 + 60.0f),
-                    UIConfig::Color::TextMuted, "请为当前设备选择运行形态 (后续可在设置中随时切换)");
+        const char* sub_txt = "请选择当前设备运行形态 (设置中可随时切换)";
+        ImVec2 s_sz = ImGui::CalcTextSize(sub_txt);
+        dl->AddText(ImVec2(card_x0 + (card_w - s_sz.x) * 0.5f, card_y0 + 52.0f),
+                    UIConfig::Color::TextMuted, sub_txt);
         if (Fonts::Small) ImGui::PopFont();
 
         // 选项 1：数播模式卡片
-        float btn_w = card_w - 40.0f;
-        float btn_h = 100.0f;
-        float btn1_y = card_y0 + 95.0f;
-        ImVec2 b1_min(card_x0 + 20.0f, btn1_y);
-        ImVec2 b1_max(card_x0 + 20.0f + btn_w, btn1_y + btn_h);
+        float btn_w = card_w - 32.0f;
+        float btn_h = 96.0f;
+        float btn1_y = card_y0 + 82.0f;
+        ImVec2 b1_min(card_x0 + 16.0f, btn1_y);
+        ImVec2 b1_max(card_x0 + 16.0f + btn_w, btn1_y + btn_h);
 
         ImGui::SetCursorScreenPos(b1_min);
         if (ImGui::InvisibleButton("##SelectStreamerRoleBtn", ImVec2(btn_w, btn_h))) {
@@ -311,20 +317,20 @@
         dl->AddRect(b1_min, b1_max, b1_bd, 12.0f, 0, 1.2f);
 
         if (Fonts::Medium) ImGui::PushFont(Fonts::Medium);
-        dl->AddText(ImVec2(b1_min.x + 16.0f, b1_min.y + 16.0f), UIConfig::Color::TextActive, "发烧数播模式 (Streamer)");
+        dl->AddText(ImVec2(b1_min.x + 16.0f, b1_min.y + 14.0f), UIConfig::Color::TextActive, "发烧数播模式 (Streamer)");
         if (Fonts::Medium) ImGui::PopFont();
 
         if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-        dl->AddText(ImVec2(b1_min.x + 16.0f, b1_min.y + 44.0f), UIConfig::Color::TextNormal,
-                    "耳放解码直连 · 强制横屏 · 绚丽发烧表头 · 自动开启Web遥控");
-        dl->AddText(ImVec2(b1_min.x + 16.0f, b1_min.y + 66.0f), UIConfig::Color::TextMuted,
-                    "适合将旧手机放置在音响架或桌面当独立转盘使用");
+        dl->AddText(ImVec2(b1_min.x + 16.0f, b1_min.y + 42.0f), UIConfig::Color::TextNormal,
+                    "耳放解码直连 · 绚丽发烧表头 · 强制横屏");
+        dl->AddText(ImVec2(b1_min.x + 16.0f, b1_min.y + 64.0f), UIConfig::Color::TextMuted,
+                    "自动开启Web遥控 · 适合桌面独立转盘");
         if (Fonts::Small) ImGui::PopFont();
 
         // 选项 2：便携随身主端模式卡片
-        float btn2_y = btn1_y + btn_h + 16.0f;
-        ImVec2 b2_min(card_x0 + 20.0f, btn2_y);
-        ImVec2 b2_max(card_x0 + 20.0f + btn_w, btn2_y + btn_h);
+        float btn2_y = btn1_y + btn_h + 14.0f;
+        ImVec2 b2_min(card_x0 + 16.0f, btn2_y);
+        ImVec2 b2_max(card_x0 + 16.0f + btn_w, btn2_y + btn_h);
 
         ImGui::SetCursorScreenPos(b2_min);
         if (ImGui::InvisibleButton("##SelectPlayerRoleBtn", ImVec2(btn_w, btn_h))) {
@@ -337,14 +343,14 @@
         dl->AddRect(b2_min, b2_max, b2_bd, 12.0f, 0, 1.2f);
 
         if (Fonts::Medium) ImGui::PushFont(Fonts::Medium);
-        dl->AddText(ImVec2(b2_min.x + 16.0f, b2_min.y + 16.0f), UIConfig::Color::TextActive, "便携主端模式 (Player)");
+        dl->AddText(ImVec2(b2_min.x + 16.0f, b2_min.y + 14.0f), UIConfig::Color::TextActive, "便携主端模式 (Player)");
         if (Fonts::Medium) ImGui::PopFont();
 
         if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-        dl->AddText(ImVec2(b2_min.x + 16.0f, b2_min.y + 44.0f), UIConfig::Color::TextNormal,
-                    "单手竖屏握持 · 随身曲库 · 随身10段EQ & 魔棒微调");
-        dl->AddText(ImVec2(b2_min.x + 16.0f, b2_min.y + 66.0f), UIConfig::Color::TextMuted,
-                    "适合日常主力手机随时随地高保真聆听");
+        dl->AddText(ImVec2(b2_min.x + 16.0f, b2_min.y + 42.0f), UIConfig::Color::TextNormal,
+                    "单手竖屏握持 · 随身海量高解析曲库");
+        dl->AddText(ImVec2(b2_min.x + 16.0f, b2_min.y + 64.0f), UIConfig::Color::TextMuted,
+                    "10段发烧EQ & 调音魔棒 · 随身聆听");
         if (Fonts::Small) ImGui::PopFont();
     }
     ImGui::End();
@@ -369,11 +375,17 @@
     if (ImGui::Begin("##PhoneModeSwitchButtonRoot", nullptr, flags)) {
         ImDrawList* dl = ImGui::GetWindowDrawList();
 
-        // 位于右上角的轻盈毛玻璃切换胶囊
-        float btn_w = 90.0f;
-        float btn_h = 28.0f;
-        float btn_x = screen_w - btn_w - 16.0f;
-        float btn_y = 12.0f;
+        UIEdgeInsets insets = UIEdgeInsetsZero;
+        if (@available(iOS 11.0, *)) {
+            insets = self.view.safeAreaInsets;
+        }
+
+        // 放置在左侧边栏顶部右侧空白处，完全避让右侧主舞台所有页面控件 (调音魔棒一键复位/设置/歌单等)
+        float sidebar_w = UIConfig::Layout::SidebarWidth;
+        float btn_w = 64.0f;
+        float btn_h = 22.0f;
+        float btn_x = insets.left + sidebar_w - UIConfig::Layout::ContainerMarginX - btn_w - 4.0f;
+        float btn_y = insets.top + UIConfig::Layout::ContainerMarginY + 4.0f;
         ImVec2 b_min(btn_x, btn_y);
         ImVec2 b_max(btn_x + btn_w, btn_y + btn_h);
 
@@ -383,13 +395,13 @@
         }
         bool hov = ImGui::IsItemHovered();
         ImU32 fill = hov ? IM_COL32(250, 45, 72, 80) : IM_COL32(255, 255, 255, 26);
-        dl->AddRectFilled(b_min, b_max, fill, 14.0f);
-        dl->AddRect(b_min, b_max, hov ? UIConfig::Color::Accent : UIConfig::Color::GlassBorder, 14.0f, 0, 1.0f);
+        dl->AddRectFilled(b_min, b_max, fill, 11.0f);
+        dl->AddRect(b_min, b_max, hov ? UIConfig::Color::Accent : UIConfig::Color::GlassBorder, 11.0f, 0, 1.0f);
 
         if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-        ImVec2 t_sz = ImGui::CalcTextSize("切换为竖屏");
+        ImVec2 t_sz = ImGui::CalcTextSize("切换竖屏");
         dl->AddText(ImVec2(btn_x + (btn_w - t_sz.x) * 0.5f, btn_y + (btn_h - t_sz.y) * 0.5f),
-                    UIConfig::Color::TextActive, "切换为竖屏");
+                    UIConfig::Color::TextActive, "切换竖屏");
         if (Fonts::Small) ImGui::PopFont();
     }
     ImGui::End();

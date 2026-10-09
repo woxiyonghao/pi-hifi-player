@@ -34,7 +34,7 @@ void LogCurrentAudioRoute(AVAudioSession *session, NSString *reason) {
 }
 
 void KeepPadAudioSessionActive(NSString *reason) {
-    if (!IS_IPAD) return;
+    if (!IS_IPAD && !IS_IPHONE) return;
 
     dispatch_async(AudioSessionQueue(), ^{
         AVAudioSession *session = [AVAudioSession sharedInstance];
@@ -50,11 +50,11 @@ void KeepPadAudioSessionActive(NSString *reason) {
 
 } // namespace
 
-// iPad 专用桥接：系统设置中的 64/256/512 表示 AVAudioSession 的首选
+// iPad / iPhone 专用桥接：系统设置中的 64/256/512 表示 AVAudioSession 的首选
 // 硬件 I/O 帧数，而不是 AudioQueue 每个应用层推流 buffer 的分配尺寸。
-// 返回 true 只表示该 iPad 设置已在这里处理；蓝牙路由可能会采用自己的实际值。
+// 返回 true 只表示该 iOS 设置已在这里处理；蓝牙路由可能会采用自己的实际值。
 extern "C" bool HifiPadSetPreferredIOBufferFrames(uint32_t frames) {
-    if (!IS_IPAD) {
+    if (!IS_IPAD && !IS_IPHONE) {
         return false;
     }
 
@@ -72,10 +72,10 @@ extern "C" bool HifiPadSetPreferredIOBufferFrames(uint32_t frames) {
     return true;
 }
 
-// 仅在 iPad 的 A2DP 输出上返回实际采样率；其他设备与其他平台返回 0，
+// 在 iOS (iPad / iPhone) 的 A2DP 输出上返回实际采样率；其他设备与其他平台返回 0，
 // 让核心继续沿用原来的解码和直通路径。
 extern "C" uint32_t HifiPadGetBluetoothOutputSampleRate() {
-    if (!IS_IPAD) {
+    if (!IS_IPAD && !IS_IPHONE) {
         return 0;
     }
 
@@ -98,7 +98,8 @@ extern "C" uint32_t HifiPadGetBluetoothOutputSampleRate() {
 
     // Playback 本身就支持 A2DP。AllowBluetoothA2DP 只适用于支持输入的类别，
     // 与 Playback 组合会返回 OSStatus -50，并留下不稳定的旧会话配置。
-    AVAudioSessionCategoryOptions options = IS_IPAD ? 0 : AVAudioSessionCategoryOptionAllowBluetoothA2DP;
+    // 复刻 iPad 稳定做法：options 设为 0。
+    AVAudioSessionCategoryOptions options = 0;
     BOOL categorySet = [session setCategory:AVAudioSessionCategoryPlayback
                                        mode:AVAudioSessionModeDefault
                                     options:options
@@ -107,11 +108,11 @@ extern "C" uint32_t HifiPadGetBluetoothOutputSampleRate() {
         NSLog(@"[AVAudioSession] setCategory error: %@", error.localizedDescription);
     }
 
-    if (IS_IPAD) {
+    if (IS_IPAD || IS_IPHONE) {
         HifiPadSetPreferredIOBufferFrames(gPreferredIOBufferFrames);
     }
 
-    if (IS_IPAD) {
+    if (IS_IPAD || IS_IPHONE) {
         // 串行激活，避免锁屏/中断恢复与启动流程并发操作同一个 AudioSession。
         KeepPadAudioSessionActive(@"activated");
     } else {
@@ -129,7 +130,7 @@ extern "C" uint32_t HifiPadGetBluetoothOutputSampleRate() {
                                                   usingBlock:^(NSNotification * _Nonnull note) {
         NSLog(@"[AVAudioSession] 音频输出设备路由变更: %@", note.userInfo);
         AVAudioSession *currentSession = [AVAudioSession sharedInstance];
-        if (IS_IPAD) {
+        if (IS_IPAD || IS_IPHONE) {
             // 不在路由通知里 setActive 或重提缓冲偏好；两者都会再次触发
             // A2DP 配置协商，形成 AirPods/扬声器来回跳转与边界爆音。
             LogCurrentAudioRoute(currentSession, @"route changed");
@@ -146,7 +147,7 @@ extern "C" uint32_t HifiPadGetBluetoothOutputSampleRate() {
         NSDictionary *info = note.userInfo;
         AVAudioSessionInterruptionType type = (AVAudioSessionInterruptionType)[info[AVAudioSessionInterruptionTypeKey] unsignedIntegerValue];
         if (type == AVAudioSessionInterruptionTypeEnded) {
-            if (IS_IPAD) {
+            if (IS_IPAD || IS_IPHONE) {
                 KeepPadAudioSessionActive(@"interruption ended");
             } else {
                 [[AVAudioSession sharedInstance] setActive:YES error:nil];

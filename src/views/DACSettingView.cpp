@@ -500,7 +500,7 @@ void DACSettingView::renderHardwareStatusBar(ImDrawList* dl, float x0, float& cu
     uint32_t cur_sr = audio_engine::AudioEngine::getInstance().getActiveHardwareSampleRate();
 
     // 右侧独占开关药丸按钮 (支持随时切换，与全局各芯片设置严格双向同步)
-    float btn_w = 110.0f;
+    float btn_w = Platform::isIPhone() ? 86.0f : 110.0f;
     float btn_h = 24.0f;
     float btn_x = p1.x - btn_w - 12.0f;
     float btn_y = p0.y + (h - btn_h) * 0.5f;
@@ -524,38 +524,53 @@ void DACSettingView::renderHardwareStatusBar(ImDrawList* dl, float x0, float& cu
         if (is_exclusive_pref) {
             dot_col = accent;
             dl->AddCircle(dot_center, 6.5f, IM_COL32(r, g, b, 80), 0, 1.5f);
-            info_text = "声卡硬件: " + dev_name + "  |  蓝牙 0dB 源码直通 (系统共享)  |  " + std::to_string(cur_sr / 1000) + " kHz";
+            info_text = Platform::isIPhone()
+                ? ("硬件: " + dev_name + " | 蓝牙直通 | " + std::to_string(cur_sr / 1000) + "kHz")
+                : ("声卡硬件: " + dev_name + "  |  蓝牙 0dB 源码直通 (系统共享)  |  " + std::to_string(cur_sr / 1000) + " kHz");
             info_text_col = UIConfig::Color::TextActive;
         } else {
             dot_col = IM_COL32(160, 160, 160, 200);
-            info_text = "声卡硬件: " + dev_name + "  |  系统混音共享  |  " + std::to_string(cur_sr / 1000) + " kHz";
+            info_text = Platform::isIPhone()
+                ? ("硬件: " + dev_name + " | 混音共享 | " + std::to_string(cur_sr / 1000) + "kHz")
+                : ("声卡硬件: " + dev_name + "  |  系统混音共享  |  " + std::to_string(cur_sr / 1000) + " kHz");
             info_text_col = UIConfig::Color::TextMuted;
         }
     } else if (is_real_hog) {
         dot_col = accent;
         dl->AddCircle(dot_center, 6.5f, IM_COL32(r, g, b, 80), 0, 1.5f);
-        info_text = "声卡硬件: " + dev_name + "  |  Hog Mode 硬件已独占 (Bit-Perfect)  |  " + std::to_string(cur_sr / 1000) + " kHz";
+        info_text = Platform::isIPhone()
+            ? ("硬件: " + dev_name + " | 硬件独占锁定 | " + std::to_string(cur_sr / 1000) + "kHz")
+            : ("声卡硬件: " + dev_name + "  |  Hog Mode 硬件已独占 (Bit-Perfect)  |  " + std::to_string(cur_sr / 1000) + " kHz");
         info_text_col = UIConfig::Color::TextActive;
     } else if (is_exclusive_pref) {
         dot_col = accent;
         dl->AddCircle(dot_center, 6.5f, IM_COL32(r, g, b, 60), 0, 1.5f);
-        info_text = "声卡硬件: " + dev_name + "  |  独占模式就绪 (起播锁定)  |  " + std::to_string(cur_sr / 1000) + " kHz";
+        info_text = Platform::isIPhone()
+            ? ("硬件: " + dev_name + " | 独占就绪 | " + std::to_string(cur_sr / 1000) + "kHz")
+            : ("声卡硬件: " + dev_name + "  |  独占模式就绪 (起播锁定)  |  " + std::to_string(cur_sr / 1000) + " kHz");
         info_text_col = UIConfig::Color::TextActive;
     } else {
         dot_col = IM_COL32(160, 160, 160, 200);
-        info_text = "声卡硬件: " + dev_name + "  |  系统混音共享模式  |  " + std::to_string(cur_sr / 1000) + " kHz";
+        info_text = Platform::isIPhone()
+            ? ("硬件: " + dev_name + " | 混音共享 | " + std::to_string(cur_sr / 1000) + "kHz")
+            : ("声卡硬件: " + dev_name + "  |  系统混音共享模式  |  " + std::to_string(cur_sr / 1000) + " kHz");
         info_text_col = UIConfig::Color::TextMuted;
     }
 
     dl->AddCircleFilled(dot_center, 4.0f, dot_col);
 
+    // 严密保护文本绝不侵入或重叠右侧按钮
+    dl->PushClipRect(ImVec2(dot_center.x + 12.0f, p0.y), ImVec2(btn_x - 8.0f, p0.y + h), true);
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
     dl->AddText(ImVec2(dot_center.x + 12.0f, p0.y + (h - 14.0f) * 0.5f),
                 info_text_col, info_text.c_str());
     if (Fonts::Small) ImGui::PopFont();
+    dl->PopClipRect();
 
     // 绘制独占切换按钮
-    const char* btn_text = is_exclusive_pref ? "独占: 已开启" : "独占: 已关闭";
+    const char* btn_text = is_exclusive_pref
+        ? (Platform::isIPhone() ? "独占: 开启" : "独占: 已开启")
+        : (Platform::isIPhone() ? "独占: 关闭" : "独占: 已关闭");
     ImU32 btn_bg = is_exclusive_pref ? IM_COL32(r, g, b, 70) :
                    (btn_hov ? IM_COL32(255, 255, 255, 25) : IM_COL32(255, 255, 255, 12));
     ImU32 btn_border = is_exclusive_pref ? accent :
@@ -721,7 +736,11 @@ void DACSettingView::renderHardwareDeviceSettings(ImDrawList* dl, float x0, floa
     const char* excl_opts[] = { "Bit-Perfect 独占流", "系统混音共享" };
     renderOptionRow(dl, x0, cur_y + 12.0f, w, "硬件独占流", excl_opts, 2, apple_exclusive_mode_, "HwExcl");
 
-    const char* rate_opts[] = { "原生跟随母带 (44.1k-192k)", "锁定 96kHz", "锁定 192kHz" };
+    const char* rate_opts[] = {
+        Platform::isIPhone() ? "原生跟随母带" : "原生跟随母带 (44.1k-192k)",
+        "锁定 96kHz",
+        "锁定 192kHz"
+    };
     renderOptionRow(dl, x0, cur_y + 44.0f, w, "采样率追踪", rate_opts, 3, apple_sample_rate_, "HwRate");
 
     cur_y += h3 + 8.0f;
@@ -738,15 +757,19 @@ void DACSettingView::renderAppleDirectSettings(ImDrawList* dl, float x0, float& 
     dl->AddLine(ImVec2(p0.x + 10.0f, p0.y), ImVec2(p1.x - 10.0f, p0.y), IM_COL32(255, 255, 255, 38), 1.0f);
 
     if (Fonts::Regular) ImGui::PushFont(Fonts::Regular);
-    dl->AddText(ImVec2(x0 + 16.0f, cur_y + 10.0f), UIConfig::Color::TextActive,
-                "Mac 硬件直通通道 (Apple CoreAudio Bit-Perfect)");
+    const char* apple_header = Platform::isIPhone() ? "iOS 原生硬件直通通道 (CoreAudio)" : "Mac 硬件直通通道 (Apple CoreAudio Bit-Perfect)";
+    dl->AddText(ImVec2(x0 + 16.0f, cur_y + 10.0f), UIConfig::Color::TextActive, apple_header);
     if (Fonts::Regular) ImGui::PopFont();
 
     const char* excl_opts[] = { "Bit-Perfect 独占流", "系统混音共享" };
     renderOptionRow(dl, x0, cur_y + 36.0f, w, "硬件独占流", excl_opts, 2, apple_exclusive_mode_, "AppleExcl");
 
-    const char* rate_opts[] = { "原生跟随母带 (44.1k-192k)", "锁定 96kHz", "锁定 192kHz" };
-    renderOptionRow(dl, x0, cur_y + 72.0f, w, "采样率追踪", rate_opts, 3, apple_sample_rate_, "AppleRate");
+    const char* rate_opts_apple[] = {
+        Platform::isIPhone() ? "原生跟随母带" : "原生跟随母带 (44.1k-192k)",
+        "锁定 96kHz",
+        "锁定 192kHz"
+    };
+    renderOptionRow(dl, x0, cur_y + 72.0f, w, "采样率追踪", rate_opts_apple, 3, apple_sample_rate_, "AppleRate");
 
     if (is_bt) {
         ImU32 accent = ThemeManager::getInstance().getAccentColor();
@@ -777,13 +800,22 @@ void DACSettingView::renderAppleDirectSettings(ImDrawList* dl, float x0, float& 
                 "高阻抗耳机智能驱动与数据精度 (Impedance & Bit Depth)");
     if (Fonts::Regular) ImGui::PopFont();
 
-    const char* drive_opts[] = { "智能检测 (1.25V~3Vrms)", "强制高输出 (3.0Vrms)", "标准输出 (1.25Vrms)" };
+    const char* drive_opts[] = {
+        Platform::isIPhone() ? "智能检测" : "智能检测 (1.25V~3Vrms)",
+        Platform::isIPhone() ? "高输出 (3V)" : "强制高输出 (3.0Vrms)",
+        Platform::isIPhone() ? "标准 (1.25V)" : "标准输出 (1.25Vrms)"
+    };
     renderOptionRow(dl, x0, cur_y + 36.0f, w, "阻抗驱动力", drive_opts, 3, apple_headphone_drive_, "AppleDrive");
 
-    const char* depth_opts[] = { "32-bit Float 浮点直通", "24-bit 整数定点" };
+    const char* depth_opts[] = {
+        Platform::isIPhone() ? "32-bit Float" : "32-bit Float 浮点直通",
+        Platform::isIPhone() ? "24-bit 定点" : "24-bit 整数定点"
+    };
     renderOptionRow(dl, x0, cur_y + 72.0f, w, "数据位深", depth_opts, 2, apple_bit_depth_, "AppleDepth");
 
-    const char* desc = "Apple Direct 说明: MacBook Pro 硬件直通，Bit-Perfect 独占流绕过系统混音，原生 0 损耗输出。支持 3.5mm 智能阻抗自适应放大。";
+    const char* desc = Platform::isIPhone()
+        ? "Apple Direct 说明: iPhone 原生硬件直通，Bit-Perfect 0 损耗输出。"
+        : "Apple Direct 说明: MacBook Pro 硬件直通，Bit-Perfect 独占流绕过系统混音，原生 0 损耗输出。支持 3.5mm 智能阻抗自适应放大。";
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
     dl->AddText(ImVec2(x0 + 16.0f, cur_y + 112.0f), UIConfig::Color::TextMuted, desc);
     if (Fonts::Small) ImGui::PopFont();

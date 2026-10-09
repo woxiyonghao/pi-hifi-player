@@ -32,6 +32,13 @@ public:
     void init();
     void render(float screen_w, float screen_h);
 
+    void setSafeArea(float left, float top, float right, float bottom) {
+        safe_left_ = left;
+        safe_top_ = top;
+        safe_right_ = right;
+        safe_bottom_ = bottom;
+    }
+
     void resetIdle() {
         idle_timer_ = 0.0f;
         is_fullscreen_idle_ = false;
@@ -66,4 +73,9 @@ private:
     bool is_fullscreen_idle_ = false;
     float anim_progress_ = 0.0f;
     std::chrono::steady_clock::time_point last_frame_time_;
+
+    float safe_left_ = 0.0f;
+    float safe_top_ = 0.0f;
+    float safe_right_ = 0.0f;
+    float safe_bottom_ = 0.0f;
 };

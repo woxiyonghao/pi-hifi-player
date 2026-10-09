@@ -55,12 +55,20 @@ void WebServiceView::render(float x, float y, float w, float h) {
     // 2. 绘制标题栏「Web 远程遥控与跨设备中枢」
     ImVec2 title_pos(card_min.x + 20.0f, card_min.y + 16.0f);
     if (Fonts::Medium) ImGui::PushFont(Fonts::Medium);
-    dl->AddText(title_pos, UIConfig::Color::TextActive, "Web 远程控制与数播中枢");
+    const char* title_text = "Web 远程控制与数播中枢";
+    dl->AddText(title_pos, UIConfig::Color::TextActive, title_text);
+    ImVec2 title_sz = ImGui::CalcTextSize(title_text);
     if (Fonts::Medium) ImGui::PopFont();
 
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-    std::string platform_label = "当前设备: " + Platform::displayName() + " · 支持旧手机/平板当数播主机 · 双向毫秒级遥控";
-    dl->AddText(ImVec2(title_pos.x + 200.0f, title_pos.y + 3.0f), UIConfig::Color::TextMuted, platform_label.c_str());
+    if (!Platform::isIPhone()) {
+        std::string platform_label = "当前设备: " + Platform::displayName() + " · 支持旧手机/平板当数播主机 · 双向毫秒级遥控";
+        dl->AddText(ImVec2(title_pos.x + title_sz.x + 16.0f, title_pos.y + 3.0f), UIConfig::Color::TextMuted, platform_label.c_str());
+    } else {
+        if (card_max.x - (title_pos.x + title_sz.x + 16.0f) > 130.0f) {
+            dl->AddText(ImVec2(title_pos.x + title_sz.x + 12.0f, title_pos.y + 3.0f), UIConfig::Color::TextMuted, "双向毫秒级遥控已就绪");
+        }
+    }
     if (Fonts::Small) ImGui::PopFont();
 
     anim_pulse_ += ImGui::GetIO().DeltaTime * 3.0f;
@@ -74,23 +82,53 @@ void WebServiceView::render(float x, float y, float w, float h) {
     float content_x = card_min.x + 16.0f;
     float content_y = card_min.y + 46.0f;
     float content_w = card_max.x - card_min.x - 32.0f;
-    float cur_y = content_y;
+    float content_h = card_max.y - content_y - 10.0f;
 
-    // 板块一：本机数播服务端核心启停控制与网络地址卡片 (高 112px)
-    renderServerCard(dl, content_x, cur_y, content_w);
-    cur_y += 112.0f + 10.0f;
+    ImGui::SetCursorScreenPos(ImVec2(content_x, content_y));
+    ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 5.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarRounding, 2.5f);
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarBg, IM_COL32(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarGrab, IM_COL32(255, 255, 255, 45));
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarGrabHovered, IM_COL32(255, 255, 255, 90));
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarGrabActive, UIConfig::Color::Accent);
 
-    // 板块二：实时客户端同步与性能开销看板 (高 86px)
-    renderClientStatsCard(dl, content_x, cur_y, content_w);
-    cur_y += 86.0f + 10.0f;
+    if (ImGui::BeginChild("##WebServiceScrollArea", ImVec2(content_w, content_h), false, ImGuiWindowFlags_NoBackground)) {
+        if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem) &&
+            !ImGui::IsAnyItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 4.0f)) {
+            float drag_dy = std::clamp(ImGui::GetIO().MouseDelta.y, -40.0f, 40.0f);
+            if (drag_dy != 0.0f) {
+                ImGui::SetScrollY(ImGui::GetScrollY() - drag_dy);
+            }
+        }
 
-    // 板块三：连接远端数播设备 (客户端模式卡片，高 88px)
-    renderRemoteClientConnectCard(dl, content_x, cur_y, content_w);
-    cur_y += 88.0f + 10.0f;
+        ImDrawList* child_dl = ImGui::GetWindowDrawList();
+        float section_w = ImGui::GetContentRegionAvail().x;
+        float cur_x = ImGui::GetCursorScreenPos().x;
+        float cur_y = ImGui::GetCursorScreenPos().y;
 
-    // 板块四：旧手机变废为宝当数播与跨设备指南 (自适应高度)
-    float guide_h = std::max(60.0f, card_max.y - cur_y - 10.0f);
-    renderGuideCard(dl, content_x, cur_y, content_w, guide_h);
+        // 板块一：本机数播服务端核心启停控制与网络地址卡片 (高 112px)
+        renderServerCard(child_dl, cur_x, cur_y, section_w);
+        cur_y += 112.0f + 10.0f;
+
+        // 板块二：实时客户端同步与性能开销看板 (高 86px)
+        renderClientStatsCard(child_dl, cur_x, cur_y, section_w);
+        cur_y += 86.0f + 10.0f;
+
+        // 板块三：连接远端数播设备 (客户端模式卡片，高 88px)
+        renderRemoteClientConnectCard(child_dl, cur_x, cur_y, section_w);
+        cur_y += 88.0f + 10.0f;
+
+        // 板块四：旧手机变废为宝当数播与跨设备指南 (自适应高度)
+        float guide_h = 100.0f;
+        renderGuideCard(child_dl, cur_x, cur_y, section_w, guide_h);
+        cur_y += guide_h + 10.0f;
+
+        ImGui::SetCursorScreenPos(ImVec2(cur_x, cur_y));
+        ImGui::Dummy(ImVec2(0.0f, 10.0f));
+    }
+    ImGui::EndChild();
+    ImGui::PopStyleColor(4);
+    ImGui::PopStyleVar(2);
 }
 
 void WebServiceView::renderServerCard(ImDrawList* dl, float x0, float y0, float w) {

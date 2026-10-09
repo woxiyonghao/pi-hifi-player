@@ -1,5 +1,6 @@
 #include "widgets/SidebarDacWidget.hpp"
 #include "widgets/GlassCardRenderer.hpp"
+#include "public/Platform.hpp"
 #include "UIConfig.hpp"
 
 void SidebarDacWidget::render(float width, float y, float height, float offset_x, float offset_y) {
@@ -28,18 +29,19 @@ void SidebarDacWidget::render(float width, float y, float height, float offset_x
                           UIConfig::Color::GlassHover, rounding);
     }
 
-    // 2. 内部状态指示灯与文字排版
+    // 2. 内部状态指示灯与文字排版 (动态垂直居中)
     float center_y = (top_y + bot_y) * 0.5f;
-    float led_x = left_x + 18.0f;
+    float led_x = left_x + (Platform::isIPhone() ? 12.0f : 18.0f);
+    float text_y = center_y - ImGui::GetFontSize() * 0.5f;
 
     if (connected_) {
         // [已连接]：发光绿灯 + 高亮设备名称
         dl->AddCircleFilled(ImVec2(led_x, center_y), 5.5f, IM_COL32(52, 199, 89, 70));
         dl->AddCircleFilled(ImVec2(led_x, center_y), 3.0f, UIConfig::Color::DacConnected);
-        dl->AddText(ImVec2(led_x + 12.0f, center_y - 7.0f), UIConfig::Color::TextNormal, dac_name_.c_str());
+        dl->AddText(ImVec2(led_x + 10.0f, text_y), UIConfig::Color::TextNormal, dac_name_.c_str());
     } else {
         // [未连接]：微光灰点 + 次级提示文本
         dl->AddCircleFilled(ImVec2(led_x, center_y), 3.0f, UIConfig::Color::DacDisconnected);
-        dl->AddText(ImVec2(led_x + 12.0f, center_y - 7.0f), UIConfig::Color::TextMuted, "DAC: 未连接");
+        dl->AddText(ImVec2(led_x + 10.0f, text_y), UIConfig::Color::TextMuted, "DAC: 未连接");
     }
 }

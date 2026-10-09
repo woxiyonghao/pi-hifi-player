@@ -148,7 +148,7 @@ void SidebarView::render(const std::vector<Playlist>& playlists, float width, fl
     // 限制侧边栏主窗口最右边界严格不超过 width (230px)，绝不向右侵入并劫持主舞台鼠标与滚轮事件
     const float win_min_x = -350.0f;
     const float win_min_y = -250.0f;
-    const float win_w = width - win_min_x; // -350 + 580 = 230.0f，严格止步于主舞台左边界
+    const float win_w = width + std::max(top_offset_x, 0.0f) - win_min_x; // 严格止步于主舞台左边界 (safe_left + width)
     const float win_h = height - win_min_y + 250.0f;
     ImGui::SetNextWindowPos(ImVec2(win_min_x, win_min_y));
     ImGui::SetNextWindowSize(ImVec2(win_w, win_h));

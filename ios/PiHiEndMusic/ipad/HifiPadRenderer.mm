@@ -129,21 +129,28 @@ void HifiPadRenderer::render(float screen_w, float screen_h) {
                                          : 1.0f - std::pow(-2.0f * anim_progress_ + 2.0f, 3.0f) * 0.5f;
 
     if (anim_progress_ < 0.999f) {
-        float sidebar_w = (screen_w < 900.0f) ? std::min(220.0f, std::max(160.0f, screen_w * 0.28f)) : 260.0f;
-        float top_nav_dx = -sidebar_w * ease_t;
-        float top_nav_dy = -150.0f * ease_t;
-        float dac_dx = -sidebar_w * ease_t;
+        float eff_w = screen_w - safe_left_ - safe_right_;
+        float sidebar_w = (screen_w < 900.0f) ? UIConfig::Layout::SidebarWidth : 260.0f;
+
+        float top_nav_dx = safe_left_ - (sidebar_w + safe_left_) * ease_t;
+        float top_nav_dy = safe_top_ - 150.0f * ease_t;
+        float dac_dx = safe_left_ - (sidebar_w + safe_left_) * ease_t;
         float dac_dy = 120.0f * ease_t;
-        float main_dx = (screen_w - sidebar_w) * ease_t;
-        float main_dy = -150.0f * ease_t;
+
+        float main_stage_w = eff_w - sidebar_w;
+        float main_dx = main_stage_w * ease_t;
+        float main_dy = safe_top_ - 150.0f * ease_t;
+        float main_stage_x = safe_left_ + sidebar_w + main_dx;
+
         float bottom_dx = screen_w * ease_t;
         float bottom_dy = 120.0f * ease_t;
 
         sidebar_.setDacConnected(true, main_stage_.getDacView().getCurrentChipName());
-        sidebar_.render(playlists_, sidebar_w, screen_h, top_nav_dx, top_nav_dy, dac_dx, dac_dy);
+        sidebar_.render(playlists_, sidebar_w, screen_h - safe_bottom_, top_nav_dx, top_nav_dy, dac_dx, dac_dy);
         main_stage_.render(sidebar_.getCurrentTab(), sidebar_.getSelectedPlaylistId(), playlists_, 
-                           sidebar_w + main_dx, 0.0f + main_dy, screen_w - sidebar_w, screen_h);
-        bottom_bar_.render(screen_w, screen_h, bottom_dx, bottom_dy);
+                           main_stage_x, safe_top_ + main_dy, main_stage_w, screen_h - safe_bottom_);
+        float bottom_w = screen_w - safe_left_ - safe_right_;
+        bottom_bar_.render(bottom_w, screen_h - safe_bottom_, safe_left_ + bottom_dx, bottom_dy);
     }
 
     if (show_create_playlist_modal_) {
