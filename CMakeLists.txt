@@ -119,6 +119,30 @@ if(APPLE)
         COMMENT "🚀 [HiFi Deploy] 正在一键同步、编译并启动到树莓派 5..."
         USES_TERMINAL
     )
+
+    # 11. iOS iPhone 模拟器一键运行 Target (可在 CLion 中直接点击 ▶️ 运行)
+    add_custom_target(ios_simulator_iphone
+        COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_ios.sh iphone
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMENT "📱 [iOS] 正在编译并在 iPhone 模拟器启动 PiHiEndMusic..."
+        USES_TERMINAL
+    )
+
+    # 12. iOS iPad 模拟器一键运行 Target (可在 CLion 中直接点击 ▶️ 运行)
+    add_custom_target(ios_simulator_ipad
+        COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_ios.sh ipad
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMENT "📱 [iOS] 正在编译并在 iPad 模拟器启动 PiHiEndMusic..."
+        USES_TERMINAL
+    )
+
+    # 13. iOS 项目完整构建 Target
+    add_custom_target(ios_build
+        COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_ios.sh build
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMENT "📱 [iOS] 正在编译 iOS 核心库与 App..."
+        USES_TERMINAL
+    )
 else()
     target_link_libraries(${PROJECT_NAME} PRIVATE
         audio_engine

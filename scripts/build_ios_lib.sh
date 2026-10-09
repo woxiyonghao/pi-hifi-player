@@ -178,20 +178,14 @@ xcodebuild -create-xcframework \
 
 cp "${OUT_DEVICE_DIR}/libPiHifiCore.a" "${BUILD_DIR}/libPiHifiCore.a"
 
-# 同步到 PiHiEndMusic Xcode 工程
-DEST_PROJECT="/Users/mk10/Desktop/PiHiEndMusic/PiHiEndMusic"
-if [ -d "${DEST_PROJECT}" ]; then
-    echo "=== [5/5] 自动同步至 Xcode 项目 (${DEST_PROJECT}) ==="
-    mkdir -p "${DEST_PROJECT}/cxx/lib/iphoneos" "${DEST_PROJECT}/cxx/lib/iphonesimulator"
-    cp "${OUT_DEVICE_DIR}/libPiHifiCore.a" "${DEST_PROJECT}/cxx/lib/iphoneos/"
-    cp "${OUT_DEVICE_DIR}/libPiHifiCore.a" "${DEST_PROJECT}/cxx/lib/libPiHifiCore.a"
-    cp "${OUT_SIM_DIR}/libPiHifiCore.a" "${DEST_PROJECT}/cxx/lib/iphonesimulator/"
-    if [ -d "${DEST_PROJECT}/Frameworks" ]; then
-        rm -rf "${DEST_PROJECT}/Frameworks/PiHifiCore.xcframework"
-        cp -R "${OUT_XCFRAMEWORK}" "${DEST_PROJECT}/Frameworks/"
-    fi
-    mkdir -p "${DEST_PROJECT}/cxx/include"
-    cp -R "${HEADERS_DIR}/"* "${DEST_PROJECT}/cxx/include/"
+# 同步到内置 ios 目录
+IOS_LIB_DIR="${ROOT_DIR}/ios/lib"
+if [ -d "${ROOT_DIR}/ios" ]; then
+    echo "=== [5/5] 自动同步至内置 ios 库目录 (${IOS_LIB_DIR}) ==="
+    mkdir -p "${IOS_LIB_DIR}/iphoneos" "${IOS_LIB_DIR}/iphonesimulator"
+    cp "${OUT_DEVICE_DIR}/libPiHifiCore.a" "${IOS_LIB_DIR}/iphoneos/"
+    cp "${OUT_DEVICE_DIR}/libPiHifiCore.a" "${IOS_LIB_DIR}/"
+    cp "${OUT_SIM_DIR}/libPiHifiCore.a" "${IOS_LIB_DIR}/iphonesimulator/"
 fi
 
 echo "=========================================================="

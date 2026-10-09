@@ -14,6 +14,9 @@ Makefile
 compile_commands.json
 .ninja_*
 build.ninja
+ios/build/
+xcuserdata/
+*.xcworkspace/xcuserdata/
 
 # 编译中间目标与二进制文件
 *.o
