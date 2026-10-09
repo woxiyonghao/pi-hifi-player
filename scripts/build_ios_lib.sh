@@ -99,6 +99,7 @@ SOURCES=(
     "${ROOT_DIR}/src/tools/WifiTransferServer.cpp"
     "${ROOT_DIR}/src/services/WebService.cpp"
     "${ROOT_DIR}/src/views/WebServiceView.cpp"
+    "${ROOT_DIR}/src/views/HifiPhoneRenderer.cpp"
     "${ROOT_DIR}/third_party/imgui/imgui.cpp"
     "${ROOT_DIR}/third_party/imgui/imgui_draw.cpp"
     "${ROOT_DIR}/third_party/imgui/imgui_tables.cpp"

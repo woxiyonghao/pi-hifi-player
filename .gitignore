@@ -4,6 +4,7 @@
 
 # 编译构建输出目录与临时构建缓存
 build/
+build-ios/
 cmake-build-*/
 bin/
 CMakeFiles/
