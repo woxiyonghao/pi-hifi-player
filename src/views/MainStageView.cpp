@@ -32,7 +32,7 @@ void MainStageView::renderScanMusicView(float x, float y, float w, float h, std:
     float margin_x = UIConfig::Layout::ContainerMarginX;
     float margin_y = UIConfig::Layout::ContainerMarginY;
     ImVec2 card_min(x + margin_x, y + margin_y);
-    ImVec2 card_max(x + w - margin_x, y + h - 86.0f);
+    ImVec2 card_max(x + w - margin_x, y + h - UIConfig::Layout::BottomBarOffset);
 
     ImDrawList* dl = ImGui::GetWindowDrawList();
     // 绘制卡片边框背景
@@ -49,7 +49,8 @@ void MainStageView::drawLiquidCard(ImDrawList* dl, ImVec2 p_min, ImVec2 p_max, c
     // 绘制标题
     if (title) {
         bool is_iphone = Platform::isIPhone();
-        ImVec2 title_pos = ImVec2(p_min.x + (is_iphone ? 16.0f : 20.0f), p_min.y + (is_iphone ? 10.0f : 16.0f));
+        float title_y = is_iphone ? (p_min.y + 12.0f + (24.0f - 14.5f) * 0.5f) : (p_min.y + 16.0f);
+        ImVec2 title_pos = ImVec2(p_min.x + (is_iphone ? 16.0f : 20.0f), title_y);
         if (Fonts::Medium) ImGui::PushFont(Fonts::Medium);
         dl->AddText(title_pos, UIConfig::Color::TextActive, title);
         if (Fonts::Medium) ImGui::PopFont();
@@ -68,7 +69,7 @@ void MainStageView::renderEqualizerView(float x, float y, float w, float h) {
     float margin_x = UIConfig::Layout::ContainerMarginX;
     float margin_y = UIConfig::Layout::ContainerMarginY;
     ImVec2 card_min(x + margin_x, y + margin_y);
-    ImVec2 card_max(x + w - margin_x, y + h - 86.0f);
+    ImVec2 card_max(x + w - margin_x, y + h - UIConfig::Layout::BottomBarOffset);
 
     ImDrawList* dl = ImGui::GetWindowDrawList();
     const char* sub = Platform::isIPhone() ? nullptr : "10 段专业频段精调 · 纯净硬件直通";
@@ -82,9 +83,9 @@ void MainStageView::render(SidebarTab current_tab,
                            uint64_t selected_playlist_id, 
                            std::vector<Playlist>& playlists,
                            float stage_x, float stage_y, float stage_w, float stage_h) {
-    // 创建主舞台专属透明顶层无边框窗口 (动态避让底部 BottomBar 胶囊高 48px + 边距 16px + 缓冲 12px = 76px)
+    // 创建主舞台专属透明顶层无边框窗口 (动态避让底部 BottomBar 胶囊)
     ImGui::SetNextWindowPos(ImVec2(stage_x, stage_y));
-    float safe_stage_h = std::max(stage_h - 76.0f, 300.0f);
+    float safe_stage_h = std::max(stage_h - UIConfig::Layout::BottomBarOffset, 200.0f);
     ImGui::SetNextWindowSize(ImVec2(stage_w, safe_stage_h));
 
     ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar 

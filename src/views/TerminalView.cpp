@@ -92,7 +92,7 @@ void TerminalView::render(float x, float y, float w, float h) {
     float margin_x = UIConfig::Layout::ContainerMarginX; // 16.0f
     float margin_y = UIConfig::Layout::ContainerMarginY; // 16.0f
     ImVec2 card_min(x + margin_x, y + margin_y);
-    ImVec2 card_max(x + w - margin_x, y + h - 86.0f); // 避开底部播放控制栏 86px
+    ImVec2 card_max(x + w - margin_x, y + h - UIConfig::Layout::BottomBarOffset); // 动态避让底部播放控制栏
 
     ImDrawList* dl = ImGui::GetWindowDrawList();
 

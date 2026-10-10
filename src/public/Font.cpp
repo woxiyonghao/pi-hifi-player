@@ -1,6 +1,7 @@
 #include "Font.hpp"
 #include "UIConfig.hpp"
 #include "public/Platform.hpp"
+#include "public/AppConfig.hpp"
 #include <iostream>
 #include <vector>
 #include <string>
@@ -101,6 +102,18 @@ void initialize(ImGuiIO& io) {
         "/System/Library/Fonts/Hiragino Sans GB.ttc",            // macOS 原生冬青黑体
         "/System/Library/Fonts/STHeiti Light.ttc",               // macOS 华文黑体
         "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+#endif
+#if defined(__ANDROID__)
+        AppConfig::Path::getConfigDir() + "/fonts/HiraginoSansGB.ttc",
+        AppConfig::Path::getConfigDir() + "/fonts/HiraginoSansGB.ttf",
+        "/data/data/com.pihifi.player/files/hifi_player/fonts/HiraginoSansGB.ttc",
+        "/system/fonts/NotoSansCJK-Regular.ttc",
+        "/system/fonts/NotoSansCJK.ttc",
+        "/system/fonts/NotoSansSC-Regular.otf",
+        "/system/fonts/NotoSansSC.otf",
+        "/system/fonts/NotoSansHans-Regular.otf",
+        "/system/fonts/DroidSansFallback.ttf",
+        "/system/fonts/NotoSansSC-VF.ttf",
 #endif
         "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",        // 树莓派文泉驿微米黑
         "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",// 树莓派 Noto Sans

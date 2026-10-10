@@ -34,7 +34,7 @@ void AllMusicPlaylistView::render(float x, float y, float w, float h, const std:
     float margin_x = UIConfig::Layout::ContainerMarginX;
     float margin_y = UIConfig::Layout::ContainerMarginY;
     ImVec2 card_min(x + margin_x, y + margin_y);
-    ImVec2 card_max(x + w - margin_x, y + h - 86.0f);
+    ImVec2 card_max(x + w - margin_x, y + h - UIConfig::Layout::BottomBarOffset);
 
     auto tracks = MusicScanManager::getInstance().getScannedTracks();
     if (tracks.empty()) {

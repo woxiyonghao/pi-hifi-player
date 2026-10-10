@@ -9,7 +9,9 @@
 #include <TargetConditionals.h>
 #endif
 
-#if !defined(TARGET_OS_IPHONE) || !TARGET_OS_IPHONE
+#if defined(__ANDROID__)
+#include "audio_engine/sinks/AAudioSink.hpp"
+#elif !defined(TARGET_OS_IPHONE) || !TARGET_OS_IPHONE
 #include "audio_engine/sinks/SdlAudioSink.hpp"
 #include "audio_engine/sinks/AlsaAudioSink.hpp"
 #else
@@ -73,7 +75,10 @@ AudioEngine& AudioEngine::getInstance() {
 }
 
 AudioEngine::AudioEngine() : ring_buffer_(1048576) {
-#if !defined(TARGET_OS_IPHONE) || !TARGET_OS_IPHONE
+#if defined(__ANDROID__)
+    // Android 原生高保真 AAudio 独占/低延迟推流驱动
+    sink_ = std::make_unique<AAudioSink>();
+#elif !defined(TARGET_OS_IPHONE) || !TARGET_OS_IPHONE
     // 默认输出驱动：使用跨平台低延迟 SdlAudioSink
     sink_ = std::make_unique<SdlAudioSink>();
 #if defined(__APPLE__) && TARGET_OS_OSX

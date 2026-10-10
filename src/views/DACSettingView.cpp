@@ -35,6 +35,10 @@ int DACSettingView::getParam(const std::string& key) const {
     if (key == "apple_sample_rate") return apple_sample_rate_;
     if (key == "apple_drive") return apple_headphone_drive_;
     if (key == "apple_bit_depth") return apple_bit_depth_;
+    if (key == "aaudio_exclusive") return aaudio_exclusive_mode_;
+    if (key == "aaudio_sample_rate") return aaudio_sample_rate_;
+    if (key == "aaudio_bit_depth") return aaudio_bit_depth_;
+    if (key == "aaudio_perf") return aaudio_perf_mode_;
     if (key == "pcm_filter") return pcm_filter_mode_;
     if (key == "dsd_bypass") return dsd_bypass_mode_;
     if (key == "dsd_cutoff") return dsd_filter_cutoff_;
@@ -68,6 +72,10 @@ void DACSettingView::setParam(const std::string& key, int val) {
     else if (key == "apple_sample_rate") apple_sample_rate_ = val;
     else if (key == "apple_drive") apple_headphone_drive_ = val;
     else if (key == "apple_bit_depth") apple_bit_depth_ = val;
+    else if (key == "aaudio_exclusive") aaudio_exclusive_mode_ = val;
+    else if (key == "aaudio_sample_rate") aaudio_sample_rate_ = val;
+    else if (key == "aaudio_bit_depth") aaudio_bit_depth_ = val;
+    else if (key == "aaudio_perf") aaudio_perf_mode_ = val;
     else if (key == "pcm_filter") pcm_filter_mode_ = val;
     else if (key == "dsd_bypass") dsd_bypass_mode_ = val;
     else if (key == "dsd_cutoff") dsd_filter_cutoff_ = val;
@@ -101,6 +109,8 @@ std::string DACSettingView::getCurrentChipName() const {
         auto status = AudioDeviceTool::getHardwareStatus();
         if (Platform::isRaspberryPi()) {
             return status.has_external_dac ? status.dac_name : "未连接";
+        } else if (Platform::isAndroid()) {
+            return status.has_external_dac ? status.dac_name : "AAudio Direct";
         } else {
             return status.has_external_dac ? status.dac_name : "Apple Direct";
         }
@@ -115,6 +125,8 @@ std::string DACSettingView::getCurrentChipName() const {
             auto status = AudioDeviceTool::getHardwareStatus();
             if (Platform::isRaspberryPi()) {
                 return status.has_external_dac ? status.dac_name : "未连接";
+            } else if (Platform::isAndroid()) {
+                return status.has_external_dac ? status.dac_name : "AAudio Direct";
             } else {
                 return status.has_external_dac ? status.dac_name : "Apple Direct";
             }
@@ -165,7 +177,20 @@ void DACSettingView::loadSettings() {
         apple_headphone_drive_ = std::clamp(std::stoi(db.getSetting("setting_dac_apple_drive", "0")), 0, 2);
         apple_bit_depth_ = std::clamp(std::stoi(db.getSetting("setting_dac_apple_bit_depth", "0")), 0, 1);
     } catch (...) {}
-    audio_engine::AudioEngine::getInstance().setExclusiveMode(apple_exclusive_mode_ == 0);
+
+    // Android AAudio 设置
+    try {
+        aaudio_exclusive_mode_ = std::clamp(std::stoi(db.getSetting("setting_dac_aaudio_exclusive", "0")), 0, 1);
+        aaudio_sample_rate_ = std::clamp(std::stoi(db.getSetting("setting_dac_aaudio_sample_rate", "0")), 0, 3);
+        aaudio_bit_depth_ = std::clamp(std::stoi(db.getSetting("setting_dac_aaudio_bit_depth", "0")), 0, 1);
+        aaudio_perf_mode_ = std::clamp(std::stoi(db.getSetting("setting_dac_aaudio_perf", "0")), 0, 1);
+    } catch (...) {}
+
+    if (Platform::isAndroid()) {
+        audio_engine::AudioEngine::getInstance().setExclusiveMode(aaudio_exclusive_mode_ == 0);
+    } else {
+        audio_engine::AudioEngine::getInstance().setExclusiveMode(apple_exclusive_mode_ == 0);
+    }
 
     // 2. ESS Sabre 设置
     try {
@@ -222,16 +247,37 @@ void DACSettingView::saveSettings() {
     db.setSetting("setting_dac_apple_sample_rate", std::to_string(apple_sample_rate_));
     db.setSetting("setting_dac_apple_drive", std::to_string(apple_headphone_drive_));
     db.setSetting("setting_dac_apple_bit_depth", std::to_string(apple_bit_depth_));
-    
-    bool exclusive = (apple_exclusive_mode_ == 0);
-    audio_engine::AudioEngine::getInstance().setExclusiveMode(exclusive);
-    if (exclusive) {
-        uint32_t target_sr = 0;
-        if (apple_sample_rate_ == 1) target_sr = 96000;
-        else if (apple_sample_rate_ == 2) target_sr = 192000;
-        else target_sr = audio_engine::AudioEngine::getInstance().getCurrentSpec().sample_rate;
-        if (target_sr > 0) {
-            audio_engine::AudioEngine::getInstance().applyHardwareSampleRate(target_sr);
+
+    // Android AAudio
+    db.setSetting("setting_dac_aaudio_exclusive", std::to_string(aaudio_exclusive_mode_));
+    db.setSetting("setting_dac_aaudio_sample_rate", std::to_string(aaudio_sample_rate_));
+    db.setSetting("setting_dac_aaudio_bit_depth", std::to_string(aaudio_bit_depth_));
+    db.setSetting("setting_dac_aaudio_perf", std::to_string(aaudio_perf_mode_));
+
+    if (Platform::isAndroid()) {
+        bool exclusive = (aaudio_exclusive_mode_ == 0);
+        audio_engine::AudioEngine::getInstance().setExclusiveMode(exclusive);
+        if (exclusive) {
+            uint32_t target_sr = 0;
+            if (aaudio_sample_rate_ == 1) target_sr = 48000;
+            else if (aaudio_sample_rate_ == 2) target_sr = 96000;
+            else if (aaudio_sample_rate_ == 3) target_sr = 192000;
+            else target_sr = audio_engine::AudioEngine::getInstance().getCurrentSpec().sample_rate;
+            if (target_sr > 0) {
+                audio_engine::AudioEngine::getInstance().applyHardwareSampleRate(target_sr);
+            }
+        }
+    } else {
+        bool exclusive = (apple_exclusive_mode_ == 0);
+        audio_engine::AudioEngine::getInstance().setExclusiveMode(exclusive);
+        if (exclusive) {
+            uint32_t target_sr = 0;
+            if (apple_sample_rate_ == 1) target_sr = 96000;
+            else if (apple_sample_rate_ == 2) target_sr = 192000;
+            else target_sr = audio_engine::AudioEngine::getInstance().getCurrentSpec().sample_rate;
+            if (target_sr > 0) {
+                audio_engine::AudioEngine::getInstance().applyHardwareSampleRate(target_sr);
+            }
         }
     }
 
@@ -333,7 +379,7 @@ void DACSettingView::render(float x, float y, float w, float h) {
     float margin_x = UIConfig::Layout::ContainerMarginX; // 16.0f
     float margin_y = UIConfig::Layout::ContainerMarginY; // 16.0f
     ImVec2 card_min(x + margin_x, y + margin_y);
-    ImVec2 card_max(x + w - margin_x, y + h - 86.0f);
+    ImVec2 card_max(x + w - margin_x, y + h - UIConfig::Layout::BottomBarOffset);
 
     ImDrawList* dl = ImGui::GetWindowDrawList();
 
@@ -361,8 +407,8 @@ void DACSettingView::render(float x, float y, float w, float h) {
         const char* label;
         const char* subtitle;
     } chip_tabs[6] = {
-        { Platform::isRaspberryPi() ? "物理声卡侦测" : "Apple 直通",
-          Platform::isRaspberryPi() ? "真实硬件 DAC 状态" : "Mac 原生硬件直通" },
+        { Platform::isRaspberryPi() ? "物理声卡侦测" : (Platform::isAndroid() ? "AAudio 直通" : "Apple 直通"),
+          Platform::isRaspberryPi() ? "真实硬件 DAC 状态" : (Platform::isAndroid() ? "Android AAudio 原生直通" : (Platform::isIPhone() ? "iPhone 原生硬件直通" : "Mac 原生硬件直通")) },
         { "ES9038PRO", "ESS Sabre 旗舰并联" },
         { "AK4499EX", "AKM 旭化成 Velvet" },
         { "CS43198", "Cirrus Logic Master" },
@@ -447,6 +493,8 @@ void DACSettingView::render(float x, float y, float w, float h) {
             case 0:
                 if (Platform::isRaspberryPi()) {
                     renderHardwareDeviceSettings(child_dl, x0, cur_y, section_w);
+                } else if (Platform::isAndroid()) {
+                    renderAAudioDirectSettings(child_dl, x0, cur_y, section_w);
                 } else {
                     renderAppleDirectSettings(child_dl, x0, cur_y, section_w);
                 }
@@ -496,11 +544,11 @@ void DACSettingView::renderHardwareStatusBar(ImDrawList* dl, float x0, float& cu
     std::string dev_name = audio_engine::AudioEngine::getInstance().getActiveHardwareDeviceName();
     bool is_bt = audio_engine::AudioEngine::getInstance().isCurrentDeviceBluetooth();
     bool is_real_hog = audio_engine::AudioEngine::getInstance().isRealHogActive();
-    bool is_exclusive_pref = (apple_exclusive_mode_ == 0);
+    bool is_exclusive_pref = Platform::isAndroid() ? (aaudio_exclusive_mode_ == 0) : (apple_exclusive_mode_ == 0);
     uint32_t cur_sr = audio_engine::AudioEngine::getInstance().getActiveHardwareSampleRate();
 
     // 右侧独占开关药丸按钮 (支持随时切换，与全局各芯片设置严格双向同步)
-    float btn_w = Platform::isIPhone() ? 86.0f : 110.0f;
+    float btn_w = (Platform::isIPhone() || Platform::isAndroid()) ? 86.0f : 110.0f;
     float btn_h = 24.0f;
     float btn_x = p1.x - btn_w - 12.0f;
     float btn_y = p0.y + (h - btn_h) * 0.5f;
@@ -509,7 +557,11 @@ void DACSettingView::renderHardwareStatusBar(ImDrawList* dl, float x0, float& cu
 
     ImGui::SetCursorScreenPos(bp0);
     if (ImGui::InvisibleButton("##GlobalHogExclusiveToggle", ImVec2(btn_w, btn_h))) {
-        apple_exclusive_mode_ = (apple_exclusive_mode_ == 0 ? 1 : 0);
+        if (Platform::isAndroid()) {
+            aaudio_exclusive_mode_ = (aaudio_exclusive_mode_ == 0 ? 1 : 0);
+        } else {
+            apple_exclusive_mode_ = (apple_exclusive_mode_ == 0 ? 1 : 0);
+        }
         saveSettings();
     }
     bool btn_hov = ImGui::IsItemHovered();
@@ -520,7 +572,18 @@ void DACSettingView::renderHardwareStatusBar(ImDrawList* dl, float x0, float& cu
     std::string info_text;
     ImU32 info_text_col = UIConfig::Color::TextNormal;
 
-    if (is_bt) {
+    if (Platform::isAndroid()) {
+        if (is_exclusive_pref) {
+            dot_col = accent;
+            dl->AddCircle(dot_center, 6.5f, IM_COL32(r, g, b, 80), 0, 1.5f);
+            info_text = "硬件: " + dev_name + " | AAudio 独占直通 | " + std::to_string(cur_sr / 1000) + "kHz";
+            info_text_col = UIConfig::Color::TextActive;
+        } else {
+            dot_col = IM_COL32(160, 160, 160, 200);
+            info_text = "硬件: " + dev_name + " | 系统混音共享 | " + std::to_string(cur_sr / 1000) + "kHz";
+            info_text_col = UIConfig::Color::TextMuted;
+        }
+    } else if (is_bt) {
         if (is_exclusive_pref) {
             dot_col = accent;
             dl->AddCircle(dot_center, 6.5f, IM_COL32(r, g, b, 80), 0, 1.5f);
@@ -569,8 +632,8 @@ void DACSettingView::renderHardwareStatusBar(ImDrawList* dl, float x0, float& cu
 
     // 绘制独占切换按钮
     const char* btn_text = is_exclusive_pref
-        ? (Platform::isIPhone() ? "独占: 开启" : "独占: 已开启")
-        : (Platform::isIPhone() ? "独占: 关闭" : "独占: 已关闭");
+        ? ((Platform::isIPhone() || Platform::isAndroid()) ? "独占: 开启" : "独占: 已开启")
+        : ((Platform::isIPhone() || Platform::isAndroid()) ? "独占: 关闭" : "独占: 已关闭");
     ImU32 btn_bg = is_exclusive_pref ? IM_COL32(r, g, b, 70) :
                    (btn_hov ? IM_COL32(255, 255, 255, 25) : IM_COL32(255, 255, 255, 12));
     ImU32 btn_border = is_exclusive_pref ? accent :
@@ -813,9 +876,11 @@ void DACSettingView::renderAppleDirectSettings(ImDrawList* dl, float x0, float& 
     };
     renderOptionRow(dl, x0, cur_y + 72.0f, w, "数据位深", depth_opts, 2, apple_bit_depth_, "AppleDepth");
 
-    const char* desc = Platform::isIPhone()
-        ? "Apple Direct 说明: iPhone 原生硬件直通，Bit-Perfect 0 损耗输出。"
-        : "Apple Direct 说明: MacBook Pro 硬件直通，Bit-Perfect 独占流绕过系统混音，原生 0 损耗输出。支持 3.5mm 智能阻抗自适应放大。";
+    const char* desc = Platform::isAndroid()
+        ? "AAudio Direct 说明: Android AAudio 原生低延迟硬件直通，独占流 Bit-Perfect 0 损耗输出。"
+        : (Platform::isIPhone()
+            ? "Apple Direct 说明: iPhone 原生硬件直通，Bit-Perfect 0 损耗输出。"
+            : "Apple Direct 说明: MacBook Pro 硬件直通，Bit-Perfect 独占流绕过系统混音，原生 0 损耗输出。支持 3.5mm 智能阻抗自适应放大。");
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
     dl->AddText(ImVec2(x0 + 16.0f, cur_y + 112.0f), UIConfig::Color::TextMuted, desc);
     if (Fonts::Small) ImGui::PopFont();
@@ -886,6 +951,146 @@ void DACSettingView::renderAppleDirectSettings(ImDrawList* dl, float x0, float& 
             }
 
             const char* type_str = d.is_external_dac ? "外置 DAC" : "Mac 内置";
+            ImVec2 t_sz = ImGui::CalcTextSize(type_str);
+            float tx = badge_right - t_sz.x - 12.0f;
+            ImU32 t_bg = d.is_external_dac ? IM_COL32(r, g, b, 50) : IM_COL32(255, 255, 255, 15);
+            ImU32 t_border = d.is_external_dac ? accent : IM_COL32(255, 255, 255, 30);
+            dl->AddRectFilled(ImVec2(tx, dev_y + 2.0f), ImVec2(badge_right, dev_y + 22.0f), t_bg, 3.0f);
+            dl->AddRect(ImVec2(tx, dev_y + 2.0f), ImVec2(badge_right, dev_y + 22.0f), t_border, 3.0f);
+            dl->AddText(ImVec2(tx + 6.0f, dev_y + 4.0f),
+                        d.is_external_dac ? UIConfig::Color::TextActive : UIConfig::Color::TextMuted,
+                        type_str);
+
+            if (Fonts::Small) ImGui::PopFont();
+            dev_y += dev_row_h;
+        }
+    }
+
+    cur_y += h3 + 8.0f;
+}
+
+// ==============================================================================
+// 0. Android AAudio (AAudio 硬件独占直通 & USB DAC 架构)
+// ==============================================================================
+void DACSettingView::renderAAudioDirectSettings(ImDrawList* dl, float x0, float& cur_y, float w) {
+    ImU32 accent = ThemeManager::getInstance().getAccentColor();
+    const ImU32 r = (accent >> IM_COL32_R_SHIFT) & 0xFF;
+    const ImU32 g = (accent >> IM_COL32_G_SHIFT) & 0xFF;
+    const ImU32 b = (accent >> IM_COL32_B_SHIFT) & 0xFF;
+
+    // --------------------------------------------------------------------------
+    // 板块一：Android 原生 AAudio 硬件输出架构设置 (Exclusive Bit-Perfect)
+    // --------------------------------------------------------------------------
+    float h1 = 114.0f;
+    ImVec2 p0(x0, cur_y);
+    ImVec2 p1(x0 + w, cur_y + h1);
+
+    dl->AddRectFilled(p0, p1, IM_COL32(20, 26, 36, 175), 8.0f);
+    dl->AddRect(p0, p1, IM_COL32(255, 255, 255, 20), 8.0f, 0, 1.0f);
+    dl->AddLine(ImVec2(p0.x + 10.0f, p0.y), ImVec2(p1.x - 10.0f, p0.y), IM_COL32(255, 255, 255, 38), 1.0f);
+
+    if (Fonts::Regular) ImGui::PushFont(Fonts::Regular);
+    dl->AddText(ImVec2(x0 + 16.0f, cur_y + 10.0f), UIConfig::Color::TextActive, "Android 原生 AAudio 硬件输出架构");
+    if (Fonts::Regular) ImGui::PopFont();
+
+    const char* excl_opts[] = { "Bit-Perfect 独占流", "系统混音低延迟" };
+    renderOptionRow(dl, x0, cur_y + 36.0f, w, "硬件独占直通", excl_opts, 2, aaudio_exclusive_mode_, "AAudioExcl");
+
+    const char* rate_opts[] = { "原生跟随母带", "固定 48kHz (兼容)", "锁定 96kHz", "锁定 192kHz" };
+    renderOptionRow(dl, x0, cur_y + 72.0f, w, "采样率追踪", rate_opts, 4, aaudio_sample_rate_, "AAudioRate");
+
+    cur_y += h1 + 8.0f;
+
+    // --------------------------------------------------------------------------
+    // 板块二：发烧数据流规格与管线性能 (Data Spec & Latency)
+    // --------------------------------------------------------------------------
+    float h2 = 146.0f;
+    ImVec2 q0(x0, cur_y);
+    ImVec2 q1(x0 + w, cur_y + h2);
+
+    dl->AddRectFilled(q0, q1, IM_COL32(20, 26, 36, 175), 8.0f);
+    dl->AddRect(q0, q1, IM_COL32(255, 255, 255, 20), 8.0f, 0, 1.0f);
+    dl->AddLine(ImVec2(q0.x + 10.0f, q0.y), ImVec2(q1.x - 10.0f, q0.y), IM_COL32(255, 255, 255, 38), 1.0f);
+
+    if (Fonts::Regular) ImGui::PushFont(Fonts::Regular);
+    dl->AddText(ImVec2(x0 + 16.0f, cur_y + 10.0f), UIConfig::Color::TextActive,
+                "AAudio 数据精度与管线性能 (Data Spec & Latency)");
+    if (Fonts::Regular) ImGui::PopFont();
+
+    const char* depth_opts[] = { "32-bit Float 浮点直通", "24-bit 整数定点" };
+    renderOptionRow(dl, x0, cur_y + 36.0f, w, "数据位深", depth_opts, 2, aaudio_bit_depth_, "AAudioDepth");
+
+    const char* perf_opts[] = { "Low Latency 极低延迟", "Power Saving 均衡" };
+    renderOptionRow(dl, x0, cur_y + 72.0f, w, "性能模式", perf_opts, 2, aaudio_perf_mode_, "AAudioPerf");
+
+    const char* desc = "AAudio 说明: 采用 Google AAudio NDK 原生硬件通道，独占模式直接接管音频硬件，绕过 Android AudioFlinger 系统 SRC 劣质重采样，实现 1:1 纯净母带还原。";
+    if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+    dl->AddText(ImVec2(x0 + 16.0f, cur_y + 112.0f), UIConfig::Color::TextMuted, desc);
+    if (Fonts::Small) ImGui::PopFont();
+
+    cur_y += h2 + 8.0f;
+
+    // --------------------------------------------------------------------------
+    // 板块三：外接 USB DAC 与设备路由拓扑 (Real Hardware & USB Audio)
+    // --------------------------------------------------------------------------
+    auto status = AudioDeviceTool::getHardwareStatus();
+    size_t dev_count = status.devices.size();
+    float dev_row_h = 30.0f;
+    float h3 = 36.0f + std::max((size_t)1, dev_count) * dev_row_h + 8.0f;
+    ImVec2 s0(x0, cur_y);
+    ImVec2 s1(x0 + w, cur_y + h3);
+
+    dl->AddRectFilled(s0, s1, IM_COL32(20, 26, 36, 175), 8.0f);
+    dl->AddRect(s0, s1, IM_COL32(255, 255, 255, 20), 8.0f, 0, 1.0f);
+    dl->AddLine(ImVec2(s0.x + 10.0f, s0.y), ImVec2(s1.x - 10.0f, s0.y), IM_COL32(255, 255, 255, 38), 1.0f);
+
+    if (Fonts::Regular) ImGui::PushFont(Fonts::Regular);
+    dl->AddText(ImVec2(x0 + 16.0f, cur_y + 8.0f), UIConfig::Color::TextActive,
+                "音频路由与外接 USB DAC 拓扑 (USB OTG / 独立音频设备实时枚举)");
+    if (Fonts::Regular) ImGui::PopFont();
+
+    float dev_y = cur_y + 32.0f;
+    if (status.devices.empty()) {
+        if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+        dl->AddText(ImVec2(x0 + 18.0f, dev_y + 4.0f), UIConfig::Color::TextMuted, "未发现物理音频声卡或外接 DAC");
+        if (Fonts::Small) ImGui::PopFont();
+    } else {
+        for (const auto& d : status.devices) {
+            float row_x = x0 + 16.0f;
+            float row_w = w - 32.0f;
+            ImVec2 rb0(row_x, dev_y);
+            ImVec2 rb1(row_x + row_w, dev_y + 24.0f);
+
+            bool is_active_card = d.is_active;
+            ImU32 row_bg = is_active_card ? IM_COL32(r, g, b, 35) : IM_COL32(255, 255, 255, 8);
+            ImU32 row_border = is_active_card ? IM_COL32(r, g, b, 120) : IM_COL32(255, 255, 255, 18);
+            dl->AddRectFilled(rb0, rb1, row_bg, 4.0f);
+            dl->AddRect(rb0, rb1, row_border, 4.0f, 0, 1.0f);
+
+            if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+
+            std::string c_info = (d.is_external_dac ? "[USB DAC] " : "[系统音频] ") + d.name;
+            dl->AddText(ImVec2(row_x + 10.0f, dev_y + 4.0f),
+                        is_active_card ? UIConfig::Color::TextActive : UIConfig::Color::TextNormal,
+                        c_info.c_str());
+
+            float drv_x = row_x + 220.0f;
+            if (drv_x < row_x + row_w - 200.0f) {
+                std::string drv_info = "驱动: " + (d.driver.empty() ? "AAudio/ALSA" : d.driver);
+                dl->AddText(ImVec2(drv_x, dev_y + 4.0f), UIConfig::Color::TextMuted, drv_info.c_str());
+            }
+
+            float badge_right = row_x + row_w - 8.0f;
+            if (is_active_card) {
+                ImVec2 b_sz = ImGui::CalcTextSize("当前输出");
+                float bx = badge_right - b_sz.x - 12.0f;
+                dl->AddRectFilled(ImVec2(bx, dev_y + 2.0f), ImVec2(badge_right, dev_y + 22.0f), IM_COL32(52, 199, 89, 50), 3.0f);
+                dl->AddRect(ImVec2(bx, dev_y + 2.0f), ImVec2(badge_right, dev_y + 22.0f), IM_COL32(52, 199, 89, 180), 3.0f);
+                dl->AddText(ImVec2(bx + 6.0f, dev_y + 4.0f), IM_COL32(52, 199, 89, 255), "当前输出");
+                badge_right = bx - 6.0f;
+            }
+
+            const char* type_str = d.is_external_dac ? "外置 USB DAC" : "内置硬件";
             ImVec2 t_sz = ImGui::CalcTextSize(type_str);
             float tx = badge_right - t_sz.x - 12.0f;
             ImU32 t_bg = d.is_external_dac ? IM_COL32(r, g, b, 50) : IM_COL32(255, 255, 255, 15);

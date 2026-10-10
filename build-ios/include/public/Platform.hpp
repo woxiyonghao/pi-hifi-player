@@ -108,7 +108,8 @@ public:
     static bool isWindow()      { return current() == PlatformType::Window; }
     static bool isLinux()       { return current() == PlatformType::Linux; }
     static bool isIPad()        { return current() == PlatformType::IPad; }
-    static bool isIPhone()      { return current() == PlatformType::IPhone; }
+    static bool isPhone()       { return current() == PlatformType::IPhone || current() == PlatformType::Android; }
+    static bool isIPhone()      { return isPhone(); }
     static bool isAndroid()     { return current() == PlatformType::Android; }
 
     // 兼容与复合形态判断

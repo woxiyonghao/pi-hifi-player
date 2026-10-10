@@ -34,7 +34,7 @@ void WifiTransferView::render(float x, float y, float w, float h) {
     float margin_x = UIConfig::Layout::ContainerMarginX; // 16.0f
     float margin_y = UIConfig::Layout::ContainerMarginY; // 16.0f
     ImVec2 card_min(x + margin_x, y + margin_y);
-    ImVec2 card_max(x + w - margin_x, y + h - 86.0f);
+    ImVec2 card_max(x + w - margin_x, y + h - UIConfig::Layout::BottomBarOffset);
 
     ImDrawList* dl = ImGui::GetWindowDrawList();
 
@@ -151,6 +151,8 @@ void WifiTransferView::renderServerCard(ImDrawList* dl, float x0, float y0, floa
     std::string display_dir = WifiTransferServer::getInstance().getTargetDir();
     if (Platform::isIOS()) {
         display_dir = "App 文件 / Documents / music";
+    } else if (Platform::isAndroid()) {
+        display_dir = "发烧存储 / Android / data / Music";
     }
     std::string env_str = "Wi-Fi: " + net.wifi_ssid + " · 存储: " + display_dir;
     dl->AddText(ImVec2(x0 + 16.0f, y0 + 68.0f), UIConfig::Color::TextMuted, env_str.c_str());

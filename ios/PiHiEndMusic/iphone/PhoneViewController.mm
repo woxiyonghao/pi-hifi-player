@@ -84,12 +84,13 @@ void ConfigureBackgroundReadableFiles(NSString *documentsDirectory) {
     AppConfig::Path::setMusicDir([docsDir UTF8String]);
 
     // 0.2 针对 iPhone 紧凑横屏优化全局布局尺寸与边距，彻底杜绝左侧菜单截断与滚动
-    UIConfig::Layout::NavItemHeight = 25.0f;
-    UIConfig::Layout::DacCardHeight = 32.0f;
+    UIConfig::Layout::NavItemHeight = 24.0f;
+    UIConfig::Layout::DacCardHeight = 30.0f;
     UIConfig::Layout::ContainerMarginX = 8.0f;
     UIConfig::Layout::ContainerMarginY = 8.0f;
     UIConfig::Layout::ContainerGap = 6.0f;
     UIConfig::Layout::SidebarWidth  = 180.0f;
+    UIConfig::Layout::BottomBarOffset = 62.0f;
 
     // 1. 初始化 Metal 绘图引擎
     self.device = MTLCreateSystemDefaultDevice();

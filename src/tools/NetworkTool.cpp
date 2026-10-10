@@ -102,7 +102,12 @@ namespace {
         }
 
         // 获取 Wi-Fi 连接状态与 SSID
-#if defined(__linux__) || defined(HIFI_PLATFORM_RPI)
+#if defined(__ANDROID__)
+        if (info.is_connected) {
+            info.wifi_ssid = "Wi-Fi 局域网";
+            info.wifi_signal = "良好";
+        }
+#elif defined(__linux__) || defined(HIFI_PLATFORM_RPI)
         // 尝试 nmcli 获取 active wifi
         std::string nmcli_out = execCommandQuick("nmcli -t -f ACTIVE,SSID,SIGNAL dev wifi 2>/dev/null | grep '^yes:' | head -n 1");
         if (!nmcli_out.empty()) {

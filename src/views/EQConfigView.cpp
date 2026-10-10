@@ -221,7 +221,8 @@ void EQConfigView::renderTopActions(ImDrawList* dl, ImVec2 card_min, ImVec2 card
     const ImU32 g = (accent >> IM_COL32_G_SHIFT) & 0xFF;
     const ImU32 b = (accent >> IM_COL32_B_SHIFT) & 0xFF;
 
-    const float top_y = is_iphone ? (card_min.y + 8.0f) : (card_min.y + 16.0f);
+    // 顶部操作栏上下保持 12px 间距
+    const float top_y = is_iphone ? (card_min.y + 12.0f) : (card_min.y + 16.0f);
     const float btn_h = is_iphone ? 24.0f : 30.0f;
 
     // 1. 右侧 EQ 直通/启用胶囊开关
@@ -315,8 +316,8 @@ void EQConfigView::renderPresetChips(ImDrawList* dl, ImVec2 card_min, ImVec2 car
 
     const float start_x = card_min.x + 20.0f;
     const float total_w = card_max.x - card_min.x - 40.0f;
-    const float card_total_h = card_max.y - card_min.y;
-    const float chip_y = is_iphone ? (card_min.y + (card_total_h > 400.0f ? 35.0f : 32.0f)) : (card_min.y + 70.0f);
+    // 保持严格 12px 上下间距：顶部操作栏底 (card_min.y + 36px) + 12px = card_min.y + 48px
+    const float chip_y = is_iphone ? (card_min.y + 48.0f) : (card_min.y + 70.0f);
     const float chip_h = is_iphone ? 22.0f : 26.0f;
     const float chip_round = is_iphone ? 11.0f : 13.0f;
     const size_t count = presets_.size();
@@ -390,11 +391,10 @@ void EQConfigView::renderCurveCanvas(ImDrawList* dl, ImVec2 card_min, ImVec2 car
     const float canvas_x1 = card_max.x - 20.0f;
     const float card_total_h = card_max.y - card_min.y;
 
-    // 动态黄金比例计算曲线视窗高度：
-    // iPhone 竖屏 (card_total_h > 400px): ~92px；iPhone 横屏 (card_total_h < 350px): ~72px；普通平台: 138-240px
-    const float canvas_h = is_iphone ? std::clamp(card_total_h * (card_total_h > 400.0f ? 0.17f : 0.25f), 72.0f, 96.0f)
+    // 保持严格 12px 上下间距：预设胶囊底 (card_min.y + 70px) + 12px = card_min.y + 82px
+    const float canvas_h = is_iphone ? std::clamp(card_total_h * 0.16f, 54.0f, 62.0f)
                                      : std::clamp(card_total_h * 0.28f, 138.0f, 240.0f);
-    const float y0 = is_iphone ? (card_min.y + (card_total_h > 400.0f ? 62.0f : 58.0f)) : (card_min.y + 104.0f);
+    const float y0 = is_iphone ? (card_min.y + 82.0f) : (card_min.y + 104.0f);
     const float y1 = y0 + canvas_h;
     const float h = canvas_h;
     const float y_mid = (y0 + y1) * 0.5f;
@@ -518,18 +518,19 @@ void EQConfigView::renderSliders(ImDrawList* dl, ImVec2 card_min, ImVec2 card_ma
     const float col_w = total_w / static_cast<float>(NUM_BANDS);
 
     const float card_total_h = card_max.y - card_min.y;
-    const float canvas_h = is_iphone ? std::clamp(card_total_h * (card_total_h > 400.0f ? 0.17f : 0.25f), 72.0f, 96.0f)
+    const float canvas_h = is_iphone ? std::clamp(card_total_h * 0.16f, 54.0f, 62.0f)
                                      : std::clamp(card_total_h * 0.28f, 138.0f, 240.0f);
-    const float curve_y0 = is_iphone ? (card_min.y + (card_total_h > 400.0f ? 62.0f : 58.0f)) : (card_min.y + 104.0f);
-    const float y0 = is_iphone ? (curve_y0 + canvas_h + (card_total_h > 400.0f ? 8.0f : 6.0f))
+    const float curve_y0 = is_iphone ? (card_min.y + 82.0f) : (card_min.y + 104.0f);
+    // 保持严格 12px 上下间距：视窗底 + 12px，底部留白 12px
+    const float y0 = is_iphone ? (curve_y0 + canvas_h + 12.0f)
                                : (card_min.y + 104.0f + canvas_h + 12.0f);
-    const float y1 = is_iphone ? (card_max.y - 4.0f) : (card_max.y - 12.0f);
+    const float y1 = is_iphone ? (card_max.y - 12.0f) : (card_max.y - 12.0f);
 
-    const float label_top_h = is_iphone ? 14.0f : 24.0f;
-    const float label_bot_h = is_iphone ? 14.0f : 24.0f;
+    const float label_top_h = is_iphone ? 13.0f : 24.0f;
+    const float label_bot_h = is_iphone ? 13.0f : 24.0f;
 
-    const float rail_top = is_iphone ? (y0 + label_top_h + 4.0f) : (y0 + label_top_h + 8.0f);
-    const float rail_bot = is_iphone ? (y1 - label_bot_h - 4.0f) : (y1 - label_bot_h - 8.0f);
+    const float rail_top = is_iphone ? (y0 + label_top_h + 2.0f) : (y0 + label_top_h + 8.0f);
+    const float rail_bot = is_iphone ? (y1 - label_bot_h - 2.0f) : (y1 - label_bot_h - 8.0f);
     const float rail_h = rail_bot - rail_top;
     const float rail_mid = (rail_top + rail_bot) * 0.5f;
 
@@ -594,7 +595,7 @@ void EQConfigView::renderSliders(ImDrawList* dl, ImVec2 card_min, ImVec2 card_ma
 
         if (Fonts::Small) ImGui::PushFont(Fonts::Small);
         ImVec2 db_sz = ImGui::CalcTextSize(db_buf);
-        ImVec2 db_pos(cx - db_sz.x * 0.5f, is_iphone ? (y0 + 2.0f) : (y0 + 6.0f));
+        ImVec2 db_pos(cx - db_sz.x * 0.5f, is_iphone ? (y0 + 1.0f) : (y0 + 6.0f));
 
         ImU32 db_col = UIConfig::Color::TextMuted;
         if (is_enabled_) {
@@ -682,7 +683,7 @@ void EQConfigView::renderSliders(ImDrawList* dl, ImVec2 card_min, ImVec2 card_ma
 
         if (Fonts::Small) ImGui::PushFont(Fonts::Small);
         ImVec2 freq_sz = ImGui::CalcTextSize(disp_freq);
-        ImVec2 freq_pos(cx - freq_sz.x * 0.5f, is_iphone ? (rail_bot + 4.0f) : (rail_bot + 12.0f));
+        ImVec2 freq_pos(cx - freq_sz.x * 0.5f, is_iphone ? (rail_bot + 2.0f) : (rail_bot + 12.0f));
 
         ImU32 freq_col = (hov || act) ? UIConfig::Color::TextActive : UIConfig::Color::TextMuted;
         dl->AddText(freq_pos, freq_col, disp_freq);

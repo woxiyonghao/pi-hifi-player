@@ -63,6 +63,9 @@ namespace UIConfig {
 
         // 底部固定 DAC 容器高度
         inline float DacCardHeight    = 42.0f;  // DAC 容器高度 (px)
+
+        // 底部播放控制栏避让偏移量
+        inline float BottomBarOffset  = 86.0f;  // 避让底部播放控制栏的下边距 (px)
     }
 
     // ==========================================================================

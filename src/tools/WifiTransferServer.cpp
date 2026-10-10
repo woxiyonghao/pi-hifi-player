@@ -1,6 +1,7 @@
 #include "tools/WifiTransferServer.hpp"
 #include "tools/MusicScanManager.hpp"
 #include "public/AppConfig.hpp"
+#include "public/Platform.hpp"
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -637,6 +638,24 @@ void WifiTransferServer::handleClient(int client_fd) {
     // 1. GET / 或 /index.html: 返回 H5 网页
     if (method == "GET" && (uri == "/" || uri == "/index.html")) {
         std::string body = INDEX_HTML;
+        std::string platform_label = "树莓派";
+        if (Platform::isAndroid()) {
+            platform_label = "Android";
+        } else if (Platform::isIPhone()) {
+            platform_label = "iPhone";
+        } else if (Platform::isIPad()) {
+            platform_label = "iPad";
+        } else if (Platform::isMacOS()) {
+            platform_label = "Mac";
+        }
+        if (platform_label != "树莓派") {
+            const std::string rpi_str = "树莓派";
+            size_t pos = 0;
+            while ((pos = body.find(rpi_str, pos)) != std::string::npos) {
+                body.replace(pos, rpi_str.length(), platform_label);
+                pos += platform_label.length();
+            }
+        }
         std::ostringstream resp;
         resp << "HTTP/1.1 200 OK\r\n"
              << "Content-Type: text/html; charset=utf-8\r\n"
@@ -702,6 +721,37 @@ void WifiTransferServer::handleClient(int client_fd) {
         std::filesystem::path final_path = std::filesystem::path(target_music_dir_) / filename;
         std::filesystem::path temp_path = std::filesystem::path(target_music_dir_) / (filename + ".part");
         std::ofstream outfile(temp_path, std::ios::binary);
+
+        // 自愈容错：如果首次在 target_music_dir_ 创建文件失败 (例如 Android 遭遇 Scoped Storage 限制)，
+        // 自动探测并回退到备用可写目录 (AppConfig 音乐目录或配置沙盒目录)
+        if (!outfile.is_open()) {
+            std::vector<std::string> fallback_dirs;
+            std::string app_music = AppConfig::Path::getMusicDir();
+            if (!app_music.empty() && app_music != target_music_dir_) {
+                fallback_dirs.push_back(app_music);
+            }
+            std::string app_config = AppConfig::Path::getConfigDir();
+            if (!app_config.empty()) {
+                fallback_dirs.push_back(app_config + "/Music");
+            }
+            fallback_dirs.push_back("/tmp/music");
+
+            for (const auto& cand : fallback_dirs) {
+                try {
+                    std::filesystem::create_directories(cand);
+                } catch (...) {}
+                std::filesystem::path cand_temp = std::filesystem::path(cand) / (filename + ".part");
+                outfile.open(cand_temp, std::ios::binary);
+                if (outfile.is_open()) {
+                    temp_path = cand_temp;
+                    final_path = std::filesystem::path(cand) / filename;
+                    target_music_dir_ = cand;
+                    AppConfig::Path::setMusicDir(cand);
+                    std::cout << "[WifiTransferServer] 目标目录不可写，已自动自愈切换为: " << cand << std::endl;
+                    break;
+                }
+            }
+        }
 
         if (!outfile.is_open()) {
             std::string err_body = "{\"status\":\"error\",\"message\":\"无法创建写入文件\"}";

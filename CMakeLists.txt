@@ -151,6 +151,30 @@ if(APPLE)
         COMMENT "📲 [iOS] 正在编译并部署到物理 iPhone 真机..."
         USES_TERMINAL
     )
+
+    # 15. Android AVD 模拟器一键运行 Target (可在 CLion 中直接点击 ▶️ 运行)
+    add_custom_target(android_emulator
+        COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_android.sh emulator
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMENT "🤖 [Android] 正在编译并在 AVD 模拟器启动 PiHiEndMusic..."
+        USES_TERMINAL
+    )
+
+    # 16. Android 物理真机一键运行 Target (可在 CLion 中直接点击 ▶️ 运行)
+    add_custom_target(android_device
+        COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_android.sh device
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMENT "📲 [Android] 正在编译并部署到物理 Android 真机..."
+        USES_TERMINAL
+    )
+
+    # 17. Android APK 完整构建 Target
+    add_custom_target(android_build
+        COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_android.sh build
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMENT "📦 [Android] 正在编译 Android Debug APK..."
+        USES_TERMINAL
+    )
 else()
     target_link_libraries(${PROJECT_NAME} PRIVATE
         audio_engine

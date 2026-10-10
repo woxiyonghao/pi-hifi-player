@@ -248,7 +248,27 @@ AudioHardwareStatus detectMacCoreAudioDevices() {
 } // namespace
 
 AudioHardwareStatus AudioDeviceTool::getHardwareStatus() {
-#if defined(__linux__) && !defined(HIFI_PLATFORM_MAC)
+#if defined(__ANDROID__)
+    // 在 Android 平台下：首先检查是否能读取 /proc/asound/cards 探测物理声卡 / USB OTG DAC
+    AudioHardwareStatus status = detectLinuxAlsaCards();
+    if (status.devices.empty()) {
+        status.has_external_dac = false;
+        status.dac_name = "AAudio Direct";
+        status.dac_full_desc = "Android AAudio 低延迟硬件直通";
+        status.active_output_name = "原生 AAudio 硬件输出";
+        
+        PhysicalAudioDevice aaudio_dev;
+        aaudio_dev.card_num = 0;
+        aaudio_dev.id = "AAudio";
+        aaudio_dev.name = "AAudio Native Stream";
+        aaudio_dev.driver = "AAudio/OpenSL";
+        aaudio_dev.long_name = "Android AAudio 独占直通低延迟音频管道";
+        aaudio_dev.is_active = true;
+        aaudio_dev.is_external_dac = false;
+        status.devices.push_back(aaudio_dev);
+    }
+    return status;
+#elif defined(__linux__) && !defined(HIFI_PLATFORM_MAC)
     return detectLinuxAlsaCards();
 #elif defined(__APPLE__) && TARGET_OS_OSX
     return detectMacCoreAudioDevices();

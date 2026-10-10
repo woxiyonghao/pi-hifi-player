@@ -6,15 +6,26 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # 源码列表
-set(AUDIO_ENGINE_SOURCES
-    src/AudioEngine.cpp
-    src/DsfParser.cpp
-    src/decoders/FlacDecoder.cpp
-    src/decoders/WavDecoder.cpp
-    src/decoders/Mp3Decoder.cpp
-    src/sinks/SdlAudioSink.cpp
-    src/sinks/AlsaAudioSink.cpp
-)
+if(ANDROID)
+    set(AUDIO_ENGINE_SOURCES
+        src/AudioEngine.cpp
+        src/DsfParser.cpp
+        src/decoders/FlacDecoder.cpp
+        src/decoders/WavDecoder.cpp
+        src/decoders/Mp3Decoder.cpp
+        src/sinks/AAudioSink.cpp
+    )
+else()
+    set(AUDIO_ENGINE_SOURCES
+        src/AudioEngine.cpp
+        src/DsfParser.cpp
+        src/decoders/FlacDecoder.cpp
+        src/decoders/WavDecoder.cpp
+        src/decoders/Mp3Decoder.cpp
+        src/sinks/SdlAudioSink.cpp
+        src/sinks/AlsaAudioSink.cpp
+    )
+endif()
 
 if(APPLE)
     list(APPEND AUDIO_ENGINE_SOURCES src/decoders/AppleAudioDecoder.cpp)
@@ -31,7 +42,12 @@ target_include_directories(audio_engine
         ${SDL2_INCLUDE_DIRS}
 )
 
-if(APPLE)
+if(ANDROID)
+    target_link_libraries(audio_engine PRIVATE
+        aaudio
+        log
+    )
+elseif(APPLE)
     target_link_libraries(audio_engine PRIVATE
         ${SDL2_LIBRARIES}
         "-framework CoreAudio"

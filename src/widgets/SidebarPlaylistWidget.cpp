@@ -48,9 +48,9 @@ void SidebarPlaylistWidget::drawPlaylistIcon(ImDrawList* dl, ImVec2 center, Play
 }
 
 void SidebarPlaylistWidget::drawHeader(const char* title) {
-    ImGui::Dummy(ImVec2(0.0f, 6.0f));
+    ImGui::Dummy(ImVec2(0.0f, Platform::isPhone() ? 2.0f : 6.0f));
     ImGui::PushStyleColor(ImGuiCol_Text, UIConfig::Color::TextMuted);
-    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 10.0f);
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (Platform::isPhone() ? 6.0f : 10.0f));
 
     if (Fonts::Small) {
         ImGui::PushFont(Fonts::Small);
@@ -61,7 +61,7 @@ void SidebarPlaylistWidget::drawHeader(const char* title) {
     }
 
     ImGui::PopStyleColor();
-    ImGui::Dummy(ImVec2(0.0f, 2.0f));
+    ImGui::Dummy(ImVec2(0.0f, Platform::isPhone() ? 1.0f : 2.0f));
 }
 
 bool SidebarPlaylistWidget::drawPlaylistItem(PlaylistIcon icon, const char* label, bool is_selected, PlaylistIndicatorTarget& out_target) {
@@ -90,8 +90,12 @@ bool SidebarPlaylistWidget::drawPlaylistItem(PlaylistIcon icon, const char* labe
     ImU32 icon_col = is_selected ? UIConfig::Color::TextActive : UIConfig::Color::IconNormal;
     ImU32 text_col = is_selected ? UIConfig::Color::TextActive : UIConfig::Color::TextNormal;
 
-    drawPlaylistIcon(dl, ImVec2(pos.x + 18.0f, pos.y + height * 0.5f), icon, icon_col);
-    dl->AddText(ImVec2(pos.x + 36.0f, pos.y + 8.0f), text_col, label);
+    float icon_x = pos.x + (Platform::isPhone() ? 14.0f : 18.0f);
+    float text_x = pos.x + (Platform::isPhone() ? 28.0f : 36.0f);
+    float text_y = pos.y + (height - ImGui::GetFontSize()) * 0.5f;
+
+    drawPlaylistIcon(dl, ImVec2(icon_x, pos.y + height * 0.5f), icon, icon_col);
+    dl->AddText(ImVec2(text_x, text_y), text_col, label);
 
     ImGui::Dummy(ImVec2(0.0f, 1.0f));
     return clicked;
@@ -133,7 +137,7 @@ std::optional<PlaylistIndicatorTarget> SidebarPlaylistWidget::render(
 
     // 3. 添加播放列表按钮
     {
-        ImGui::Dummy(ImVec2(0.0f, 4.0f));
+        ImGui::Dummy(ImVec2(0.0f, Platform::isPhone() ? 2.0f : 4.0f));
         PlaylistIndicatorTarget dummy_target{};
         if (drawPlaylistItem(PlaylistIcon::Add, "添加播放列表", false, dummy_target)) {
             if (on_create_playlist_) {

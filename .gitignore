@@ -58,3 +58,15 @@ tests/snapshots/
 tests/*.ppm
 tests/*.png
 
+# Android 构建缓存与本地配置
+.gradle/
+android/.gradle/
+android/.cxx/
+android/build/
+android/app/build/
+android/app/.cxx/
+android/local.properties
+*.apk
+*.aab
+
+
