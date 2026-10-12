@@ -35,6 +35,7 @@ private:
     AudioCallback callback_;
     AudioFormatSpec actual_spec_;
     std::atomic<bool> is_running_{false};
+    std::atomic<bool> is_disconnected_{false};
     uint32_t buffer_size_samples_ = 512;
 
     static aaudio_data_callback_result_t dataCallbackThunk(

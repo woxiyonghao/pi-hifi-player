@@ -121,6 +121,14 @@ void ConfigureBackgroundReadableFiles(NSString *documentsDirectory) {
 
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(onKeyboardWillShow:) name:UIKeyboardWillShowNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(onKeyboardWillHide:) name:UIKeyboardWillHideNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(onAppDidBecomeActive:) name:UIApplicationDidBecomeActiveNotification object:nil];
+}
+
+- (void)onAppDidBecomeActive:(NSNotification *)notification {
+    if (_renderer) {
+        _renderer->resetIdle();
+    }
+    [self.mtkView setNeedsDisplay];
 }
 
 - (void)dealloc {

@@ -117,6 +117,9 @@ void HifiPadRenderer::render(float screen_w, float screen_h) {
     idle_timer_ += dt;
     if (idle_timer_ >= 15.0f && PlayerAdmin::getInstance().isPlaying()) {
         is_fullscreen_idle_ = true;
+    } else if (!PlayerAdmin::getInstance().isPlaying()) {
+        is_fullscreen_idle_ = false;
+        anim_progress_ = 0.0f;
     }
     float anim_speed = 3.2f;
     if (is_fullscreen_idle_) {

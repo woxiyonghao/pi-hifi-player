@@ -41,6 +41,7 @@ class HifiGLSurfaceView @JvmOverloads constructor(
     external fun nativeSetSafeArea(left: Float, top: Float, right: Float, bottom: Float)
     external fun nativeDrawFrame()
     external fun nativeOnTouchEvent(action: Int, x: Float, y: Float, eventTimeMs: Long)
+    external fun nativeOnResume()
 
     init {
         // 请求 OpenGL ES 3.0 上下文环境

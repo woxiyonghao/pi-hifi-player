@@ -52,6 +52,9 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         hideSystemUI()
         glSurfaceView.onResume()
+        glSurfaceView.queueEvent {
+            glSurfaceView.nativeOnResume()
+        }
     }
 
     override fun onPause() {

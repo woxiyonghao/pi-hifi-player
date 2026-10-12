@@ -42,6 +42,7 @@ public:
     void resetIdle() {
         idle_timer_ = 0.0f;
         is_fullscreen_idle_ = false;
+        anim_progress_ = 0.0f;
     }
 
     void setKeyboardHeight(float h) {

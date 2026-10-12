@@ -89,7 +89,7 @@ Java_com_pihifi_player_HifiGLSurfaceView_nativeInit(
 JNIEXPORT void JNICALL
 Java_com_pihifi_player_HifiGLSurfaceView_nativeSurfaceCreated(
     JNIEnv* env, jobject thiz) {
-    LOGI("GLSurfaceView Surface 创建，初始化 ImGui & GLES3 管线");
+    LOGI("GLSurfaceView Surface 创建/重建，重置 ImGui & GLES3 管线");
 
     if (g_view_obj) {
         env->DeleteGlobalRef(g_view_obj);
@@ -110,14 +110,22 @@ Java_com_pihifi_player_HifiGLSurfaceView_nativeSurfaceCreated(
     } else {
         ImGuiIO& io = ImGui::GetIO();
         io.IniFilename = nullptr;
-        if (io.BackendRendererUserData == nullptr) {
-            ImGui_ImplOpenGL3_Init("#version 300 es");
+        // 关键修复：当从来电、锁屏或后台切回时，Android 已创建全新 EGLContext！
+        // 旧 EGLContext 下的 Shader/Texture/VBO 句柄已失效，必须针对新 EGLContext 重新构建设备对象
+        if (io.BackendRendererUserData != nullptr) {
+            ImGui_ImplOpenGL3_Shutdown();
         }
+        ImGui_ImplOpenGL3_Init("#version 300 es");
+        ImGui_ImplOpenGL3_CreateDeviceObjects();
     }
 
-    // 初始化全功能发烧数播渲染器
-    g_renderer = std::make_unique<HifiPadRenderer>();
-    g_renderer->init();
+    // 初始化全功能发烧数播渲染器 (保留原单例，杜绝重置用户播放列表与界面状态)
+    if (!g_renderer) {
+        g_renderer = std::make_unique<HifiPadRenderer>();
+        g_renderer->init();
+    } else {
+        g_renderer->resetIdle();
+    }
 }
 
 JNIEXPORT void JNICALL
@@ -152,9 +160,6 @@ Java_com_pihifi_player_HifiGLSurfaceView_nativeDrawFrame(
     float dt = std::chrono::duration<float>(now - g_last_frame_time).count();
     g_last_frame_time = now;
     if (dt <= 0.0f || dt > 0.1f) dt = 1.0f / 60.0f;
-
-    // 驱动 PlayerAdmin 播放器心跳与进度更新
-    PlayerAdmin::getInstance().update(dt);
 
     ImGuiIO& io = ImGui::GetIO();
     io.DisplaySize = ImVec2(g_logical_w, g_logical_h);
@@ -360,9 +365,33 @@ Java_com_pihifi_player_HifiGLSurfaceView_nativeOnTouchEvent(
     }
 }
 
+JNIEXPORT void JNICALL
+Java_com_pihifi_player_HifiGLSurfaceView_nativeOnResume(
+    JNIEnv* /*env*/, jobject /*thiz*/) {
+    LOGI("HifiGLSurfaceView nativeOnResume: 唤醒并重置渲染器状态");
+    if (g_renderer) {
+        g_renderer->resetIdle();
+    }
+    g_last_frame_time = std::chrono::steady_clock::now();
+}
+
 // -----------------------------------------------------------------------------
 // 系统音频播控与前台服务 JNI 交互接口
 // -----------------------------------------------------------------------------
+
+JNIEXPORT void JNICALL
+Java_com_pihifi_player_AudioPlaybackService_nativePlay(
+    JNIEnv* /*env*/, jobject /*thiz*/) {
+    LOGI("AudioPlaybackService nativePlay");
+    PlayerAdmin::getInstance().play();
+}
+
+JNIEXPORT void JNICALL
+Java_com_pihifi_player_AudioPlaybackService_nativePause(
+    JNIEnv* /*env*/, jobject /*thiz*/) {
+    LOGI("AudioPlaybackService nativePause");
+    PlayerAdmin::getInstance().pause();
+}
 
 JNIEXPORT void JNICALL
 Java_com_pihifi_player_AudioPlaybackService_nativeTogglePlayPause(

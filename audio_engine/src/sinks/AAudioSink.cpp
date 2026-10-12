@@ -34,6 +34,7 @@ void AAudioSink::errorCallbackThunk(
     if (error == AAUDIO_ERROR_DISCONNECTED) {
         if (self) {
             self->is_running_.store(false, std::memory_order_release);
+            self->is_disconnected_.store(true, std::memory_order_release);
         }
     }
 }
@@ -98,28 +99,47 @@ bool AAudioSink::open(const AudioFormatSpec& requested_spec, AudioCallback callb
               << ", 声道: " << actual_spec_.channels
               << ", Burst 帧: " << burst << std::endl;
 
+    is_disconnected_.store(false, std::memory_order_release);
     return true;
 }
 
 void AAudioSink::start() {
+    if (is_disconnected_.load(std::memory_order_acquire)) {
+        std::cout << "[AAudioSink] 检测到流已被系统断开 (例如电话呼入)，自动重建输出流并恢复播放..." << std::endl;
+        AudioFormatSpec spec = actual_spec_;
+        AudioCallback cb = callback_;
+        close();
+        if (!open(spec, std::move(cb))) {
+            return;
+        }
+    }
     if (!stream_) return;
     is_running_.store(true, std::memory_order_release);
     aaudio_result_t result = AAudioStream_requestStart(stream_);
     if (result != AAUDIO_OK) {
         std::cerr << "[AAudioSink] requestStart 失败: " << AAudio_convertResultToText(result) << std::endl;
+        if (result == AAUDIO_ERROR_DISCONNECTED) {
+            is_disconnected_.store(true, std::memory_order_release);
+        }
     }
 }
 
 void AAudioSink::pause() {
     if (!stream_) return;
     is_running_.store(false, std::memory_order_release);
-    AAudioStream_requestPause(stream_);
+    aaudio_result_t res = AAudioStream_requestPause(stream_);
+    if (res == AAUDIO_ERROR_DISCONNECTED) {
+        is_disconnected_.store(true, std::memory_order_release);
+    }
 }
 
 void AAudioSink::stop() {
     if (!stream_) return;
     is_running_.store(false, std::memory_order_release);
-    AAudioStream_requestStop(stream_);
+    aaudio_result_t res = AAudioStream_requestStop(stream_);
+    if (res == AAUDIO_ERROR_DISCONNECTED) {
+        is_disconnected_.store(true, std::memory_order_release);
+    }
 }
 
 void AAudioSink::close() {

@@ -10,6 +10,7 @@
 #import "ipad/PadViewController.h"
 #import "iphone/PhoneViewController.h"
 #import <AVFoundation/AVFoundation.h>
+#import "tools/PlayerAdmin.hpp"
 
 namespace {
 
@@ -146,11 +147,26 @@ extern "C" uint32_t HifiPadGetBluetoothOutputSampleRate() {
                                                   usingBlock:^(NSNotification * _Nonnull note) {
         NSDictionary *info = note.userInfo;
         AVAudioSessionInterruptionType type = (AVAudioSessionInterruptionType)[info[AVAudioSessionInterruptionTypeKey] unsignedIntegerValue];
-        if (type == AVAudioSessionInterruptionTypeEnded) {
+        static bool wasPlayingBeforeInterruption = false;
+        if (type == AVAudioSessionInterruptionTypeBegan) {
+            wasPlayingBeforeInterruption = PlayerAdmin::getInstance().isPlaying();
+            NSLog(@"[AVAudioSession] 电话呼入/系统中断开始，当前播放状态: %s", wasPlayingBeforeInterruption ? "true" : "false");
+            if (wasPlayingBeforeInterruption) {
+                PlayerAdmin::getInstance().pause();
+            }
+        } else if (type == AVAudioSessionInterruptionTypeEnded) {
+            NSLog(@"[AVAudioSession] 电话挂断/系统中断结束，重新激活音频会话");
             if (IS_IPAD || IS_IPHONE) {
                 KeepPadAudioSessionActive(@"interruption ended");
             } else {
                 [[AVAudioSession sharedInstance] setActive:YES error:nil];
+            }
+            if (wasPlayingBeforeInterruption) {
+                wasPlayingBeforeInterruption = false;
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(350 * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{
+                    NSLog(@"[AVAudioSession] 挂断电话恢复播放，正在启动 PlayerAdmin::play()...");
+                    PlayerAdmin::getInstance().play();
+                });
             }
         }
     }];

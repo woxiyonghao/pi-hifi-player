@@ -1,5 +1,6 @@
 #include "HifiPadRenderer.hpp"
 #include "widgets/GlassCardRenderer.hpp"
+#include "public/Platform.hpp"
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -115,6 +116,9 @@ void HifiPadRenderer::render(float screen_w, float screen_h) {
     idle_timer_ += dt;
     if (idle_timer_ >= 15.0f && PlayerAdmin::getInstance().isPlaying()) {
         is_fullscreen_idle_ = true;
+    } else if (!PlayerAdmin::getInstance().isPlaying()) {
+        is_fullscreen_idle_ = false;
+        anim_progress_ = 0.0f;
     }
     float anim_speed = 3.2f;
     if (is_fullscreen_idle_) {
@@ -130,7 +134,7 @@ void HifiPadRenderer::render(float screen_w, float screen_h) {
 
     if (anim_progress_ < 0.999f) {
         float eff_w = screen_w - safe_left_ - safe_right_;
-        float sidebar_w = (screen_w < 900.0f) ? UIConfig::Layout::SidebarWidth : 260.0f;
+        float sidebar_w = Platform::isPhone() ? UIConfig::Layout::SidebarWidth : ((screen_w < 900.0f) ? UIConfig::Layout::SidebarWidth : 260.0f);
 
         float top_nav_dx = safe_left_ - (sidebar_w + safe_left_) * ease_t;
         float top_nav_dy = safe_top_ - 150.0f * ease_t;
@@ -338,7 +342,13 @@ void HifiPadRenderer::renderCreatePlaylistModal(float screen_w, float screen_h) 
     const float modal_w = 380.0f;
     const float modal_h = 200.0f;
     const float modal_x = (screen_w - modal_w) * 0.5f;
-    const float modal_y = (screen_h - modal_h) * 0.5f;
+    float modal_y = (screen_h - modal_h) * 0.5f;
+    if (keyboard_height_ > 0.0f) {
+        float avail = screen_h - keyboard_height_;
+        modal_y = std::max(20.0f, (avail - modal_h) * 0.5f);
+    } else if (ImGui::GetIO().WantTextInput) {
+        modal_y = std::max(20.0f, modal_y - 60.0f);
+    }
 
     ImGui::SetNextWindowPos(ImVec2(modal_x, modal_y));
     ImGui::SetNextWindowSize(ImVec2(modal_w, modal_h));
