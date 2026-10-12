@@ -1,4 +1,5 @@
 #include "tools/MusicDatabase.hpp"
+#include "tools/CueSheetParser.hpp"
 #include "public/AppConfig.hpp"
 #include <sqlite3.h>
 #include <filesystem>
@@ -134,8 +135,15 @@ bool MusicDatabase::init(const std::string& db_path) {
                 track_number INTEGER DEFAULT 0,
                 is_cue_track INTEGER DEFAULT 0
             );
-            INSERT OR IGNORE INTO scanned_tracks_new (id, title, artist, album, file_path, format, sample_rate, bit_depth, duration_sec)
-            SELECT id, title, artist, album, file_path, format, sample_rate, bit_depth, duration_sec FROM scanned_tracks;
+            INSERT OR IGNORE INTO scanned_tracks_new (
+                id, title, artist, album, file_path, format, sample_rate, bit_depth, duration_sec,
+                start_time_sec, end_time_sec, cue_path, track_number, is_cue_track
+            )
+            SELECT id, title, artist, album, file_path, format, sample_rate, bit_depth, duration_sec,
+                   COALESCE(start_time_sec, 0.0), COALESCE(end_time_sec, 0.0),
+                   COALESCE(cue_path, ''), COALESCE(track_number, 0),
+                   COALESCE(is_cue_track, 0)
+            FROM scanned_tracks;
             DROP TABLE scanned_tracks;
             ALTER TABLE scanned_tracks_new RENAME TO scanned_tracks;
         )";
@@ -203,21 +211,30 @@ bool MusicDatabase::saveScannedTracks(const std::vector<Track>& tracks) {
     for (const auto& t : tracks) {
         sqlite3_reset(stmt);
         sqlite3_bind_int64(stmt, 1, static_cast<sqlite3_int64>(t.id));
-        sqlite3_bind_text(stmt, 2, t.title.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_text(stmt, 3, t.artist.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_text(stmt, 4, t.album.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_text(stmt, 5, t.file_path.c_str(), -1, SQLITE_STATIC);
+
+        std::string safe_title = CueSheetParser::sanitizeUtf8(t.title);
+        std::string safe_artist = CueSheetParser::sanitizeUtf8(t.artist);
+        std::string safe_album = CueSheetParser::sanitizeUtf8(t.album);
+        std::string safe_path = CueSheetParser::sanitizeUtf8(t.file_path);
+        std::string safe_cue = CueSheetParser::sanitizeUtf8(t.cue_path);
+
+        sqlite3_bind_text(stmt, 2, safe_title.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 3, safe_artist.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 4, safe_album.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 5, safe_path.c_str(), -1, SQLITE_TRANSIENT);
         sqlite3_bind_int(stmt, 6, static_cast<int>(t.format));
         sqlite3_bind_int64(stmt, 7, static_cast<sqlite3_int64>(t.sample_rate));
         sqlite3_bind_int(stmt, 8, static_cast<int>(t.bit_depth));
         sqlite3_bind_int64(stmt, 9, static_cast<sqlite3_int64>(t.duration_sec));
         sqlite3_bind_double(stmt, 10, t.start_time_sec);
         sqlite3_bind_double(stmt, 11, t.end_time_sec);
-        sqlite3_bind_text(stmt, 12, t.cue_path.c_str(), -1, SQLITE_STATIC);
+        sqlite3_bind_text(stmt, 12, safe_cue.c_str(), -1, SQLITE_TRANSIENT);
         sqlite3_bind_int64(stmt, 13, static_cast<sqlite3_int64>(t.track_number));
         sqlite3_bind_int(stmt, 14, t.is_cue_track ? 1 : 0);
 
-        sqlite3_step(stmt);
+        if (sqlite3_step(stmt) != SQLITE_DONE) {
+            std::cerr << "[MusicDatabase] saveScannedTracks step 写入警告: " << sqlite3_errmsg(db_) << std::endl;
+        }
     }
 
     sqlite3_finalize(stmt);
@@ -372,10 +389,17 @@ bool MusicDatabase::savePlaylists(const std::vector<Playlist>& playlists) {
             sqlite3_reset(trk_stmt);
             sqlite3_bind_int64(trk_stmt, 1, static_cast<sqlite3_int64>(pl.getId()));
             sqlite3_bind_int64(trk_stmt, 2, static_cast<sqlite3_int64>(t.id));
-            sqlite3_bind_text(trk_stmt, 3, t.title.c_str(), -1, SQLITE_STATIC);
-            sqlite3_bind_text(trk_stmt, 4, t.artist.c_str(), -1, SQLITE_STATIC);
-            sqlite3_bind_text(trk_stmt, 5, t.album.c_str(), -1, SQLITE_STATIC);
-            sqlite3_bind_text(trk_stmt, 6, t.file_path.c_str(), -1, SQLITE_STATIC);
+
+            std::string safe_title = CueSheetParser::sanitizeUtf8(t.title);
+            std::string safe_artist = CueSheetParser::sanitizeUtf8(t.artist);
+            std::string safe_album = CueSheetParser::sanitizeUtf8(t.album);
+            std::string safe_path = CueSheetParser::sanitizeUtf8(t.file_path);
+            std::string safe_cue = CueSheetParser::sanitizeUtf8(t.cue_path);
+
+            sqlite3_bind_text(trk_stmt, 3, safe_title.c_str(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(trk_stmt, 4, safe_artist.c_str(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(trk_stmt, 5, safe_album.c_str(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(trk_stmt, 6, safe_path.c_str(), -1, SQLITE_TRANSIENT);
             sqlite3_bind_int(trk_stmt, 7, static_cast<int>(t.format));
             sqlite3_bind_int64(trk_stmt, 8, static_cast<sqlite3_int64>(t.sample_rate));
             sqlite3_bind_int(trk_stmt, 9, static_cast<int>(t.bit_depth));
@@ -383,7 +407,7 @@ bool MusicDatabase::savePlaylists(const std::vector<Playlist>& playlists) {
             sqlite3_bind_int(trk_stmt, 11, static_cast<int>(i));
             sqlite3_bind_double(trk_stmt, 12, t.start_time_sec);
             sqlite3_bind_double(trk_stmt, 13, t.end_time_sec);
-            sqlite3_bind_text(trk_stmt, 14, t.cue_path.c_str(), -1, SQLITE_STATIC);
+            sqlite3_bind_text(trk_stmt, 14, safe_cue.c_str(), -1, SQLITE_TRANSIENT);
             sqlite3_bind_int64(trk_stmt, 15, static_cast<sqlite3_int64>(t.track_number));
             sqlite3_bind_int(trk_stmt, 16, t.is_cue_track ? 1 : 0);
 

@@ -14,6 +14,7 @@ struct CueTrackInfo {
     std::string resolved_audio_path;
     double start_time_sec = 0.0;
     double end_time_sec = 0.0;
+    double pregap_sec = 0.0;
     uint32_t duration_sec = 0;
 };
 
@@ -35,6 +36,9 @@ public:
 
     // 检测字符串是否为合法 UTF-8
     static bool isValidUtf8(const std::string& str);
+
+    // 净化字符串为严格有效 UTF-8，防止 SQLite 事务中断回滚
+    static std::string sanitizeUtf8(const std::string& str);
 
     // 解析标准 CUE 时间戳 mm:ss:ff 为秒数 (每秒 75 帧)
     static double parseTimestamp(const std::string& time_str);

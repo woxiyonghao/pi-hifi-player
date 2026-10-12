@@ -158,6 +158,19 @@ void HifiPhoneRenderer::renderLibraryTab(float x, float y, float w, float h) {
         }
     }
 
+    // 行业标准：如果已被 CUE 拆解为分轨，绝对不在曲目列表中展示整轨大文件
+    std::unordered_set<std::string> cue_audio_files;
+    for (const auto& t : cached_tracks_) {
+        if (t.is_cue_track && !t.file_path.empty()) {
+            cue_audio_files.insert(t.file_path);
+        }
+    }
+    if (!cue_audio_files.empty()) {
+        std::erase_if(cached_tracks_, [&](const Track& t) {
+            return !t.is_cue_track && cue_audio_files.count(t.file_path) > 0;
+        });
+    }
+
     // 头部：曲目总数与重新扫描
     float pad = 12.0f;
     char count_str[64];
@@ -201,8 +214,24 @@ void HifiPhoneRenderer::renderLibraryTab(float x, float y, float w, float h) {
     if (list_h <= 50.0f) return;
 
     ImGui::SetCursorScreenPos(ImVec2(x + 4.0f, list_y));
-    ImGuiWindowFlags list_flags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoBackground;
+    ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 4.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarRounding, 2.0f);
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarBg, IM_COL32(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarGrab, IM_COL32(255, 255, 255, 40));
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarGrabHovered, IM_COL32(255, 255, 255, 80));
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarGrabActive, UIConfig::Color::Accent);
+
+    ImGuiWindowFlags list_flags = ImGuiWindowFlags_NoBackground;
     ImGui::BeginChild("##PhoneTrackListChild", ImVec2(w - 8.0f, list_h), false, list_flags);
+
+    // 触控与鼠标拖拽平滑滚动
+    if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem) &&
+        ImGui::IsMouseDragging(ImGuiMouseButton_Left, 4.0f)) {
+        float drag_dy = std::clamp(ImGui::GetIO().MouseDelta.y, -40.0f, 40.0f);
+        if (drag_dy != 0.0f) {
+            ImGui::SetScrollY(ImGui::GetScrollY() - drag_dy);
+        }
+    }
 
     auto& player = PlayerAdmin::getInstance();
     auto cur_opt = player.getCurrentTrack();
@@ -247,6 +276,8 @@ void HifiPhoneRenderer::renderLibraryTab(float x, float y, float w, float h) {
     }
 
     ImGui::EndChild();
+    ImGui::PopStyleColor(4);
+    ImGui::PopStyleVar(2);
 }
 
 // ==============================================================================

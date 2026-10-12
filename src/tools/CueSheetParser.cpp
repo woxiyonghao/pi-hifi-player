@@ -27,23 +27,73 @@ bool CueSheetParser::isValidUtf8(const std::string& str) {
             i++;
         } else if ((c & 0xE0) == 0xC0) {
             if (i + 1 >= len || (static_cast<unsigned char>(str[i + 1]) & 0xC0) != 0x80) return false;
+            if (c < 0xC2) return false;
             i += 2;
         } else if ((c & 0xF0) == 0xE0) {
             if (i + 2 >= len ||
                 (static_cast<unsigned char>(str[i + 1]) & 0xC0) != 0x80 ||
                 (static_cast<unsigned char>(str[i + 2]) & 0xC0) != 0x80) return false;
+            if (c == 0xE0 && (static_cast<unsigned char>(str[i + 1]) < 0xA0)) return false;
+            if (c == 0xED && (static_cast<unsigned char>(str[i + 1]) >= 0xA0)) return false;
             i += 3;
         } else if ((c & 0xF8) == 0xF0) {
             if (i + 3 >= len ||
                 (static_cast<unsigned char>(str[i + 1]) & 0xC0) != 0x80 ||
                 (static_cast<unsigned char>(str[i + 2]) & 0xC0) != 0x80 ||
                 (static_cast<unsigned char>(str[i + 3]) & 0xC0) != 0x80) return false;
+            if (c == 0xF0 && (static_cast<unsigned char>(str[i + 1]) < 0x90)) return false;
+            if (c == 0xF4 && (static_cast<unsigned char>(str[i + 1]) >= 0x90)) return false;
             i += 4;
         } else {
             return false;
         }
     }
     return true;
+}
+
+std::string CueSheetParser::sanitizeUtf8(const std::string& str) {
+    if (isValidUtf8(str)) return str;
+
+    std::string out;
+    out.reserve(str.size());
+    size_t i = 0;
+    const size_t len = str.size();
+    while (i < len) {
+        unsigned char c = static_cast<unsigned char>(str[i]);
+        if (c <= 0x7F) {
+            out.push_back(str[i]);
+            i++;
+        } else if ((c & 0xE0) == 0xC0 && i + 1 < len &&
+                   (static_cast<unsigned char>(str[i + 1]) & 0xC0) == 0x80 && c >= 0xC2) {
+            out.push_back(str[i]);
+            out.push_back(str[i + 1]);
+            i += 2;
+        } else if ((c & 0xF0) == 0xE0 && i + 2 < len &&
+                   (static_cast<unsigned char>(str[i + 1]) & 0xC0) == 0x80 &&
+                   (static_cast<unsigned char>(str[i + 2]) & 0xC0) == 0x80 &&
+                   !(c == 0xE0 && (static_cast<unsigned char>(str[i + 1]) < 0xA0)) &&
+                   !(c == 0xED && (static_cast<unsigned char>(str[i + 1]) >= 0xA0))) {
+            out.push_back(str[i]);
+            out.push_back(str[i + 1]);
+            out.push_back(str[i + 2]);
+            i += 3;
+        } else if ((c & 0xF8) == 0xF0 && i + 3 < len &&
+                   (static_cast<unsigned char>(str[i + 1]) & 0xC0) == 0x80 &&
+                   (static_cast<unsigned char>(str[i + 2]) & 0xC0) == 0x80 &&
+                   (static_cast<unsigned char>(str[i + 3]) & 0xC0) == 0x80 &&
+                   !(c == 0xF0 && (static_cast<unsigned char>(str[i + 1]) < 0x90)) &&
+                   !(c == 0xF4 && (static_cast<unsigned char>(str[i + 1]) >= 0x90))) {
+            out.push_back(str[i]);
+            out.push_back(str[i + 1]);
+            out.push_back(str[i + 2]);
+            out.push_back(str[i + 3]);
+            i += 4;
+        } else {
+            out.push_back('?');
+            i++;
+        }
+    }
+    return out;
 }
 
 std::string CueSheetParser::convertGbkToUtf8(const std::string& raw_bytes) {
@@ -72,7 +122,6 @@ std::string CueSheetParser::convertGbkToUtf8(const std::string& raw_bytes) {
         false
     );
     if (!cfstr) {
-        // 降级尝试 GBK
         cfstr = CFStringCreateWithBytes(
             kCFAllocatorDefault,
             reinterpret_cast<const UInt8*>(raw_bytes.data()),
@@ -101,34 +150,46 @@ std::string CueSheetParser::convertGbkToUtf8(const std::string& raw_bytes) {
             }
         }
         if (env) {
-            jbyteArray bytes = env->NewByteArray(raw_bytes.size());
-            env->SetByteArrayRegion(bytes, 0, raw_bytes.size(), reinterpret_cast<const jbyte*>(raw_bytes.data()));
-            jstring charset = env->NewStringUTF("GB18030");
-            jclass str_cls = env->FindClass("java/lang/String");
-            jmethodID ctor = env->GetMethodID(str_cls, "<init>", "([BLjava/lang/String;)V");
-            jstring result_str = static_cast<jstring>(env->NewObject(str_cls, ctor, bytes, charset));
-            std::string result;
-            if (result_str) {
-                const char* chars = env->GetStringUTFChars(result_str, nullptr);
-                if (chars) {
-                    result = chars;
-                    env->ReleaseStringUTFChars(result_str, chars);
+            auto convertWithCharset = [&](const char* charset_name) -> std::string {
+                jbyteArray bytes = env->NewByteArray(raw_bytes.size());
+                if (!bytes) return "";
+                env->SetByteArrayRegion(bytes, 0, raw_bytes.size(), reinterpret_cast<const jbyte*>(raw_bytes.data()));
+                jstring charset = env->NewStringUTF(charset_name);
+                jclass str_cls = env->FindClass("java/lang/String");
+                jmethodID ctor = env->GetMethodID(str_cls, "<init>", "([BLjava/lang/String;)V");
+                jstring result_str = static_cast<jstring>(env->NewObject(str_cls, ctor, bytes, charset));
+                std::string result;
+                if (env->ExceptionCheck()) {
+                    env->ExceptionClear();
+                } else if (result_str) {
+                    const char* chars = env->GetStringUTFChars(result_str, nullptr);
+                    if (chars) {
+                        result = chars;
+                        env->ReleaseStringUTFChars(result_str, chars);
+                    }
+                    env->DeleteLocalRef(result_str);
                 }
-                env->DeleteLocalRef(result_str);
-            }
-            env->DeleteLocalRef(bytes);
-            env->DeleteLocalRef(charset);
-            env->DeleteLocalRef(str_cls);
+                env->DeleteLocalRef(bytes);
+                env->DeleteLocalRef(charset);
+                env->DeleteLocalRef(str_cls);
+                return result;
+            };
+
+            std::string res = convertWithCharset("GB18030");
+            if (res.empty()) res = convertWithCharset("GBK");
             if (need_detach) {
                 g_android_jvm->DetachCurrentThread();
             }
-            if (!result.empty()) return result;
+            if (!res.empty()) return res;
         }
     }
 #elif defined(__linux__)
     iconv_t cd = iconv_open("UTF-8", "GB18030");
     if (cd == (iconv_t)-1) {
         cd = iconv_open("UTF-8", "GBK");
+    }
+    if (cd == (iconv_t)-1) {
+        cd = iconv_open("UTF-8", "GB2312");
     }
     if (cd != (iconv_t)-1) {
         size_t in_bytes = raw_bytes.size();
@@ -145,64 +206,145 @@ std::string CueSheetParser::convertGbkToUtf8(const std::string& raw_bytes) {
     }
 #endif
 
-    // 若转码未成功，作为安全兜底返回原串
-    return raw_bytes;
+    // 若系统级转码失败，使用严格 UTF-8 清洗兜底，坚决防止 SQLite 异常
+    return sanitizeUtf8(raw_bytes);
 }
 
 double CueSheetParser::parseTimestamp(const std::string& time_str) {
-    // 格式 mm:ss:ff (ff 为帧数，1 秒 = 75 帧)
     int mm = 0, ss = 0, ff = 0;
     char colon1 = ':', colon2 = ':';
     std::istringstream iss(time_str);
     if (iss >> mm >> colon1 >> ss >> colon2 >> ff) {
         return static_cast<double>(mm) * 60.0 + static_cast<double>(ss) + static_cast<double>(ff) / 75.0;
     }
+    std::istringstream iss2(time_str);
+    if (iss2 >> mm >> colon1 >> ss) {
+        return static_cast<double>(mm) * 60.0 + static_cast<double>(ss);
+    }
     return 0.0;
+}
+
+static std::string trimWhitespace(const std::string& str) {
+    size_t first = str.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos) return "";
+    size_t last = str.find_last_not_of(" \t\r\n");
+    return str.substr(first, (last - first + 1));
+}
+
+static std::string toUpperAscii(const std::string& s) {
+    std::string res = s;
+    for (char& c : res) {
+        if (c >= 'a' && c <= 'z') {
+            c = static_cast<char>(c - 'a' + 'A');
+        }
+    }
+    return res;
+}
+
+static std::string cleanQuotedValue(const std::string& text) {
+    std::string s = trimWhitespace(text);
+    if (s.empty()) return "";
+
+    if (s.front() == '"') {
+        size_t end_q = s.find('"', 1);
+        if (end_q != std::string::npos) {
+            return s.substr(1, end_q - 1);
+        }
+        return s.substr(1);
+    }
+    if (s.front() == '\'') {
+        size_t end_q = s.find('\'', 1);
+        if (end_q != std::string::npos) {
+            return s.substr(1, end_q - 1);
+        }
+        return s.substr(1);
+    }
+    return s;
+}
+
+static std::string cleanAudioFilename(const std::string& raw) {
+    std::string s = cleanQuotedValue(raw);
+    // 移除末尾的文件类型标识 (如 WAVE, BINARY, FLAC, MP3)
+    std::string s_up = toUpperAscii(s);
+    for (const char* kw : {" WAVE", " BINARY", " FLAC", " MP3", " AIFF", " MOTOROLA"}) {
+        size_t pos = s_up.rfind(kw);
+        if (pos != std::string::npos && pos + std::strlen(kw) == s_up.size()) {
+            s = trimWhitespace(s.substr(0, pos));
+            s = cleanQuotedValue(s);
+            break;
+        }
+    }
+
+    // 剥离 Windows 盘符与路径 (如 "C:\Music\CDImage.wav" 或 "..\CDImage.wav")
+    size_t last_slash = s.find_last_of("/\\");
+    if (last_slash != std::string::npos) {
+        s = s.substr(last_slash + 1);
+    }
+    return trimWhitespace(s);
 }
 
 std::string CueSheetParser::resolveAudioFile(const std::filesystem::path& cue_dir, const std::string& filename) {
     std::error_code ec;
+    std::string clean_name = cleanAudioFilename(filename);
 
-    // 1. 同级目录下直接完全匹配
-    std::filesystem::path direct = cue_dir / filename;
-    if (std::filesystem::exists(direct, ec) && std::filesystem::is_regular_file(direct, ec)) {
-        return direct.string();
-    }
+    if (!clean_name.empty()) {
+        // 1. 同级目录下完全匹配
+        std::filesystem::path direct = cue_dir / clean_name;
+        if (std::filesystem::exists(direct, ec) && std::filesystem::is_regular_file(direct, ec)) {
+            return direct.string();
+        }
 
-    // 2. 大小写不敏感匹配 (兼容 Linux/Android 大小写敏感文件系统)
-    for (const auto& entry : std::filesystem::directory_iterator(cue_dir, ec)) {
-        if (!entry.is_regular_file(ec)) continue;
-        std::string entry_name = entry.path().filename().string();
-        if (entry_name.size() == filename.size()) {
-            bool match = true;
-            for (size_t i = 0; i < filename.size(); ++i) {
-                if (std::tolower(static_cast<unsigned char>(entry_name[i])) !=
-                    std::tolower(static_cast<unsigned char>(filename[i]))) {
-                    match = false;
-                    break;
-                }
-            }
-            if (match) {
+        // 2. 大小写不敏感匹配 (兼容 Linux / Android / macOS 大小写规范)
+        std::string clean_lower = clean_name;
+        std::transform(clean_lower.begin(), clean_lower.end(), clean_lower.begin(), ::tolower);
+
+        for (const auto& entry : std::filesystem::directory_iterator(cue_dir, ec)) {
+            if (!entry.is_regular_file(ec)) continue;
+            std::string entry_name = entry.path().filename().string();
+            std::string entry_lower = entry_name;
+            std::transform(entry_lower.begin(), entry_lower.end(), entry_lower.begin(), ::tolower);
+            if (entry_lower == clean_lower) {
                 return entry.path().string();
+            }
+        }
+
+        // 3. 同名格式转写匹配 (如 CUE 记录的是 CDImage.wav，但实际为 CDImage.flac 或 CDImage.ape / CDImage.dsf)
+        std::filesystem::path target_stem_path(clean_name);
+        std::string target_stem = target_stem_path.stem().string();
+        std::string target_stem_lower = target_stem;
+        std::transform(target_stem_lower.begin(), target_stem_lower.end(), target_stem_lower.begin(), ::tolower);
+
+        for (const auto& entry : std::filesystem::directory_iterator(cue_dir, ec)) {
+            if (!entry.is_regular_file(ec)) continue;
+            std::string ext = entry.path().extension().string();
+            if (AudioFormatUtils::isSupported(ext)) {
+                std::string stem_lower = entry.path().stem().string();
+                std::transform(stem_lower.begin(), stem_lower.end(), stem_lower.begin(), ::tolower);
+                if (stem_lower == target_stem_lower) {
+                    return entry.path().string();
+                }
             }
         }
     }
 
-    // 3. 同名其他格式兜底匹配 (如 CUE 记录的是 CDImage.wav，但实际为 CDImage.flac 或同名母带)
-    std::filesystem::path target_stem_path(filename);
-    std::string target_stem = target_stem_path.stem().string();
+    // 4. 目录内同名 CUE 关联匹配 (如 CDImage.cue 关联同目录 CDImage.wav)
+    std::string cue_stem = cue_dir.filename().string();
+    std::string cue_stem_lower = cue_stem;
+    std::transform(cue_stem_lower.begin(), cue_stem_lower.end(), cue_stem_lower.begin(), ::tolower);
 
     for (const auto& entry : std::filesystem::directory_iterator(cue_dir, ec)) {
         if (!entry.is_regular_file(ec)) continue;
         std::string ext = entry.path().extension().string();
         if (AudioFormatUtils::isSupported(ext)) {
-            if (entry.path().stem().string() == target_stem) {
+            std::string stem_lower = entry.path().stem().string();
+            std::transform(stem_lower.begin(), stem_lower.end(), stem_lower.begin(), ::tolower);
+            if (stem_lower == cue_stem_lower) {
                 return entry.path().string();
             }
         }
     }
 
-    // 4. 目录内唯一主流音频文件自适应 (单曲整轨 CD 常见模式)
+    // 5. 目录内单一大母带音频自适应匹配 (发烧整轨 CD 经典模式)
     std::vector<std::filesystem::path> supported_audio_files;
     for (const auto& entry : std::filesystem::directory_iterator(cue_dir, ec)) {
         if (!entry.is_regular_file(ec)) continue;
@@ -216,29 +358,6 @@ std::string CueSheetParser::resolveAudioFile(const std::filesystem::path& cue_di
     }
 
     return "";
-}
-
-static std::string extractQuotedString(const std::string& line, size_t prefix_len) {
-    if (line.size() <= prefix_len) return "";
-    std::string rest = line.substr(prefix_len);
-    // 去除前导空白
-    size_t first_char = rest.find_first_not_of(" \t");
-    if (first_char == std::string::npos) return "";
-    rest = rest.substr(first_char);
-
-    if (!rest.empty() && rest.front() == '"') {
-        size_t end_quote = rest.find('"', 1);
-        if (end_quote != std::string::npos) {
-            return rest.substr(1, end_quote - 1);
-        }
-        return rest.substr(1);
-    }
-    // 未带引号，截取到下一个空格或行末
-    size_t end_sp = rest.find_first_of(" \t\r\n");
-    if (end_sp != std::string::npos) {
-        return rest.substr(0, end_sp);
-    }
-    return rest;
 }
 
 std::optional<CueSheet> CueSheetParser::parse(const std::filesystem::path& cue_path) {
@@ -264,48 +383,58 @@ std::optional<CueSheet> CueSheetParser::parse(const std::filesystem::path& cue_p
     std::optional<CueTrackInfo> current_track;
 
     while (std::getline(stream, line)) {
-        // 移除行首行尾空白及回车
-        while (!line.empty() && (line.back() == '\r' || line.back() == '\n' || line.back() == ' ' || line.back() == '\t')) {
-            line.pop_back();
-        }
-        size_t start_idx = line.find_first_not_of(" \t");
-        if (start_idx == std::string::npos) continue;
-        line = line.substr(start_idx);
+        std::string trimmed = trimWhitespace(line);
+        if (trimmed.empty()) continue;
 
-        if (line.rfind("PERFORMER", 0) == 0) {
-            std::string val = extractQuotedString(line, 9);
+        // 提取行首指令关键字 (忽略大小写)
+        size_t sp_pos = trimmed.find_first_of(" \t");
+        std::string cmd = (sp_pos == std::string::npos) ? trimmed : trimmed.substr(0, sp_pos);
+        std::string rest = (sp_pos == std::string::npos) ? "" : trimWhitespace(trimmed.substr(sp_pos));
+        std::string cmd_upper = toUpperAscii(cmd);
+
+        if (cmd_upper == "REM") {
+            continue;
+        } else if (cmd_upper == "PERFORMER" || cmd_upper == "SONGWRITER") {
+            std::string val = cleanQuotedValue(rest);
             if (current_track.has_value()) {
                 current_track->performer = val;
             } else {
                 sheet.album_performer = val;
             }
-        } else if (line.rfind("TITLE", 0) == 0) {
-            std::string val = extractQuotedString(line, 5);
+        } else if (cmd_upper == "TITLE") {
+            std::string val = cleanQuotedValue(rest);
             if (current_track.has_value()) {
                 current_track->title = val;
             } else {
                 sheet.album_title = val;
             }
-        } else if (line.rfind("FILE", 0) == 0) {
-            current_file = extractQuotedString(line, 4);
+        } else if (cmd_upper == "FILE") {
+            current_file = cleanAudioFilename(rest);
             sheet.referenced_audio_files.push_back(current_file);
-        } else if (line.rfind("TRACK", 0) == 0) {
+        } else if (cmd_upper == "TRACK") {
             if (current_track.has_value()) {
                 sheet.tracks.push_back(*current_track);
                 current_track.reset();
             }
             CueTrackInfo t;
             t.file_reference = current_file;
-            std::istringstream tr_ss(line.substr(5));
+            std::istringstream tr_ss(rest);
             tr_ss >> t.track_number;
-            t.performer = sheet.album_performer; // 默认继承专辑艺术家
+            t.performer = sheet.album_performer;
             current_track = t;
-        } else if (line.rfind("INDEX 01", 0) == 0) {
-            std::string time_str = line.substr(8);
-            size_t p = time_str.find_first_not_of(" \t");
-            if (p != std::string::npos) time_str = time_str.substr(p);
-            if (current_track.has_value()) {
-                current_track->start_time_sec = parseTimestamp(time_str);
+        } else if (cmd_upper == "INDEX") {
+            // INDEX <00|01|0|1> <mm:ss:ff>
+            std::istringstream idx_ss(rest);
+            int idx_num = 0;
+            std::string time_str;
+            if (idx_ss >> idx_num >> time_str) {
+                if (current_track.has_value()) {
+                    if (idx_num == 1) {
+                        current_track->start_time_sec = parseTimestamp(time_str);
+                    } else if (idx_num == 0) {
+                        current_track->pregap_sec = parseTimestamp(time_str);
+                    }
+                }
             }
         }
     }
@@ -337,16 +466,23 @@ std::optional<CueSheet> CueSheetParser::parse(const std::filesystem::path& cue_p
         t.resolved_audio_path = resolveAudioFile(cue_dir, ref);
     }
 
-    // 按照音频文件分组计算分轨时间
+    // 业内核心算法：依据 CUE 的 INDEX 精准切分 WAV 区间
     for (size_t i = 0; i < sheet.tracks.size(); ++i) {
-        if (i + 1 < sheet.tracks.size() && sheet.tracks[i].resolved_audio_path == sheet.tracks[i + 1].resolved_audio_path) {
-            sheet.tracks[i].end_time_sec = sheet.tracks[i + 1].start_time_sec;
+        if (i + 1 < sheet.tracks.size() &&
+            !sheet.tracks[i].resolved_audio_path.empty() &&
+            sheet.tracks[i].resolved_audio_path == sheet.tracks[i + 1].resolved_audio_path) {
+            
+            // 下一首音轨有 INDEX 00 前奏时，当前音轨截断在 INDEX 00；否则截断在下一首 INDEX 01
+            double next_start = (sheet.tracks[i + 1].pregap_sec > sheet.tracks[i].start_time_sec)
+                                ? sheet.tracks[i + 1].pregap_sec
+                                : sheet.tracks[i + 1].start_time_sec;
+            sheet.tracks[i].end_time_sec = next_start;
             double dur = sheet.tracks[i].end_time_sec - sheet.tracks[i].start_time_sec;
             sheet.tracks[i].duration_sec = static_cast<uint32_t>(std::max(0.0, std::round(dur)));
         } else {
             // 最后一首或当前文件最后一个分轨，end_time_sec = 0.0 表示播至物理文件末尾 (EOF)
             sheet.tracks[i].end_time_sec = 0.0;
-            sheet.tracks[i].duration_sec = 0; // 后续扫描时由实际音频总时长相减填充
+            sheet.tracks[i].duration_sec = 0; // 扫描时由实际物理音频总时长相减填充
         }
     }
 

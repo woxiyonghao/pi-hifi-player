@@ -63,6 +63,31 @@ void MusicScanManager::loadFromDatabase() {
     auto cached = MusicDatabase::getInstance().loadScannedTracks();
     std::lock_guard lock(mutex_);
     if (!cached.empty()) {
+        // 自愈过滤：若同一物理文件既有 CUE 分轨又有整轨大文件记录，坚决剔除整轨大文件，只保留 CUE 分轨！
+        std::unordered_set<std::string> cue_audio_files;
+        for (const auto& t : cached) {
+            if (t.is_cue_track && !t.file_path.empty()) {
+                cue_audio_files.insert(t.file_path);
+                std::error_code dummy_ec;
+                std::string norm = std::filesystem::weakly_canonical(t.file_path, dummy_ec).string();
+                if (!norm.empty()) cue_audio_files.insert(norm);
+            }
+        }
+        if (!cue_audio_files.empty()) {
+            size_t before_cnt = cached.size();
+            std::erase_if(cached, [&](const Track& t) {
+                if (t.is_cue_track) return false;
+                std::error_code dummy_ec;
+                std::string norm = std::filesystem::weakly_canonical(t.file_path, dummy_ec).string();
+                return cue_audio_files.count(t.file_path) > 0 || (!norm.empty() && cue_audio_files.count(norm) > 0);
+            });
+            if (cached.size() != before_cnt) {
+                std::cout << "[MusicScanManager] 自动清洗剔除了 " << (before_cnt - cached.size())
+                          << " 首被 CUE 拆解的同名整轨大文件记录。" << std::endl;
+                MusicDatabase::getInstance().saveScannedTracks(cached);
+            }
+        }
+
         scanned_tracks_ = std::move(cached);
         state_ = ScanState::Completed;
         std::cout << "[MusicScanManager] 从本地数据库恢复已扫描曲目 " << scanned_tracks_.size() << " 首。" << std::endl;
@@ -244,8 +269,7 @@ void MusicScanManager::scanWorker(std::stop_token stop_token, std::filesystem::p
         "/storage/emulated/0/Music",
         "/storage/emulated/0/Download",
         "/sdcard/Music",
-        "/sdcard/Download",
-        "/storage/emulated/0"
+        "/sdcard/Download"
     };
     for (const char* p : android_candidates) {
         std::error_code dummy_ec;
@@ -281,13 +305,22 @@ void MusicScanManager::scanWorker(std::stop_token stop_token, std::filesystem::p
 #endif
 #endif
 
-    // 目录去重与规范化
+    // 目录去重与规范化 (过滤裸 $HOME 与 /storage/emulated/0，避免遍历整机系统庞大文件树)
+    const char* home_env = std::getenv("HOME");
+    std::string home_norm = (home_env && home_env[0] != '\0') ? std::filesystem::weakly_canonical(home_env, ec).string() : "";
+
     std::vector<std::filesystem::path> unique_roots;
     std::unordered_set<std::string> seen_root_paths;
     for (const auto& r : candidate_roots) {
         std::error_code dummy_ec;
         std::string can = std::filesystem::weakly_canonical(r, dummy_ec).string();
         if (can.empty()) can = r.string();
+#if !TARGET_OS_IPHONE && defined(__APPLE__)
+        if (!home_norm.empty() && can == home_norm) {
+            // macOS 严禁遍历整个用户根目录，由已添加的 Music 与 Downloads 代替
+            continue;
+        }
+#endif
         if (seen_root_paths.insert(can).second) {
             unique_roots.push_back(r);
         }
@@ -366,6 +399,7 @@ void MusicScanManager::scanWorker(std::stop_token stop_token, std::filesystem::p
 
     uint64_t current_id = 1;
     std::unordered_set<std::string> cue_handled_audio_paths;
+    std::unordered_set<std::string> cue_handled_dir_stems;
 
     // 2.1 优先解析 CUE 分轨表，按音轨拆分虚拟单曲
     for (const auto& cue_entry : cue_entries) {
@@ -378,17 +412,52 @@ void MusicScanManager::scanWorker(std::stop_token stop_token, std::filesystem::p
                   << " (专辑: " << sheet.album_title << ", 艺术家: " << sheet.album_performer
                   << ", 包含 " << sheet.tracks.size() << " 个音轨)" << std::endl;
 
+        std::filesystem::path cue_p = cue_entry.path();
+        std::string cue_dir_str = cue_p.parent_path().string();
+        std::error_code dummy_ec;
+        std::string norm_cue_dir = std::filesystem::weakly_canonical(cue_p.parent_path(), dummy_ec).string();
+        std::string cue_stem = cue_p.stem().string();
+        std::string cue_stem_lower = cue_stem;
+        std::transform(cue_stem_lower.begin(), cue_stem_lower.end(), cue_stem_lower.begin(), ::tolower);
+
+        cue_handled_dir_stems.insert(cue_dir_str + "/" + cue_stem);
+        cue_handled_dir_stems.insert(cue_dir_str + "/" + cue_stem_lower);
+        if (!norm_cue_dir.empty()) {
+            cue_handled_dir_stems.insert(norm_cue_dir + "/" + cue_stem);
+            cue_handled_dir_stems.insert(norm_cue_dir + "/" + cue_stem_lower);
+        }
+
+        for (const auto& ref : sheet.referenced_audio_files) {
+            std::filesystem::path ref_p(ref);
+            std::string r_stem = ref_p.stem().string();
+            std::string r_stem_lower = r_stem;
+            std::transform(r_stem_lower.begin(), r_stem_lower.end(), r_stem_lower.begin(), ::tolower);
+            cue_handled_dir_stems.insert(cue_dir_str + "/" + r_stem);
+            cue_handled_dir_stems.insert(cue_dir_str + "/" + r_stem_lower);
+            if (!norm_cue_dir.empty()) {
+                cue_handled_dir_stems.insert(norm_cue_dir + "/" + r_stem);
+                cue_handled_dir_stems.insert(norm_cue_dir + "/" + r_stem_lower);
+            }
+        }
+
         std::unordered_map<std::string, Track> audio_meta_cache;
 
         for (const auto& cue_trk : sheet.tracks) {
             if (cue_trk.resolved_audio_path.empty()) continue;
 
             cue_handled_audio_paths.insert(cue_trk.resolved_audio_path);
-            std::error_code dummy_ec;
             std::string norm_audio = std::filesystem::weakly_canonical(cue_trk.resolved_audio_path, dummy_ec).string();
             if (!norm_audio.empty()) {
                 cue_handled_audio_paths.insert(norm_audio);
             }
+
+            std::filesystem::path ap(cue_trk.resolved_audio_path);
+            std::string a_dir = ap.parent_path().string();
+            std::string a_stem = ap.stem().string();
+            std::string a_stem_lower = a_stem;
+            std::transform(a_stem_lower.begin(), a_stem_lower.end(), a_stem_lower.begin(), ::tolower);
+            cue_handled_dir_stems.insert(a_dir + "/" + a_stem);
+            cue_handled_dir_stems.insert(a_dir + "/" + a_stem_lower);
 
             if (audio_meta_cache.find(cue_trk.resolved_audio_path) == audio_meta_cache.end()) {
                 std::filesystem::path audio_p(cue_trk.resolved_audio_path);
@@ -443,7 +512,7 @@ void MusicScanManager::scanWorker(std::stop_token stop_token, std::filesystem::p
         }
     }
 
-    // 2.2 解析普通音频文件 (自动跳过已被 CUE 拆解的整轨大文件，防止重复收录)
+    // 2.2 解析普通音频文件 (绝对跳过已被 CUE 拆解的整轨大文件，防止重复收录)
     for (const auto& entry : audio_entries) {
         if (stop_token.stop_requested()) {
             std::cout << "[MusicScanManager] 扫描被用户中断。" << std::endl;
@@ -458,8 +527,19 @@ void MusicScanManager::scanWorker(std::stop_token stop_token, std::filesystem::p
         std::string full_path = entry.path().string();
         std::error_code dummy_ec;
         std::string norm_entry = std::filesystem::weakly_canonical(entry.path(), dummy_ec).string();
+        std::string entry_dir = entry.path().parent_path().string();
+        std::string norm_dir = std::filesystem::weakly_canonical(entry.path().parent_path(), dummy_ec).string();
+        std::string entry_stem = entry.path().stem().string();
+        std::string entry_stem_lower = entry_stem;
+        std::transform(entry_stem_lower.begin(), entry_stem_lower.end(), entry_stem_lower.begin(), ::tolower);
+
         if (cue_handled_audio_paths.count(full_path) > 0 ||
-            (!norm_entry.empty() && cue_handled_audio_paths.count(norm_entry) > 0)) {
+            (!norm_entry.empty() && cue_handled_audio_paths.count(norm_entry) > 0) ||
+            cue_handled_dir_stems.count(entry_dir + "/" + entry_stem) > 0 ||
+            cue_handled_dir_stems.count(entry_dir + "/" + entry_stem_lower) > 0 ||
+            (!norm_dir.empty() && cue_handled_dir_stems.count(norm_dir + "/" + entry_stem) > 0) ||
+            (!norm_dir.empty() && cue_handled_dir_stems.count(norm_dir + "/" + entry_stem_lower) > 0)) {
+            std::cout << "[MusicScanManager] 严格屏蔽已被 CUE 拆解的整轨大文件: " << full_path << std::endl;
             continue;
         }
 

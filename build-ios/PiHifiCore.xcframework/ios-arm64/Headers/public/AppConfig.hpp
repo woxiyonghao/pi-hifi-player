@@ -28,9 +28,9 @@ namespace AppConfig {
     }
 
     namespace Path {
-        // 默认曲库子路径相对目录 (如果希望直接扫描用户根目录可设为 ""，若扫描 Music 目录则设为 "/Music")
+        // 默认曲库子路径相对目录
         // 【全局唯一配置点】：修改此处即可全局生效！
-        inline constexpr const char* DefaultMusicSubDir = "";
+        inline constexpr const char* DefaultMusicSubDir = "/Music";
 
         // 获取音乐库默认扫描根目录引用 (全局唯一事实来源，支持动态修改与沙盒路径覆盖)
         inline std::string& getMusicDirRef() {
@@ -39,14 +39,27 @@ namespace AppConfig {
                 if (home && home[0] != '\0') {
 #if defined(__APPLE__) && TARGET_OS_IPHONE
                     return std::string(home) + "/Documents";
+#elif defined(__APPLE__)
+                    std::string m_path = std::string(home) + "/Music";
+                    std::error_code ec;
+                    if (std::filesystem::exists(m_path, ec) && std::filesystem::is_directory(m_path, ec)) {
+                        return m_path;
+                    }
+                    std::string d_path = std::string(home) + "/Downloads";
+                    if (std::filesystem::exists(d_path, ec) && std::filesystem::is_directory(d_path, ec)) {
+                        return d_path;
+                    }
+                    return std::string(home) + "/Music";
+#elif defined(HIFI_PLATFORM_RPI)
+                    return std::string("/home/pi/Music");
 #else
                     return std::string(home) + DefaultMusicSubDir;
 #endif
                 }
 #if defined(HIFI_PLATFORM_RPI)
-                return std::string("/home/pi") + DefaultMusicSubDir;
+                return std::string("/home/pi/Music");
 #else
-                return std::string(DefaultMusicSubDir);
+                return std::string("./Music");
 #endif
             }();
             return s_music_dir;
