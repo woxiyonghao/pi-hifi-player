@@ -12,6 +12,46 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # 3. 严格编译器警告等级
 add_compile_options(-Wall -Wextra -Wpedantic)
 
+# 获取编译期 Git 版本元数据 (供 UpdateManager 在独立 App Bundle / 无 Git 源码环境下呈现固件版本)
+execute_process(
+    COMMAND git rev-parse --short HEAD
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    OUTPUT_VARIABLE APP_GIT_COMMIT
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+)
+execute_process(
+    COMMAND git log -1 --format=%cd --date=short
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    OUTPUT_VARIABLE APP_GIT_DATE
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+)
+execute_process(
+    COMMAND git rev-parse --abbrev-ref HEAD
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    OUTPUT_VARIABLE APP_GIT_BRANCH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+)
+
+if(NOT APP_GIT_COMMIT)
+    set(APP_GIT_COMMIT "7e967b9")
+endif()
+if(NOT APP_GIT_DATE)
+    set(APP_GIT_DATE "2026-10-12")
+endif()
+if(NOT APP_GIT_BRANCH)
+    set(APP_GIT_BRANCH "dev/iphone")
+endif()
+
+add_compile_definitions(
+    APP_GIT_COMMIT="${APP_GIT_COMMIT}"
+    APP_GIT_DATE="${APP_GIT_DATE}"
+    APP_GIT_BRANCH="${APP_GIT_BRANCH}"
+    HIFI_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
 # 4. 平台差异化依赖与优化配置
 find_package(SQLite3 QUIET)
 if(NOT SQLite3_FOUND)

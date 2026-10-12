@@ -190,16 +190,18 @@ void SystemSettingsView::render(float x, float y, float w, float h) {
         ImGui::SetCursorScreenPos(ImVec2(p_hw.x, p_hw.y + card2_h));
         ImGui::Dummy(ImVec2(0.0f, is_iphone ? 8.0f : 10.0f));
 
-        // 仅在嵌入式 Linux / 树莓派专用数播平台呈现底层固件在线更新 (OTA) 与系统关机重启管控
-        // Mac / Windows 桌面端以及 iPad / iPhone / Android 移动端不呈现关机管控与远程 OTA
-        if (!Platform::isMac() && !Platform::isWindow() && !Platform::isMobile()) {
-            // 板块三：固件与在线更新 (OTA)
+        // 板块三：固件与在线更新 (OTA)
+        // 支持 Mac 桌面端与 Linux / 树莓派专用数播平台在线检测并执行固件与应用 OTA 在线更新
+        if (Platform::isMac() || (!Platform::isMobile() && !Platform::isWindow())) {
             ImVec2 p_update = ImGui::GetCursorScreenPos();
             float update_card_h = renderUpdateSection(child_dl, p_update.x, p_update.y, section_w);
             ImGui::SetCursorScreenPos(ImVec2(p_update.x, p_update.y + update_card_h));
             ImGui::Dummy(ImVec2(0.0f, 10.0f));
+        }
 
-            // 板块四：系统维护、网络调试与电源管控
+        // 板块四：系统维护、网络调试与电源管控
+        // 仅在 Linux / 树莓派专用数播硬件呈现（Mac / Windows 桌面端不呈现关机与重启管控）
+        if (Platform::isLinux() && !Platform::isMobile()) {
             ImVec2 p_power = ImGui::GetCursorScreenPos();
             float power_card_h = renderPowerSection(child_dl, p_power.x, p_power.y, section_w);
             ImGui::SetCursorScreenPos(ImVec2(p_power.x, p_power.y + power_card_h));

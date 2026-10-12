@@ -57,6 +57,7 @@ private:
     UpdateManager& operator=(const UpdateManager&) = delete;
 
     void refreshLocalVersionInfo();
+    std::string findRepositoryRoot();
     static std::string execCommand(const std::string& cmd, int* out_code = nullptr);
 
 private:
