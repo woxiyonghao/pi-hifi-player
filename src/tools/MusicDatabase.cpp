@@ -47,11 +47,16 @@ bool MusicDatabase::init(const std::string& db_path) {
             title TEXT NOT NULL,
             artist TEXT NOT NULL,
             album TEXT NOT NULL,
-            file_path TEXT UNIQUE NOT NULL,
+            file_path TEXT NOT NULL,
             format INTEGER NOT NULL,
             sample_rate INTEGER NOT NULL,
             bit_depth INTEGER NOT NULL,
-            duration_sec INTEGER NOT NULL
+            duration_sec INTEGER NOT NULL,
+            start_time_sec REAL DEFAULT 0.0,
+            end_time_sec REAL DEFAULT 0.0,
+            cue_path TEXT DEFAULT '',
+            track_number INTEGER DEFAULT 0,
+            is_cue_track INTEGER DEFAULT 0
         );
 
         CREATE TABLE IF NOT EXISTS playlists (
@@ -72,6 +77,11 @@ bool MusicDatabase::init(const std::string& db_path) {
             bit_depth INTEGER NOT NULL,
             duration_sec INTEGER NOT NULL,
             sort_order INTEGER NOT NULL,
+            start_time_sec REAL DEFAULT 0.0,
+            end_time_sec REAL DEFAULT 0.0,
+            cue_path TEXT DEFAULT '',
+            track_number INTEGER DEFAULT 0,
+            is_cue_track INTEGER DEFAULT 0,
             PRIMARY KEY(playlist_id, sort_order)
         );
 
@@ -88,6 +98,49 @@ bool MusicDatabase::init(const std::string& db_path) {
         sqlite3_free(err_msg);
         return false;
     }
+
+    // 检查并升级旧版 scanned_tracks 表结构 (迁移 UNIQUE 约束与无损补齐 CUE 字段)
+    sqlite3_stmt* check_stmt = nullptr;
+    if (sqlite3_prepare_v2(db_, "SELECT sql FROM sqlite_master WHERE type='table' AND name='scanned_tracks';", -1, &check_stmt, nullptr) == SQLITE_OK) {
+        if (sqlite3_step(check_stmt) == SQLITE_ROW) {
+            const unsigned char* sql_text = sqlite3_column_text(check_stmt, 0);
+            std::string schema_sql = sql_text ? reinterpret_cast<const char*>(sql_text) : "";
+            if (schema_sql.find("UNIQUE") != std::string::npos || schema_sql.find("start_time_sec") == std::string::npos) {
+                std::cout << "[MusicDatabase] 检测到旧版数据库结构，正在无损升级 scanned_tracks..." << std::endl;
+                const char* migrate_sql = R"(
+                    CREATE TABLE IF NOT EXISTS scanned_tracks_new (
+                        id INTEGER PRIMARY KEY,
+                        title TEXT NOT NULL,
+                        artist TEXT NOT NULL,
+                        album TEXT NOT NULL,
+                        file_path TEXT NOT NULL,
+                        format INTEGER NOT NULL,
+                        sample_rate INTEGER NOT NULL,
+                        bit_depth INTEGER NOT NULL,
+                        duration_sec INTEGER NOT NULL,
+                        start_time_sec REAL DEFAULT 0.0,
+                        end_time_sec REAL DEFAULT 0.0,
+                        cue_path TEXT DEFAULT '',
+                        track_number INTEGER DEFAULT 0,
+                        is_cue_track INTEGER DEFAULT 0
+                    );
+                    INSERT INTO scanned_tracks_new (id, title, artist, album, file_path, format, sample_rate, bit_depth, duration_sec)
+                    SELECT id, title, artist, album, file_path, format, sample_rate, bit_depth, duration_sec FROM scanned_tracks;
+                    DROP TABLE scanned_tracks;
+                    ALTER TABLE scanned_tracks_new RENAME TO scanned_tracks;
+                )";
+                sqlite3_exec(db_, migrate_sql, nullptr, nullptr, nullptr);
+            }
+        }
+        sqlite3_finalize(check_stmt);
+    }
+
+    // 升级 playlist_tracks
+    sqlite3_exec(db_, "ALTER TABLE playlist_tracks ADD COLUMN start_time_sec REAL DEFAULT 0.0;", nullptr, nullptr, nullptr);
+    sqlite3_exec(db_, "ALTER TABLE playlist_tracks ADD COLUMN end_time_sec REAL DEFAULT 0.0;", nullptr, nullptr, nullptr);
+    sqlite3_exec(db_, "ALTER TABLE playlist_tracks ADD COLUMN cue_path TEXT DEFAULT '';", nullptr, nullptr, nullptr);
+    sqlite3_exec(db_, "ALTER TABLE playlist_tracks ADD COLUMN track_number INTEGER DEFAULT 0;", nullptr, nullptr, nullptr);
+    sqlite3_exec(db_, "ALTER TABLE playlist_tracks ADD COLUMN is_cue_track INTEGER DEFAULT 0;", nullptr, nullptr, nullptr);
 
     is_initialized_ = true;
     std::cout << "[MusicDatabase] SQLite 发烧曲库数据库已成功连接: " << path << std::endl;
@@ -113,8 +166,8 @@ bool MusicDatabase::saveScannedTracks(const std::vector<Track>& tracks) {
     sqlite3_exec(db_, "DELETE FROM scanned_tracks;", nullptr, nullptr, nullptr);
 
     const char* sql = R"(
-        INSERT INTO scanned_tracks (id, title, artist, album, file_path, format, sample_rate, bit_depth, duration_sec)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+        INSERT INTO scanned_tracks (id, title, artist, album, file_path, format, sample_rate, bit_depth, duration_sec, start_time_sec, end_time_sec, cue_path, track_number, is_cue_track)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
     )";
 
     sqlite3_stmt* stmt = nullptr;
@@ -134,6 +187,11 @@ bool MusicDatabase::saveScannedTracks(const std::vector<Track>& tracks) {
         sqlite3_bind_int64(stmt, 7, static_cast<sqlite3_int64>(t.sample_rate));
         sqlite3_bind_int(stmt, 8, static_cast<int>(t.bit_depth));
         sqlite3_bind_int64(stmt, 9, static_cast<sqlite3_int64>(t.duration_sec));
+        sqlite3_bind_double(stmt, 10, t.start_time_sec);
+        sqlite3_bind_double(stmt, 11, t.end_time_sec);
+        sqlite3_bind_text(stmt, 12, t.cue_path.c_str(), -1, SQLITE_STATIC);
+        sqlite3_bind_int64(stmt, 13, static_cast<sqlite3_int64>(t.track_number));
+        sqlite3_bind_int(stmt, 14, t.is_cue_track ? 1 : 0);
 
         sqlite3_step(stmt);
     }
@@ -183,7 +241,7 @@ std::vector<Track> MusicDatabase::loadScannedTracks() {
     if (!init()) return tracks;
     std::lock_guard<std::mutex> lock(mutex_);
 
-    const char* sql = "SELECT id, title, artist, album, file_path, format, sample_rate, bit_depth, duration_sec FROM scanned_tracks ORDER BY id ASC;";
+    const char* sql = "SELECT id, title, artist, album, file_path, format, sample_rate, bit_depth, duration_sec, start_time_sec, end_time_sec, cue_path, track_number, is_cue_track FROM scanned_tracks ORDER BY id ASC;";
     sqlite3_stmt* stmt = nullptr;
     if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) != SQLITE_OK) {
         return tracks;
@@ -212,6 +270,12 @@ std::vector<Track> MusicDatabase::loadScannedTracks() {
         t.sample_rate = static_cast<uint32_t>(sqlite3_column_int64(stmt, 6));
         t.bit_depth = static_cast<uint8_t>(sqlite3_column_int(stmt, 7));
         t.duration_sec = static_cast<uint32_t>(sqlite3_column_int64(stmt, 8));
+        t.start_time_sec = sqlite3_column_double(stmt, 9);
+        t.end_time_sec = sqlite3_column_double(stmt, 10);
+        const unsigned char* cue_str = sqlite3_column_text(stmt, 11);
+        t.cue_path = cue_str ? reinterpret_cast<const char*>(cue_str) : "";
+        t.track_number = static_cast<uint32_t>(sqlite3_column_int64(stmt, 12));
+        t.is_cue_track = sqlite3_column_int(stmt, 13) != 0;
 
         tracks.push_back(std::move(t));
     }
@@ -260,8 +324,8 @@ bool MusicDatabase::savePlaylists(const std::vector<Playlist>& playlists) {
     }
 
     const char* trk_sql = R"(
-        INSERT INTO playlist_tracks (playlist_id, track_id, title, artist, album, file_path, format, sample_rate, bit_depth, duration_sec, sort_order)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+        INSERT INTO playlist_tracks (playlist_id, track_id, title, artist, album, file_path, format, sample_rate, bit_depth, duration_sec, sort_order, start_time_sec, end_time_sec, cue_path, track_number, is_cue_track)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
     )";
     sqlite3_stmt* trk_stmt = nullptr;
     if (sqlite3_prepare_v2(db_, trk_sql, -1, &trk_stmt, nullptr) != SQLITE_OK) {
@@ -292,6 +356,11 @@ bool MusicDatabase::savePlaylists(const std::vector<Playlist>& playlists) {
             sqlite3_bind_int(trk_stmt, 9, static_cast<int>(t.bit_depth));
             sqlite3_bind_int64(trk_stmt, 10, static_cast<sqlite3_int64>(t.duration_sec));
             sqlite3_bind_int(trk_stmt, 11, static_cast<int>(i));
+            sqlite3_bind_double(trk_stmt, 12, t.start_time_sec);
+            sqlite3_bind_double(trk_stmt, 13, t.end_time_sec);
+            sqlite3_bind_text(trk_stmt, 14, t.cue_path.c_str(), -1, SQLITE_STATIC);
+            sqlite3_bind_int64(trk_stmt, 15, static_cast<sqlite3_int64>(t.track_number));
+            sqlite3_bind_int(trk_stmt, 16, t.is_cue_track ? 1 : 0);
 
             sqlite3_step(trk_stmt);
         }
@@ -317,7 +386,7 @@ std::vector<Playlist> MusicDatabase::loadPlaylists() {
     }
 
     const char* trk_sql = R"(
-        SELECT track_id, title, artist, album, file_path, format, sample_rate, bit_depth, duration_sec
+        SELECT track_id, title, artist, album, file_path, format, sample_rate, bit_depth, duration_sec, start_time_sec, end_time_sec, cue_path, track_number, is_cue_track
         FROM playlist_tracks WHERE playlist_id = ? ORDER BY sort_order ASC;
     )";
     sqlite3_stmt* trk_stmt = nullptr;
@@ -355,6 +424,12 @@ std::vector<Playlist> MusicDatabase::loadPlaylists() {
             t.sample_rate = static_cast<uint32_t>(sqlite3_column_int64(trk_stmt, 6));
             t.bit_depth = static_cast<uint8_t>(sqlite3_column_int(trk_stmt, 7));
             t.duration_sec = static_cast<uint32_t>(sqlite3_column_int64(trk_stmt, 8));
+            t.start_time_sec = sqlite3_column_double(trk_stmt, 9);
+            t.end_time_sec = sqlite3_column_double(trk_stmt, 10);
+            const unsigned char* cue_str = sqlite3_column_text(trk_stmt, 11);
+            t.cue_path = cue_str ? reinterpret_cast<const char*>(cue_str) : "";
+            t.track_number = static_cast<uint32_t>(sqlite3_column_int64(trk_stmt, 12));
+            t.is_cue_track = sqlite3_column_int(trk_stmt, 13) != 0;
 
             pl.addTrack(std::move(t));
         }

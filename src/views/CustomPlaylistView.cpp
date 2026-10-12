@@ -156,7 +156,12 @@ void CustomPlaylistView::render(uint64_t pid, std::vector<Playlist>& playlists, 
             // 渲染歌单内曲目行，包含高亮、律动频谱、播放与移除按钮
             for (size_t i = 0; i < tracks.size(); ++i) {
                 const auto& track = tracks[i];
-                bool is_current = current_track.has_value() && (current_track->id == track.id || current_track->file_path == track.file_path);
+                bool is_current = current_track.has_value() && (
+                    (track.id != 0 && current_track->id == track.id) ||
+                    ((current_track->is_cue_track || track.is_cue_track) ?
+                        (current_track->file_path == track.file_path && current_track->title == track.title && current_track->start_time_sec == track.start_time_sec) :
+                        (current_track->file_path == track.file_path))
+                );
                 bool is_playing = is_current && player.isPlaying();
 
                 ImGui::PushID(static_cast<int>(track.id * 1000 + i));

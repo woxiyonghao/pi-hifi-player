@@ -85,7 +85,13 @@ bool MusicItem::render(ImDrawList* dl, ImVec2 pos, ImVec2 size, const Track& tra
     if (player.isPlaying()) {
         const auto& cur = player.getCurrentTrack();
         if (cur.has_value()) {
-            if (!track.file_path.empty() && track.file_path == cur->file_path) {
+            if (cur->is_cue_track || track.is_cue_track) {
+                if (track.id != 0 && track.id == cur->id) {
+                    is_track_playing = true;
+                } else if (track.file_path == cur->file_path && track.title == cur->title && track.start_time_sec == cur->start_time_sec) {
+                    is_track_playing = true;
+                }
+            } else if (!track.file_path.empty() && track.file_path == cur->file_path) {
                 is_track_playing = true;
             } else if (track.id != 0 && track.id == cur->id) {
                 is_track_playing = true;

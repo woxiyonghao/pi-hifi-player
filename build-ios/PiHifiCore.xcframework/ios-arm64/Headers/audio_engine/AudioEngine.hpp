@@ -35,6 +35,11 @@ public:
      */
     bool openAndPlay(const std::string& filepath);
 
+    /**
+     * @brief 打开并播放指定音频文件的时间区间 (用于 CUE 虚拟分轨母带播放)
+     */
+    bool openAndPlaySection(const std::string& filepath, double start_sec, double end_sec);
+
     void play();
     void pause();
     void togglePlayPause();
@@ -133,6 +138,13 @@ private:
     std::string current_filepath_;
     AudioFormatSpec current_spec_;
     double duration_sec_ = 0.0;
+
+    // CUE 分轨区间控制
+    std::atomic<double> section_start_sec_{0.0};
+    std::atomic<double> section_end_sec_{0.0};
+    std::atomic<bool> is_section_active_{false};
+    std::atomic<uint64_t> section_frames_read_{0};
+    std::atomic<uint64_t> section_total_frames_{0};
 
     // 声卡已消费总帧数计数器 (用于晶振级毫秒时间计算)
     std::atomic<uint64_t> frames_consumed_by_sink_{0};

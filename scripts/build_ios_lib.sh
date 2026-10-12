@@ -57,6 +57,7 @@ SOURCES=(
     "${ROOT_DIR}/audio_engine/src/sinks/RemoteIOSink.cpp"
     "${ROOT_DIR}/src/tools/MusicDatabase.cpp"
     "${ROOT_DIR}/src/tools/MusicScanManager.cpp"
+    "${ROOT_DIR}/src/tools/CueSheetParser.cpp"
     "${ROOT_DIR}/src/tools/PlayerAdmin.cpp"
     "${ROOT_DIR}/src/public/Font.cpp"
     "${ROOT_DIR}/src/themes/ThemeManager.cpp"

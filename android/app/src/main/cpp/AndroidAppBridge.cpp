@@ -352,4 +352,11 @@ Java_com_pihifi_player_AudioPlaybackService_nativeGetDurationMs(
     return static_cast<jlong>(PlayerAdmin::getInstance().getDurationSec() * 1000.0);
 }
 
+JavaVM* g_android_jvm = nullptr;
+
+JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* /*reserved*/) {
+    g_android_jvm = vm;
+    return JNI_VERSION_1_6;
+}
+
 } // extern "C"

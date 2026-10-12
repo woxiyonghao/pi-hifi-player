@@ -1,10 +1,12 @@
 #include "tools/MusicScanManager.hpp"
 #include "tools/MusicDatabase.hpp"
+#include "tools/CueSheetParser.hpp"
 #include "public/AppConfig.hpp"
 #include <algorithm>
 #include <iostream>
 #include <fstream>
 #include <cstring>
+#include <unordered_map>
 
 MusicScanManager::~MusicScanManager() {
     cancelScan();
@@ -227,15 +229,15 @@ void MusicScanManager::scanWorker(std::stop_token stop_token, std::filesystem::p
     std::cout << "[MusicScanManager] 开始扫描发烧音乐目录: " << root_path << std::endl;
     auto start_time = std::chrono::steady_clock::now();
 
-    // 2. 递归遍历 (跳过无权限目录，避免抛出异常)
+    // 2. 递归遍历，分别收集 .cue 分轨描述单与常规音频文件
+    std::vector<std::filesystem::directory_entry> cue_entries;
+    std::vector<std::filesystem::directory_entry> audio_entries;
+
     auto options = std::filesystem::directory_options::skip_permission_denied;
     auto iter = std::filesystem::recursive_directory_iterator(root_path, options, ec);
     auto end_iter = std::filesystem::recursive_directory_iterator();
 
-    uint64_t current_id = 1;
-
     for (; iter != end_iter; iter.increment(ec)) {
-        // [C++20 协作取消] 响应外部中断信号
         if (stop_token.stop_requested()) {
             std::cout << "[MusicScanManager] 扫描被用户中断。" << std::endl;
             state_ = ScanState::Cancelled;
@@ -246,7 +248,6 @@ void MusicScanManager::scanWorker(std::stop_token stop_token, std::filesystem::p
             return;
         }
 
-        // 跳过无法读取的坏文件
         if (ec) {
             ec.clear();
             continue;
@@ -254,7 +255,7 @@ void MusicScanManager::scanWorker(std::stop_token stop_token, std::filesystem::p
 
         const auto& entry = *iter;
 
-        // 智能剪枝：若为目录且属于隐藏目录或已知系统/开发大仓目录，直接跳过其子目录递归
+        // 智能剪枝：跳过隐藏目录或系统大仓
         if (entry.is_directory(ec)) {
             std::string dir_name = entry.path().filename().string();
             if ((!dir_name.empty() && dir_name.front() == '.') || dir_name == "Library" || dir_name == "node_modules" ||
@@ -264,26 +265,123 @@ void MusicScanManager::scanWorker(std::stop_token stop_token, std::filesystem::p
             }
         } else if (entry.is_regular_file(ec)) {
             std::string ext = entry.path().extension().string();
-
-            // 利用 SupportedFormats 大小写不敏感比对
-            if (AudioFormatUtils::isSupported(ext)) {
-                auto format = AudioFormatUtils::getAudioFormat(ext).value_or(AudioFormat::UNKNOWN);
-                Track track = parseBasicMetadata(current_id++, entry, format);
-
-                {
-                    std::lock_guard lock(mutex_);
-                    scanned_tracks_.push_back(track);
-                }
-
-                std::cout << "[MusicScanManager] 发现曲目 #" << track.id << " | 歌名: " << track.title
-                          << " | 歌手: " << track.artist << " | 专辑: " << track.album
-                          << " | 规格: " << track.getFormatBadge() << " | 路径: " << track.file_path << std::endl;
-
-                // 触发实时进度回调
-                if (progress_callback_) {
-                    progress_callback_({entry.path().filename().string(), scanned_tracks_.size(), ScanState::Scanning});
-                }
+            std::string ext_lower = ext;
+            std::transform(ext_lower.begin(), ext_lower.end(), ext_lower.begin(), ::tolower);
+            if (ext_lower == ".cue") {
+                cue_entries.push_back(entry);
+            } else if (AudioFormatUtils::isSupported(ext)) {
+                audio_entries.push_back(entry);
             }
+        }
+    }
+
+    uint64_t current_id = 1;
+    std::unordered_set<std::string> cue_handled_audio_paths;
+
+    // 2.1 优先解析 CUE 分轨表，按音轨拆分虚拟单曲
+    for (const auto& cue_entry : cue_entries) {
+        if (stop_token.stop_requested()) return;
+        auto cue_opt = CueSheetParser::parse(cue_entry.path());
+        if (!cue_opt.has_value() || cue_opt->tracks.empty()) continue;
+
+        const auto& sheet = *cue_opt;
+        std::cout << "[MusicScanManager] 成功解析 CUE 分轨表: " << cue_entry.path().filename().string()
+                  << " (专辑: " << sheet.album_title << ", 艺术家: " << sheet.album_performer
+                  << ", 包含 " << sheet.tracks.size() << " 个音轨)" << std::endl;
+
+        std::unordered_map<std::string, Track> audio_meta_cache;
+
+        for (const auto& cue_trk : sheet.tracks) {
+            if (cue_trk.resolved_audio_path.empty()) continue;
+
+            cue_handled_audio_paths.insert(cue_trk.resolved_audio_path);
+
+            if (audio_meta_cache.find(cue_trk.resolved_audio_path) == audio_meta_cache.end()) {
+                std::filesystem::path audio_p(cue_trk.resolved_audio_path);
+                std::string a_ext = audio_p.extension().string();
+                auto fmt = AudioFormatUtils::getAudioFormat(a_ext).value_or(AudioFormat::UNKNOWN);
+                std::error_code dummy_ec;
+                std::filesystem::directory_entry d_entry(audio_p, dummy_ec);
+                Track base_meta = parseBasicMetadata(0, d_entry, fmt);
+                audio_meta_cache[cue_trk.resolved_audio_path] = base_meta;
+            }
+
+            const auto& base = audio_meta_cache[cue_trk.resolved_audio_path];
+
+            Track t;
+            t.id = current_id++;
+            t.title = cue_trk.title;
+            t.artist = cue_trk.performer;
+            t.album = sheet.album_title;
+            t.file_path = cue_trk.resolved_audio_path;
+            t.format = base.format;
+            t.sample_rate = base.sample_rate;
+            t.bit_depth = base.bit_depth;
+
+            t.is_cue_track = true;
+            t.start_time_sec = cue_trk.start_time_sec;
+            t.end_time_sec = cue_trk.end_time_sec;
+            t.cue_path = sheet.cue_path;
+            t.track_number = cue_trk.track_number;
+
+            if (cue_trk.duration_sec > 0) {
+                t.duration_sec = cue_trk.duration_sec;
+            } else if (base.duration_sec > 0 && base.duration_sec > t.start_time_sec) {
+                t.end_time_sec = static_cast<double>(base.duration_sec);
+                t.duration_sec = static_cast<uint32_t>(std::max(0.0, std::round(t.end_time_sec - t.start_time_sec)));
+            } else {
+                t.duration_sec = 0;
+            }
+
+            {
+                std::lock_guard lock(mutex_);
+                scanned_tracks_.push_back(t);
+            }
+
+            std::cout << "[MusicScanManager] 发现 CUE 分轨 #" << t.id << " [Track " << t.track_number << "] | 歌名: "
+                      << t.title << " | 歌手: " << t.artist << " | 专辑: " << t.album
+                      << " | 时长: " << (t.duration_sec / 60) << "分" << (t.duration_sec % 60) << "秒"
+                      << " | 区间: " << t.start_time_sec << "s -> " << t.end_time_sec << "s"
+                      << " | 路径: " << t.file_path << std::endl;
+
+            if (progress_callback_) {
+                progress_callback_({t.title, scanned_tracks_.size(), ScanState::Scanning});
+            }
+        }
+    }
+
+    // 2.2 解析普通音频文件 (自动跳过已被 CUE 拆解的整轨大文件，防止重复收录)
+    for (const auto& entry : audio_entries) {
+        if (stop_token.stop_requested()) {
+            std::cout << "[MusicScanManager] 扫描被用户中断。" << std::endl;
+            state_ = ScanState::Cancelled;
+            if (progress_callback_) {
+                std::lock_guard lock(mutex_);
+                progress_callback_({"", scanned_tracks_.size(), ScanState::Cancelled});
+            }
+            return;
+        }
+
+        std::string full_path = entry.path().string();
+        if (cue_handled_audio_paths.count(full_path) > 0) {
+            continue;
+        }
+
+        std::string ext = entry.path().extension().string();
+        auto format = AudioFormatUtils::getAudioFormat(ext).value_or(AudioFormat::UNKNOWN);
+        Track track = parseBasicMetadata(current_id++, entry, format);
+
+        {
+            std::lock_guard lock(mutex_);
+            scanned_tracks_.push_back(track);
+        }
+
+        std::cout << "[MusicScanManager] 发现曲目 #" << track.id << " | 歌名: " << track.title
+                  << " | 歌手: " << track.artist << " | 专辑: " << track.album
+                  << " | 规格: " << track.getFormatBadge() << " | 路径: " << track.file_path << std::endl;
+
+        if (progress_callback_) {
+            progress_callback_({entry.path().filename().string(), scanned_tracks_.size(), ScanState::Scanning});
         }
     }
 

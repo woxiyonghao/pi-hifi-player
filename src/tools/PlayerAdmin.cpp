@@ -172,7 +172,12 @@ void PlayerAdmin::executeTrackSwitch(const Track& track) {
 
     if (!current_track_->file_path.empty()) {
         auto& engine = audio_engine::AudioEngine::getInstance();
-        bool ok = engine.openAndPlay(current_track_->file_path);
+        bool ok = false;
+        if (current_track_->is_cue_track || current_track_->start_time_sec > 0.0 || current_track_->end_time_sec > 0.0) {
+            ok = engine.openAndPlaySection(current_track_->file_path, current_track_->start_time_sec, current_track_->end_time_sec);
+        } else {
+            ok = engine.openAndPlay(current_track_->file_path);
+        }
         if (ok) {
             state_ = PlaybackState::Playing;
             double engine_dur = engine.getDurationSec();

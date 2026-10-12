@@ -32,6 +32,14 @@ struct Track {
     uint32_t sample_rate = 0;
     uint8_t bit_depth = 0;
     uint32_t duration_sec = 0;
+
+    // CUE 分轨母带虚拟音轨支持
+    bool is_cue_track = false;
+    double start_time_sec = 0.0;
+    double end_time_sec = 0.0;
+    std::string cue_path;
+    uint32_t track_number = 0;
+
     std::string getFormatBadge() const {
         if (format == AudioFormat::UNKNOWN) {
             return "UNKNOWN";

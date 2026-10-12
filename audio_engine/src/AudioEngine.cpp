@@ -144,7 +144,86 @@ std::unique_ptr<IAudioDecoder> AudioEngine::createDecoderForFile(const std::stri
 }
 
 bool AudioEngine::openAndPlay(const std::string& filepath) {
+    return openAndPlaySection(filepath, 0.0, 0.0);
+}
+
+bool AudioEngine::openAndPlaySection(const std::string& filepath, double start_sec, double end_sec) {
     std::lock_guard lock_dev(device_mutex_);
+
+    start_sec = std::max(0.0, start_sec);
+    bool is_section = (end_sec > start_sec);
+
+    // 检查是否已经在播放相同文件且解码器正常工作 (同张 CUE 专辑内分轨极速切歌优化)
+    bool is_same_file = false;
+    {
+        std::lock_guard lock(decoder_mutex_);
+        if (decoder_ && current_filepath_ == filepath && sink_ && sink_->isOpen()) {
+            is_same_file = true;
+        }
+    }
+
+    if (is_same_file) {
+        // 极速同文件切歌：无需重新开辟硬件声卡设备
+        is_playing_.store(false, std::memory_order_release);
+        is_decoding_.store(false, std::memory_order_release);
+
+        if (decode_thread_.joinable()) {
+            decode_thread_.request_stop();
+            decode_thread_.join();
+        }
+
+        {
+            std::lock_guard lock(decoder_mutex_);
+            section_start_sec_.store(start_sec, std::memory_order_release);
+            section_end_sec_.store(end_sec, std::memory_order_release);
+            is_section_active_.store(is_section, std::memory_order_release);
+
+            if (is_section) {
+                duration_sec_ = end_sec - start_sec;
+            } else {
+                duration_sec_ = std::max(0.0, decoder_->getDuration() - start_sec);
+            }
+
+            decoder_->seek(start_sec);
+            ring_buffer_.reset();
+            frames_consumed_by_sink_.store(0, std::memory_order_relaxed);
+            seek_base_time_.store(0.0, std::memory_order_relaxed);
+            is_eof_.store(false, std::memory_order_relaxed);
+            eof_reported_.store(false, std::memory_order_relaxed);
+            resetFade();
+
+            uint32_t rate = (current_spec_.sample_rate > 0) ? current_spec_.sample_rate : 44100;
+            if (is_section) {
+                section_total_frames_.store(static_cast<uint64_t>(duration_sec_ * rate), std::memory_order_release);
+            } else {
+                section_total_frames_.store(0, std::memory_order_release);
+            }
+            section_frames_read_.store(0, std::memory_order_release);
+
+            constexpr size_t PREBUFFER_FRAMES = 65536;
+            size_t to_req = PREBUFFER_FRAMES;
+            if (is_section && section_total_frames_.load() < to_req) {
+                to_req = static_cast<size_t>(section_total_frames_.load());
+            }
+            if (to_req > 0) {
+                std::vector<float> prebuf(to_req * current_spec_.channels);
+                uint64_t pre_read = decoder_->readFrames(prebuf.data(), to_req);
+                if (pre_read > 0) {
+                    section_frames_read_.store(pre_read, std::memory_order_release);
+                    ring_buffer_.write(prebuf.data(), pre_read * current_spec_.channels);
+                }
+            }
+        }
+
+        is_playing_.store(true, std::memory_order_release);
+        is_paused_.store(false, std::memory_order_release);
+        is_decoding_.store(true, std::memory_order_release);
+
+        decode_thread_ = std::jthread([this](std::stop_token st) { decodeWorker(st); });
+        sink_->start();
+        return true;
+    }
+
     stop();
 
 #if defined(__APPLE__) && TARGET_OS_IPHONE
@@ -159,7 +238,6 @@ bool AudioEngine::openAndPlay(const std::string& filepath) {
 
     if (!new_decoder->open(filepath)) {
 #if defined(__APPLE__)
-        // 在 Apple 平台上，若基础解码器打开失败，自动无缝降级尝试 Apple 原生 ExtAudioFile 硬件解码
         auto apple_decoder = std::make_unique<AppleAudioDecoder>();
         if (apple_decoder->open(filepath)) {
             new_decoder = std::move(apple_decoder);
@@ -174,8 +252,6 @@ bool AudioEngine::openAndPlay(const std::string& filepath) {
     }
 
 #if defined(__APPLE__) && TARGET_OS_IPHONE
-    // 只在 iPad 当前使用 A2DP 时替换输出后端。iPhone、macOS、Linux、
-    // 树莓派以及 iPad 有线输出仍保留各自原来的 sink。
     bool should_use_remote_io = HifiPadGetBluetoothOutputSampleRate
         && HifiPadGetBluetoothOutputSampleRate() > 0;
     if (should_use_remote_io != using_ipad_remote_io_) {
@@ -196,12 +272,35 @@ bool AudioEngine::openAndPlay(const std::string& filepath) {
         decoder_ = std::move(new_decoder);
         current_filepath_ = filepath;
         current_spec_ = decoder_->getSpec();
-        duration_sec_ = decoder_->getDuration();
+
+        section_start_sec_.store(start_sec, std::memory_order_release);
+        section_end_sec_.store(end_sec, std::memory_order_release);
+        is_section_active_.store(is_section, std::memory_order_release);
+
+        if (is_section) {
+            duration_sec_ = end_sec - start_sec;
+        } else {
+            duration_sec_ = std::max(0.0, decoder_->getDuration() - start_sec);
+        }
+
+        if (start_sec > 0.001) {
+            decoder_->seek(start_sec);
+        }
+
         ring_buffer_.reset();
         frames_consumed_by_sink_.store(0, std::memory_order_relaxed);
         seek_base_time_.store(0.0, std::memory_order_relaxed);
         is_eof_.store(false, std::memory_order_relaxed);
         eof_reported_.store(false, std::memory_order_relaxed);
+        resetFade();
+
+        uint32_t rate = (current_spec_.sample_rate > 0) ? current_spec_.sample_rate : 44100;
+        if (is_section) {
+            section_total_frames_.store(static_cast<uint64_t>(duration_sec_ * rate), std::memory_order_release);
+        } else {
+            section_total_frames_.store(0, std::memory_order_release);
+        }
+        section_frames_read_.store(0, std::memory_order_release);
     }
 
     // 1. 在打开音频设备前，如果是非蓝牙物理硬件且开启了独占，先同步硬件采样率
@@ -210,7 +309,6 @@ bool AudioEngine::openAndPlay(const std::string& filepath) {
     if (is_exclusive_mode_.load(std::memory_order_acquire)) {
         applyHardwareSampleRate(current_spec_.sample_rate);
     }
-    // 确保打开前释放所有 Hog 独占锁，防止阻碍 SDL 打开设备 (SDL2 检查 HogMode != -1 会直接拒绝)
     releaseHogMode();
 #endif
 
@@ -237,25 +335,28 @@ bool AudioEngine::openAndPlay(const std::string& filepath) {
     is_paused_.store(false, std::memory_order_release);
     is_decoding_.store(true, std::memory_order_release);
 
-    // 预缓冲：在声卡推流前先预解码充足的数据填充环形缓冲区，彻底消除起播断流与沙沙杂音
-    // 预读 65536 帧 (~1.5 秒)，确保喂饱 sink_ 初始的硬件缓冲区后，环形缓冲区仍留有海量安全冗余
     constexpr size_t PREBUFFER_FRAMES = 65536;
-    std::vector<float> prebuf(PREBUFFER_FRAMES * current_spec_.channels);
-    uint64_t pre_read = 0;
-    {
-        std::lock_guard lock(decoder_mutex_);
-        if (decoder_) {
-            pre_read = decoder_->readFrames(prebuf.data(), PREBUFFER_FRAMES);
+    size_t to_req = PREBUFFER_FRAMES;
+    if (is_section && section_total_frames_.load() < to_req) {
+        to_req = static_cast<size_t>(section_total_frames_.load());
+    }
+    if (to_req > 0) {
+        std::vector<float> prebuf(to_req * current_spec_.channels);
+        uint64_t pre_read = 0;
+        {
+            std::lock_guard lock(decoder_mutex_);
+            if (decoder_) {
+                pre_read = decoder_->readFrames(prebuf.data(), to_req);
+            }
+        }
+        if (pre_read > 0) {
+            section_frames_read_.store(pre_read, std::memory_order_release);
+            ring_buffer_.write(prebuf.data(), pre_read * current_spec_.channels);
         }
     }
-    if (pre_read > 0) {
-        ring_buffer_.write(prebuf.data(), pre_read * current_spec_.channels);
-    }
 
-    // 立即启动后台无阻塞异步解码线程
     decode_thread_ = std::jthread([this](std::stop_token st) { decodeWorker(st); });
 
-    // 硬件推流前等待环形缓冲区积累足够的水位 (至少 32768 帧或已至 EOF)
     size_t safe_watermark = std::min(static_cast<size_t>(32768 * current_spec_.channels),
                                      static_cast<size_t>(duration_sec_ * current_spec_.sample_rate * current_spec_.channels));
     int wait_cycles = 0;
@@ -265,7 +366,6 @@ bool AudioEngine::openAndPlay(const std::string& filepath) {
     }
 
     sink_->start();
-
     return true;
 }
 
@@ -321,6 +421,11 @@ void AudioEngine::stop() {
         frames_consumed_by_sink_.store(0, std::memory_order_relaxed);
         seek_base_time_.store(0.0, std::memory_order_relaxed);
         duration_sec_ = 0.0;
+        section_start_sec_.store(0.0, std::memory_order_relaxed);
+        section_end_sec_.store(0.0, std::memory_order_relaxed);
+        is_section_active_.store(false, std::memory_order_relaxed);
+        section_frames_read_.store(0, std::memory_order_relaxed);
+        section_total_frames_.store(0, std::memory_order_relaxed);
         is_eof_.store(false, std::memory_order_relaxed);
         eof_reported_.store(false, std::memory_order_relaxed);
         resetFade();
@@ -332,13 +437,32 @@ void AudioEngine::seek(double target_seconds) {
     if (!decoder_) return;
 
     double clamped = std::clamp(target_seconds, 0.0, duration_sec_);
-    if (decoder_->seek(clamped)) {
+    double abs_target = section_start_sec_.load(std::memory_order_relaxed) + clamped;
+
+    if (decoder_->seek(abs_target)) {
         ring_buffer_.reset();
         constexpr size_t SEEK_PREBUFFER = 32768;
-        std::vector<float> prebuf(SEEK_PREBUFFER * current_spec_.channels);
-        uint64_t pre_read = decoder_->readFrames(prebuf.data(), SEEK_PREBUFFER);
-        if (pre_read > 0) {
-            ring_buffer_.write(prebuf.data(), pre_read * current_spec_.channels);
+        uint32_t rate = (current_spec_.sample_rate > 0) ? current_spec_.sample_rate : 44100;
+        uint64_t new_read_frames = static_cast<uint64_t>(clamped * rate);
+        section_frames_read_.store(new_read_frames, std::memory_order_release);
+
+        size_t to_req = SEEK_PREBUFFER;
+        if (is_section_active_.load(std::memory_order_relaxed)) {
+            uint64_t total = section_total_frames_.load(std::memory_order_relaxed);
+            if (new_read_frames < total) {
+                to_req = static_cast<size_t>(std::min<uint64_t>(SEEK_PREBUFFER, total - new_read_frames));
+            } else {
+                to_req = 0;
+            }
+        }
+
+        if (to_req > 0) {
+            std::vector<float> prebuf(to_req * current_spec_.channels);
+            uint64_t pre_read = decoder_->readFrames(prebuf.data(), to_req);
+            if (pre_read > 0) {
+                section_frames_read_.fetch_add(pre_read, std::memory_order_release);
+                ring_buffer_.write(prebuf.data(), pre_read * current_spec_.channels);
+            }
         }
         frames_consumed_by_sink_.store(0, std::memory_order_release);
         seek_base_time_.store(clamped, std::memory_order_release);
@@ -897,14 +1021,30 @@ void AudioEngine::decodeWorker(std::stop_token stop_token) {
             continue;
         }
 
+        size_t frames_to_request = CHUNK_FRAMES;
+        if (is_section_active_.load(std::memory_order_relaxed)) {
+            uint64_t total = section_total_frames_.load(std::memory_order_relaxed);
+            uint64_t already = section_frames_read_.load(std::memory_order_relaxed);
+            if (already >= total) {
+                if (!is_eof_.load(std::memory_order_relaxed)) {
+                    std::cout << "[AudioEngine] CUE 分轨区间解码完成 (EOF), 已解码帧=" << already << std::endl;
+                }
+                is_eof_.store(true, std::memory_order_release);
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
+                continue;
+            }
+            frames_to_request = static_cast<size_t>(std::min<uint64_t>(CHUNK_FRAMES, total - already));
+        }
+
         uint64_t frames_read = 0;
         {
             std::lock_guard lock(decoder_mutex_);
             if (!decoder_) break;
-            frames_read = decoder_->readFrames(decode_buf.data(), CHUNK_FRAMES);
+            frames_read = decoder_->readFrames(decode_buf.data(), frames_to_request);
         }
 
         if (frames_read > 0) {
+            section_frames_read_.fetch_add(frames_read, std::memory_order_relaxed);
             size_t samples_to_write = frames_read * current_spec_.channels;
             ring_buffer_.write(decode_buf.data(), samples_to_write);
         } else {
