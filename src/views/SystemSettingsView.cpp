@@ -190,8 +190,9 @@ void SystemSettingsView::render(float x, float y, float w, float h) {
         ImGui::SetCursorScreenPos(ImVec2(p_hw.x, p_hw.y + card2_h));
         ImGui::Dummy(ImVec2(0.0f, is_iphone ? 8.0f : 10.0f));
 
-        // 仅在非 iPad / 非 iOS 平台 (如树莓派/Linux) 呈现底层固件更新与系统维护网络调试面板
-        if (!Platform::isIPad() && !Platform::isIOS()) {
+        // 仅在嵌入式 Linux / 树莓派专用数播平台呈现底层固件在线更新 (OTA) 与系统关机重启管控
+        // Mac / Windows 桌面端以及 iPad / iPhone / Android 移动端不呈现关机管控与远程 OTA
+        if (!Platform::isMac() && !Platform::isWindow() && !Platform::isMobile()) {
             // 板块三：固件与在线更新 (OTA)
             ImVec2 p_update = ImGui::GetCursorScreenPos();
             float update_card_h = renderUpdateSection(child_dl, p_update.x, p_update.y, section_w);
