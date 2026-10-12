@@ -44,6 +44,10 @@ public:
         is_fullscreen_idle_ = false;
     }
 
+    void setKeyboardHeight(float h) {
+        keyboard_height_ = h;
+    }
+
 private:
     void renderBackground(float screen_w, float screen_h);
     void renderCreatePlaylistModal(float screen_w, float screen_h);
@@ -78,4 +82,5 @@ private:
     float safe_top_ = 0.0f;
     float safe_right_ = 0.0f;
     float safe_bottom_ = 0.0f;
+    float keyboard_height_ = 0.0f;
 };

@@ -17,6 +17,7 @@
 #import "public/UIConfig.hpp"
 #import "tools/MusicDatabase.hpp"
 #import "views/EQConfigView.hpp"
+#import "../define/HifiKeyboardField.h"
 #import <memory>
 #import <string>
 #import <cmath>
@@ -64,6 +65,7 @@ void ConfigureBackgroundReadableFiles(NSString *documentsDirectory) {
 @property (nonatomic, assign) BOOL isItemDrag;
 @property (nonatomic, assign) BOOL stoppedFling;
 @property (nonatomic, assign) float scrollVelocityY;
+@property (nonatomic, strong) HifiKeyboardField *hiddenTextField;
 
 @end
 
@@ -127,13 +129,36 @@ void ConfigureBackgroundReadableFiles(NSString *documentsDirectory) {
     // 3. 初始化发烧音频全功能横屏数播渲染器
     _renderer = std::make_unique<HifiPadRenderer>();
     _renderer->init();
+
+    // 4. 软键盘交互响应代理 (全自动拉起 iOS 底部输入法)
+    self.hiddenTextField = [[HifiKeyboardField alloc] initWithFrame:CGRectMake(0, -100, 10, 10)];
+    [self.view addSubview:self.hiddenTextField];
+
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(onKeyboardWillShow:) name:UIKeyboardWillShowNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(onKeyboardWillHide:) name:UIKeyboardWillHideNotification object:nil];
 }
 
 - (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
     _renderer.reset();
     if (ImGui::GetCurrentContext() != nullptr) {
         ImGui_ImplMetal_Shutdown();
         ImGui::DestroyContext();
+    }
+}
+
+- (void)onKeyboardWillShow:(NSNotification *)notification {
+    NSDictionary *info = [notification userInfo];
+    CGSize kbSize = [[info objectForKey:UIKeyboardFrameEndUserInfoKey] CGRectValue].size;
+    float kbHeight = MIN(kbSize.width, kbSize.height);
+    if (_renderer) {
+        _renderer->setKeyboardHeight(kbHeight);
+    }
+}
+
+- (void)onKeyboardWillHide:(NSNotification *)notification {
+    if (_renderer) {
+        _renderer->setKeyboardHeight(0.0f);
     }
 }
 
@@ -218,6 +243,14 @@ void ConfigureBackgroundReadableFiles(NSString *documentsDirectory) {
     }
 
     ImGui::Render();
+
+    // 监听 ImGui 文本输入焦点状态，自动拉起/收回 iOS 软键盘
+    if (io.WantTextInput && !self.hiddenTextField.isFirstResponder) {
+        [self.hiddenTextField becomeFirstResponder];
+    } else if (!io.WantTextInput && self.hiddenTextField.isFirstResponder) {
+        [self.hiddenTextField resignFirstResponder];
+    }
+
     id<MTLRenderCommandEncoder> renderEncoder = [commandBuffer renderCommandEncoderWithDescriptor:renderPassDesc];
     ImGui_ImplMetal_RenderDrawData(ImGui::GetDrawData(), commandBuffer, renderEncoder);
     [renderEncoder endEncoding];

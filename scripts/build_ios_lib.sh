@@ -92,6 +92,7 @@ SOURCES=(
     "${ROOT_DIR}/src/widgets/SidebarDacWidget.cpp"
     "${ROOT_DIR}/src/widgets/LEDSpectrumWidget.cpp"
     "${ROOT_DIR}/src/widgets/GlassCardRenderer.cpp"
+    "${ROOT_DIR}/src/widgets/VirtualKeyboard.cpp"
     "${ROOT_DIR}/src/tools/AudioDeviceTool.cpp"
     "${ROOT_DIR}/src/tools/NetworkTool.cpp"
     "${ROOT_DIR}/src/tools/UpdateManager.cpp"

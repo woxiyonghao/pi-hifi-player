@@ -47,10 +47,13 @@ float g_logical_h = 0.0f;
 
 bool g_is_initialized = false;
 std::chrono::steady_clock::time_point g_last_frame_time;
+jobject g_view_obj = nullptr;
 
 } // namespace
 
 extern "C" {
+
+JavaVM* g_android_jvm = nullptr;
 
 JNIEXPORT void JNICALL
 Java_com_pihifi_player_HifiGLSurfaceView_nativeInit(
@@ -85,8 +88,14 @@ Java_com_pihifi_player_HifiGLSurfaceView_nativeInit(
 
 JNIEXPORT void JNICALL
 Java_com_pihifi_player_HifiGLSurfaceView_nativeSurfaceCreated(
-    JNIEnv* /*env*/, jobject /*thiz*/) {
+    JNIEnv* env, jobject thiz) {
     LOGI("GLSurfaceView Surface 创建，初始化 ImGui & GLES3 管线");
+
+    if (g_view_obj) {
+        env->DeleteGlobalRef(g_view_obj);
+        g_view_obj = nullptr;
+    }
+    g_view_obj = env->NewGlobalRef(thiz);
 
     if (ImGui::GetCurrentContext() == nullptr) {
         IMGUI_CHECKVERSION();
@@ -175,6 +184,65 @@ Java_com_pihifi_player_HifiGLSurfaceView_nativeDrawFrame(
 
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+    // 监听 ImGui 文本输入焦点状态，自动驱动 Android 软键盘弹出与收回
+    static bool s_last_want_text = false;
+    bool want_text = io.WantTextInput;
+    if (want_text != s_last_want_text) {
+        s_last_want_text = want_text;
+        if (g_view_obj && g_android_jvm) {
+            JNIEnv* cur_env = nullptr;
+            bool attached = false;
+            jint res = g_android_jvm->GetEnv((void**)&cur_env, JNI_VERSION_1_6);
+            if (res == JNI_EDETACHED) {
+                if (g_android_jvm->AttachCurrentThread(&cur_env, nullptr) == JNI_OK) {
+                    attached = true;
+                }
+            }
+            if (cur_env) {
+                jclass clazz = cur_env->GetObjectClass(g_view_obj);
+                if (clazz) {
+                    const char* mname = want_text ? "showKeyboard" : "hideKeyboard";
+                    jmethodID mid = cur_env->GetMethodID(clazz, mname, "()V");
+                    if (mid) {
+                        cur_env->CallVoidMethod(g_view_obj, mid);
+                    }
+                    cur_env->DeleteLocalRef(clazz);
+                }
+            }
+            if (attached) {
+                g_android_jvm->DetachCurrentThread();
+            }
+        }
+    }
+}
+
+JNIEXPORT void JNICALL
+Java_com_pihifi_player_HifiGLSurfaceView_nativeAddInputCharacters(
+    JNIEnv* env, jclass /*clazz*/, jstring text) {
+    if (!text) return;
+    const char* c_str = env->GetStringUTFChars(text, nullptr);
+    if (c_str) {
+        if (ImGui::GetCurrentContext() != nullptr) {
+            ImGuiIO& io = ImGui::GetIO();
+            io.AddInputCharactersUTF8(c_str);
+        }
+        env->ReleaseStringUTFChars(text, c_str);
+    }
+}
+
+JNIEXPORT void JNICALL
+Java_com_pihifi_player_HifiGLSurfaceView_nativeSendKeyEvent(
+    JNIEnv* /*env*/, jclass /*clazz*/, jint keyCode) {
+    if (ImGui::GetCurrentContext() == nullptr) return;
+    ImGuiIO& io = ImGui::GetIO();
+    if (keyCode == 1) { // KEY_BACKSPACE
+        io.AddKeyEvent(ImGuiKey_Backspace, true);
+        io.AddKeyEvent(ImGuiKey_Backspace, false);
+    } else if (keyCode == 2) { // KEY_ENTER
+        io.AddKeyEvent(ImGuiKey_Enter, true);
+        io.AddKeyEvent(ImGuiKey_Enter, false);
+    }
 }
 
 JNIEXPORT void JNICALL
@@ -351,8 +419,6 @@ Java_com_pihifi_player_AudioPlaybackService_nativeGetDurationMs(
     JNIEnv* /*env*/, jobject /*thiz*/) {
     return static_cast<jlong>(PlayerAdmin::getInstance().getDurationSec() * 1000.0);
 }
-
-JavaVM* g_android_jvm = nullptr;
 
 JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* /*reserved*/) {
     g_android_jvm = vm;

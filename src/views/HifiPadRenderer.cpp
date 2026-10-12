@@ -1,5 +1,6 @@
 #include "views/HifiPadRenderer.hpp"
 #include "widgets/GlassCardRenderer.hpp"
+#include "widgets/VirtualKeyboard.hpp"
 #include "public/Platform.hpp"
 #include <algorithm>
 #include <cmath>
@@ -157,6 +158,9 @@ void HifiPadRenderer::render(float screen_w, float screen_h) {
     if (show_create_playlist_modal_) {
         renderCreatePlaylistModal(screen_w, screen_h);
     }
+
+    // 触控软键盘渲染
+    VirtualKeyboard::getInstance().render(screen_w, screen_h);
 
     SidebarTab cur_tab = sidebar_.getCurrentTab();
     uint64_t cur_pl_id = sidebar_.getSelectedPlaylistId();
@@ -339,7 +343,13 @@ void HifiPadRenderer::renderCreatePlaylistModal(float screen_w, float screen_h) 
     const float modal_w = 380.0f;
     const float modal_h = 200.0f;
     const float modal_x = (screen_w - modal_w) * 0.5f;
-    const float modal_y = (screen_h - modal_h) * 0.5f;
+    float modal_y = (screen_h - modal_h) * 0.5f;
+    if (keyboard_height_ > 0.0f) {
+        float avail = screen_h - keyboard_height_;
+        modal_y = std::max(20.0f, (avail - modal_h) * 0.5f);
+    } else if (ImGui::GetIO().WantTextInput) {
+        modal_y = std::max(20.0f, modal_y - 60.0f);
+    }
 
     ImGui::SetNextWindowPos(ImVec2(modal_x, modal_y));
     ImGui::SetNextWindowSize(ImVec2(modal_w, modal_h));

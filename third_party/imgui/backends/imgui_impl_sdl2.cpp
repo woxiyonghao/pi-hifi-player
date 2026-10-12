@@ -242,15 +242,14 @@ static void ImGui_ImplSDL2_PlatformSetImeData(ImGuiContext*, ImGuiViewport* view
         r.h = (int)data->InputLineHeight;
         SDL_SetTextInputRect(&r);
 
-#ifdef __ANDROID__
-        // SDL_StartTextInput() is needed on Android (and some other platforms) to show the on-screen keyboard. (#7636, #9474, #6306)
-        // It was removed in a7703fe6 due to concerns about its relation to desktop IME, but is required on mobile.
+#if defined(__ANDROID__) || defined(__linux__) || defined(__IPHONEOS__)
+        // SDL_StartTextInput() is needed on Linux/touchscreens and mobile platforms to show the on-screen keyboard.
         SDL_StartTextInput();
 #endif
     }
     else
     {
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || defined(__linux__) || defined(__IPHONEOS__)
         SDL_StopTextInput();
 #endif
     }

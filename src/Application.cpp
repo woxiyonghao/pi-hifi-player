@@ -26,6 +26,7 @@
 #include "imgui_internal.h"
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_opengl3.h"
+#include "widgets/VirtualKeyboard.hpp"
 
 namespace {
 
@@ -867,6 +868,9 @@ void Application::render() {
         renderCreatePlaylistModal(screen_w, screen_h);
     }
 
+    // [触控软键盘] 树莓派与触控屏环境屏幕虚拟键盘
+    VirtualKeyboard::getInstance().render(screen_w, screen_h);
+
     // 侧边栏选中项发生变动时立即持久化
     SidebarTab cur_tab = sidebar_.getCurrentTab();
     uint64_t cur_pl_id = sidebar_.getSelectedPlaylistId();
@@ -935,7 +939,14 @@ void Application::renderCreatePlaylistModal(float screen_w, float screen_h) {
     const float modal_w = 380.0f;
     const float modal_h = 200.0f;
     const float modal_x = (screen_w - modal_w) * 0.5f;
-    const float modal_y = (screen_h - modal_h) * 0.5f;
+    float modal_y = (screen_h - modal_h) * 0.5f;
+    float kb_h = VirtualKeyboard::getInstance().getHeight();
+    if (kb_h > 0.0f) {
+        float avail = screen_h - kb_h;
+        modal_y = std::max(20.0f, (avail - modal_h) * 0.5f);
+    } else if (ImGui::GetIO().WantTextInput) {
+        modal_y = std::max(20.0f, modal_y - 60.0f);
+    }
 
     ImGui::SetNextWindowPos(ImVec2(modal_x, modal_y));
     ImGui::SetNextWindowSize(ImVec2(modal_w, modal_h));

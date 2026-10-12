@@ -348,10 +348,13 @@ void CustomPlaylistView::renderAddMusicToPlaylistModal(Playlist* target_playlist
     ImGui::End();
 
     // 2. 居中模态卡片尺寸与排版 (660px × 480px，留足右侧音频格式与时长空间)
-    const float modal_w = 660.0f;
-    const float modal_h = 480.0f;
+    const float modal_w = std::min(screen_w - 20.0f, 660.0f);
+    const float modal_h = std::min(screen_h - 20.0f, 480.0f);
     const float modal_x = (screen_w - modal_w) * 0.5f;
-    const float modal_y = (screen_h - modal_h) * 0.5f;
+    float modal_y = (screen_h - modal_h) * 0.5f;
+    if (ImGui::GetIO().WantTextInput) {
+        modal_y = std::max(10.0f, modal_y - 60.0f);
+    }
 
     ImGui::SetNextWindowPos(ImVec2(modal_x, modal_y));
     ImGui::SetNextWindowSize(ImVec2(modal_w, modal_h));
