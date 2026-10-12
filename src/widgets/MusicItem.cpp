@@ -2,6 +2,7 @@
 #include "widgets/DrawUtils.hpp"
 #include "public/Font.hpp"
 #include "public/UIConfig.hpp"
+#include "public/Platform.hpp"
 #include "tools/PlayerAdmin.hpp"
 #include <algorithm>
 #include <cmath>
@@ -181,7 +182,8 @@ bool MusicItem::render(ImDrawList* dl, ImVec2 pos, ImVec2 size, const Track& tra
     if (Fonts::Small) ImGui::PopFont();
 
     // 触控拖拽防误触过滤：若鼠标处于滑动或拖拽位移中，不视为有效点击
-    bool was_dragged = (std::abs(ImGui::GetMouseDragDelta(0).x) > 4.0f || std::abs(ImGui::GetMouseDragDelta(0).y) > 4.0f);
+    const float drag_threshold = Platform::isTouchDevice() ? 12.0f : 4.0f;
+    bool was_dragged = (std::abs(ImGui::GetMouseDragDelta(0).x) > drag_threshold || std::abs(ImGui::GetMouseDragDelta(0).y) > drag_threshold);
     return is_clicked && !was_dragged;
 }
 

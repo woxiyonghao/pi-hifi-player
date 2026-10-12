@@ -106,11 +106,16 @@ private:
         SDL_FingerID id = 0;
         float x = 0.0f;
         float y = 0.0f;
+        float start_x = 0.0f;
+        float start_y = 0.0f;
         float last_x = 0.0f;
         float last_y = 0.0f;
+        uint32_t down_time = 0;
     };
     std::vector<TouchFinger> active_fingers_;
     bool is_touch_scrolling_ = false;
+    bool touch_in_slider_ = false;
+    bool touch_stopped_fling_ = false;
     float touch_accum_dy_ = 0.0f;
     float touch_scroll_velocity_ = 0.0f;
 };

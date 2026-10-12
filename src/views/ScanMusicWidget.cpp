@@ -677,7 +677,7 @@ void ScanMusicWidget::renderCompletedState([[maybe_unused]] ImDrawList* dl, ImVe
             if (i > 0) ImGui::SameLine(0.0f, item_gap_x);
             bool clicked = MusicItem::render(ImGui::GetWindowDrawList(), ImVec2(card_w, card_h), tracks_in_fmt[i],
                                              meta.default_tag);
-            const float max_drag_sqr = Platform::isMobile() ? 256.0f : 36.0f;
+            const float max_drag_sqr = Platform::isTouchDevice() ? 256.0f : 36.0f;
             if (clicked && (ImGui::GetIO().MouseDragMaxDistanceSqr[0] < max_drag_sqr)) {
                 if (!playlists.empty()) {
                     playlists[0].addTrack(tracks_in_fmt[i]);

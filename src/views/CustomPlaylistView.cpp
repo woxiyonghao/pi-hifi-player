@@ -295,7 +295,7 @@ void CustomPlaylistView::render(uint64_t pid, std::vector<Playlist>& playlists, 
                     break;
                 }
 
-                const float max_drag_sqr = Platform::isMobile() ? 256.0f : 36.0f;
+                const float max_drag_sqr = Platform::isTouchDevice() ? 256.0f : 36.0f;
                 if ((clicked || play_click) && (ImGui::GetIO().MouseDragMaxDistanceSqr[0] < max_drag_sqr)) {
                     player.playPlaylist(*target_playlist, i);
                 }

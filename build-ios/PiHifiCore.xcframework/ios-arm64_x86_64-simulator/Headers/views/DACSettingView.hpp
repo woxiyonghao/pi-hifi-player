@@ -50,6 +50,7 @@ private:
     // 芯片专属发烧设置子页面
     void renderHardwareDeviceSettings(ImDrawList* dl, float x0, float& cur_y, float w);
     void renderAppleDirectSettings(ImDrawList* dl, float x0, float& cur_y, float w);
+    void renderAAudioDirectSettings(ImDrawList* dl, float x0, float& cur_y, float w);
     void renderESSSabreSettings(ImDrawList* dl, float x0, float& cur_y, float w);
     void renderAKMVelvetSettings(ImDrawList* dl, float x0, float& cur_y, float w);
     void renderCirrusSettings(ImDrawList* dl, float x0, float& cur_y, float w);
@@ -58,7 +59,7 @@ private:
 
 private:
     // 当前选中的芯片架构索引 (0 ~ 5)
-    // 0: Apple Direct (MacBook Pro M1 Pro 硬件直通)
+    // 0: Apple Direct / Android AAudio Direct / 树莓派物理声卡
     // 1: ESS Sabre (ES9038PRO / ES9039PRO)
     // 2: AKM 旭化成 (AK4499EX + AK4191EQ)
     // 3: Cirrus Logic (CS43198 / CS43131)
@@ -74,6 +75,14 @@ private:
     int apple_sample_rate_ = 0;      // 0: 原生跟随母带 (44.1k-192k), 1: 固定 96kHz, 2: 固定 192kHz
     int apple_headphone_drive_ = 0;  // 0: 智能阻抗自适应 (<150Ω/150-1kΩ/>1kΩ), 1: 强制高输出 3.0Vrms, 2: 标准输出 1.25Vrms
     int apple_bit_depth_ = 0;        // 0: 32-bit Float 直通, 1: 24-bit 整数定点
+
+    // --------------------------------------------------------------------------
+    // 0. Android AAudio (AAudio 硬件独占直通 & USB DAC 架构)
+    // --------------------------------------------------------------------------
+    int aaudio_exclusive_mode_ = 0;   // 0: Bit-Perfect 独占流, 1: 系统混音低延迟
+    int aaudio_sample_rate_ = 0;      // 0: 原生跟随母带 (44.1k-768k/DSD), 1: 固定 48kHz (系统兼容), 2: 锁定 96kHz, 3: 锁定 192kHz
+    int aaudio_bit_depth_ = 0;        // 0: 32-bit Float 浮点直通, 1: 24-bit 整数定点
+    int aaudio_perf_mode_ = 0;        // 0: Low Latency 极低延迟, 1: Power Saving 均衡
 
     // --------------------------------------------------------------------------
     // 1. ESS Sabre (ES9038PRO 并联架构)

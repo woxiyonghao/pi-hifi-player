@@ -119,6 +119,7 @@ public:
     static bool isMobile()      { return isIPad() || isIPhone() || isAndroid(); }
     static bool isTablet()      { return isIPad(); }
     static bool isDesktop()     { return isMac() || isWindow() || (isLinux() && !isRaspberryPi()); }
+    static bool isTouchDevice() { return isMobile() || isRaspberryPi(); }
 
     // 树莓派精准硬件识别 (运行在 Linux 内核上的特定单板计算机)
     static bool isRaspberryPi() {

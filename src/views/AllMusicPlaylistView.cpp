@@ -295,7 +295,7 @@ void AllMusicPlaylistView::render(float x, float y, float w, float h, const std:
             cur_dl->AddText(ImVec2(badge_x + 5.0f, badge_y + 1.0f), IM_COL32(65, 190, 255, 230), badge.c_str());
             if (Fonts::Small) ImGui::PopFont();
 
-            const float max_drag_sqr = Platform::isMobile() ? 256.0f : 36.0f;
+            const float max_drag_sqr = Platform::isTouchDevice() ? 256.0f : 36.0f;
             if ((clicked || btn_click) && (ImGui::GetIO().MouseDragMaxDistanceSqr[0] < max_drag_sqr)) {
                 player.playTracks(queue_context, index_in_queue);
             }
@@ -330,7 +330,7 @@ void AllMusicPlaylistView::render(float x, float y, float w, float h, const std:
             bool clicked = ImGui::InvisibleButton("##NodeBtn", ImVec2(avail_w, node_h));
             bool hovered = ImGui::IsItemHovered();
 
-            const float max_drag_sqr = Platform::isMobile() ? 256.0f : 36.0f;
+            const float max_drag_sqr = Platform::isTouchDevice() ? 256.0f : 36.0f;
             if (clicked && (ImGui::GetIO().MouseDragMaxDistanceSqr[0] < max_drag_sqr)) {
                 is_open = !is_open;
                 tree_expanded_[key] = is_open;

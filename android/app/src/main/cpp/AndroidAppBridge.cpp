@@ -32,7 +32,8 @@ struct TouchState {
     float last_y = 0.0f;
     int64_t last_time_ms = 0;
     bool is_scrolling = false;
-    bool is_item_drag = false;
+    bool is_slider_drag = false;
+    bool stopped_fling = false;
     float scroll_velocity_y = 0.0f;
 };
 
@@ -188,24 +189,29 @@ Java_com_pihifi_player_HifiGLSurfaceView_nativeOnTouchEvent(
 
     switch (action) {
         case 0: { // ACTION_DOWN
+            bool was_flinging = (std::abs(g_touch.scroll_velocity_y) > 30.0f);
+            g_touch.scroll_velocity_y = 0.0f;
+
             g_touch.start_x = lx;
             g_touch.start_y = ly;
             g_touch.last_x = lx;
             g_touch.last_y = ly;
             g_touch.last_time_ms = eventTimeMs;
-            g_touch.scroll_velocity_y = 0.0f;
+            g_touch.is_scrolling = false;
+            g_touch.stopped_fling = was_flinging;
 
-            // 若手指触控命中 EQ 推子滑块区域，锁定为拖拽态，严禁误判为列表滚动
-            if (EQConfigView::isSliderTouch(lx, ly)) {
-                g_touch.is_item_drag = true;
-                g_touch.is_scrolling = false;
+            // 若手指触控命中 EQ 推子滑块区域或底部控制栏滑块，允许直接按键拖拽
+            bool is_eq = EQConfigView::isSliderTouch(lx, ly);
+            bool is_bottom = (ly >= (g_logical_h - 75.0f));
+            if (is_eq || is_bottom) {
+                g_touch.is_slider_drag = true;
+                io.AddMousePosEvent(lx, ly);
+                io.AddMouseButtonEvent(0, true);
             } else {
-                g_touch.is_scrolling = false;
-                g_touch.is_item_drag = false;
+                g_touch.is_slider_drag = false;
+                io.AddMousePosEvent(lx, ly);
+                // 核心关键：绝不立即下发 MouseButtonEvent(0, true)，消除按压瞬间误触
             }
-
-            io.AddMousePosEvent(lx, ly);
-            io.AddMouseButtonEvent(0, true);
             break;
         }
         case 2: { // ACTION_MOVE
@@ -213,34 +219,30 @@ Java_com_pihifi_player_HifiGLSurfaceView_nativeOnTouchEvent(
             float dy = ly - g_touch.start_y;
             float total_dist = std::sqrt(dx * dx + dy * dy);
 
-            if (!g_touch.is_scrolling && !g_touch.is_item_drag) {
-                if (total_dist > 7.0f) {
-                    if (EQConfigView::isSliderTouch(g_touch.start_x, g_touch.start_y) ||
-                        EQConfigView::isSliderTouch(lx, ly) ||
-                        EQConfigView::isAnySliderActive()) {
-                        g_touch.is_item_drag = true;
-                        g_touch.is_scrolling = false;
-                    } else if (std::abs(dy) > std::abs(dx) * 0.7f) {
+            if (g_touch.is_slider_drag) {
+                io.AddMousePosEvent(lx, ly);
+            } else {
+                const float touch_slop = 12.0f;
+                if (!g_touch.is_scrolling) {
+                    if (total_dist > touch_slop) {
                         g_touch.is_scrolling = true;
-                        io.AddMouseButtonEvent(0, false);
-                    } else {
-                        g_touch.is_item_drag = true;
+                        g_touch.stopped_fling = false;
                     }
                 }
-            }
 
-            if (g_touch.is_scrolling) {
-                float delta_y = ly - g_touch.last_y;
-                int64_t dt_ms = eventTimeMs - g_touch.last_time_ms;
-                if (dt_ms > 1) {
-                    float instant_velocity = (delta_y / static_cast<float>(dt_ms)) * 1000.0f;
-                    g_touch.scroll_velocity_y = g_touch.scroll_velocity_y * 0.25f + instant_velocity * 0.75f;
+                if (g_touch.is_scrolling) {
+                    float delta_y = ly - g_touch.last_y;
+                    int64_t dt_ms = eventTimeMs - g_touch.last_time_ms;
+                    if (dt_ms > 1) {
+                        float instant_velocity = (delta_y / static_cast<float>(dt_ms)) * 1000.0f;
+                        g_touch.scroll_velocity_y = g_touch.scroll_velocity_y * 0.25f + instant_velocity * 0.75f;
+                    }
+
+                    io.AddMousePosEvent(lx, ly);
+                    io.AddMouseWheelEvent(0.0f, delta_y / 55.0f);
+                } else {
+                    io.AddMousePosEvent(lx, ly);
                 }
-
-                io.AddMousePosEvent(lx, ly);
-                io.AddMouseWheelEvent(0.0f, delta_y / 65.0f);
-            } else {
-                io.AddMousePosEvent(lx, ly);
             }
 
             g_touch.last_x = lx;
@@ -248,22 +250,41 @@ Java_com_pihifi_player_HifiGLSurfaceView_nativeOnTouchEvent(
             g_touch.last_time_ms = eventTimeMs;
             break;
         }
-        case 1:   // ACTION_UP
-        case 3: { // ACTION_CANCEL
+        case 1: { // ACTION_UP
             EQConfigView::setSliderActive(false);
 
-            if (g_touch.is_scrolling) {
+            if (g_touch.is_slider_drag) {
+                io.AddMousePosEvent(lx, ly);
+                io.AddMouseButtonEvent(0, false);
+                g_touch.is_slider_drag = false;
+            } else if (g_touch.is_scrolling || g_touch.stopped_fling) {
+                // 处于滑动中或刚才轻触是为了刹停列表：绝不派发点击！
+                g_touch.is_scrolling = false;
+                g_touch.stopped_fling = false;
+
                 if (g_touch.scroll_velocity_y > 2800.0f) g_touch.scroll_velocity_y = 2800.0f;
                 if (g_touch.scroll_velocity_y < -2800.0f) g_touch.scroll_velocity_y = -2800.0f;
                 if (std::abs(g_touch.scroll_velocity_y) < 120.0f) g_touch.scroll_velocity_y = 0.0f;
 
                 io.AddMousePosEvent(lx, ly);
-                g_touch.is_scrolling = false;
             } else {
+                // 原地轻触 (Tap)：抬手下发完整单次点击
                 io.AddMousePosEvent(lx, ly);
+                io.AddMouseButtonEvent(0, true);
                 io.AddMouseButtonEvent(0, false);
             }
-            g_touch.is_item_drag = false;
+            g_touch.is_slider_drag = false;
+            break;
+        }
+        case 3: { // ACTION_CANCEL
+            EQConfigView::setSliderActive(false);
+            if (g_touch.is_slider_drag) {
+                io.AddMouseButtonEvent(0, false);
+            }
+            g_touch.is_scrolling = false;
+            g_touch.is_slider_drag = false;
+            g_touch.stopped_fling = false;
+            g_touch.scroll_velocity_y = 0.0f;
             break;
         }
         default:

@@ -62,6 +62,7 @@ void ConfigureBackgroundReadableFiles(NSString *documentsDirectory) {
 @property (nonatomic, assign) NSTimeInterval lastTouchTime;
 @property (nonatomic, assign) BOOL isScrolling;
 @property (nonatomic, assign) BOOL isItemDrag;
+@property (nonatomic, assign) BOOL stoppedFling;
 @property (nonatomic, assign) float scrollVelocityY;
 
 @end
@@ -232,23 +233,28 @@ void ConfigureBackgroundReadableFiles(NSString *documentsDirectory) {
     UITouch *touch = [touches anyObject];
     CGPoint pt = [touch locationInView:self.mtkView];
 
+    BOOL wasFlinging = (fabsf(self.scrollVelocityY) > 30.0f);
+    self.scrollVelocityY = 0.0f;
+
     self.touchStartPos = pt;
     self.lastTouchPos = pt;
     self.lastTouchTime = [NSDate timeIntervalSinceReferenceDate];
-    self.scrollVelocityY = 0.0f;
+    self.isScrolling = NO;
+    self.stoppedFling = wasFlinging;
 
-    // 若手指触控命中 EQ 推子滑块区域，立即锁定为组件拖拽态，杜绝误判为纵向列表滚动而释放鼠标按键
-    if (EQConfigView::isSliderTouch((float)pt.x, (float)pt.y)) {
-        self.isItemDrag = YES;
-        self.isScrolling = NO;
-    } else {
-        self.isScrolling = NO;
-        self.isItemDrag = NO;
-    }
+    // 若手指触控命中 EQ 推子滑块区域，允许按键拖拽
+    BOOL isEq = EQConfigView::isSliderTouch((float)pt.x, (float)pt.y);
 
     ImGuiIO& io = ImGui::GetIO();
-    io.AddMousePosEvent(pt.x, pt.y);
-    io.AddMouseButtonEvent(0, true);
+    if (isEq) {
+        self.isItemDrag = YES;
+        io.AddMousePosEvent(pt.x, pt.y);
+        io.AddMouseButtonEvent(0, true);
+    } else {
+        self.isItemDrag = NO;
+        io.AddMousePosEvent(pt.x, pt.y);
+        // 核心关键：绝不立即下发 MouseButtonEvent(0, true)
+    }
 }
 
 - (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
@@ -262,35 +268,30 @@ void ConfigureBackgroundReadableFiles(NSString *documentsDirectory) {
     CGFloat dy = pt.y - self.touchStartPos.y;
     CGFloat totalDist = sqrt(dx * dx + dy * dy);
 
-    if (!self.isScrolling && !self.isItemDrag) {
-        if (totalDist > 7.0f) {
-            // 若滑块处于激活状态或触控起始点/当前点位于推子区域，严禁触发列表滚动，严禁释放鼠标左键！
-            if (EQConfigView::isSliderTouch((float)self.touchStartPos.x, (float)self.touchStartPos.y) ||
-                EQConfigView::isSliderTouch((float)pt.x, (float)pt.y) ||
-                EQConfigView::isAnySliderActive()) {
-                self.isItemDrag = YES;
-                self.isScrolling = NO;
-            } else if (fabs(dy) > fabs(dx) * 0.7f) {
+    if (self.isItemDrag) {
+        io.AddMousePosEvent(pt.x, pt.y);
+    } else {
+        const CGFloat touchSlop = 12.0f;
+        if (!self.isScrolling) {
+            if (totalDist > touchSlop) {
                 self.isScrolling = YES;
-                io.AddMouseButtonEvent(0, false);
-            } else {
-                self.isItemDrag = YES;
+                self.stoppedFling = NO;
             }
         }
-    }
 
-    if (self.isScrolling) {
-        CGFloat deltaY = pt.y - self.lastTouchPos.y;
-        NSTimeInterval dt = now - self.lastTouchTime;
-        if (dt > 0.001) {
-            float instantVelocity = (float)(deltaY / dt);
-            self.scrollVelocityY = self.scrollVelocityY * 0.25f + instantVelocity * 0.75f;
+        if (self.isScrolling) {
+            CGFloat deltaY = pt.y - self.lastTouchPos.y;
+            NSTimeInterval dt = now - self.lastTouchTime;
+            if (dt > 0.001) {
+                float instantVelocity = (float)(deltaY / dt);
+                self.scrollVelocityY = self.scrollVelocityY * 0.25f + instantVelocity * 0.75f;
+            }
+
+            io.AddMousePosEvent(pt.x, pt.y);
+            io.AddMouseWheelEvent(0.0f, (float)(deltaY / 55.0f));
+        } else {
+            io.AddMousePosEvent(pt.x, pt.y);
         }
-
-        io.AddMousePosEvent(pt.x, pt.y);
-        io.AddMouseWheelEvent(0.0f, (float)(deltaY / 65.0f));
-    } else {
-        io.AddMousePosEvent(pt.x, pt.y);
     }
 
     self.lastTouchPos = pt;
@@ -305,15 +306,24 @@ void ConfigureBackgroundReadableFiles(NSString *documentsDirectory) {
 
     EQConfigView::setSliderActive(false);
 
-    if (self.isScrolling) {
+    if (self.isItemDrag) {
+        io.AddMousePosEvent(pt.x, pt.y);
+        io.AddMouseButtonEvent(0, false);
+        self.isItemDrag = NO;
+    } else if (self.isScrolling || self.stoppedFling) {
+        // 处于滚动中或触碰是为了阻尼停下列表：绝不派发点击！
+        self.isScrolling = NO;
+        self.stoppedFling = NO;
+
         if (self.scrollVelocityY > 2800.0f) self.scrollVelocityY = 2800.0f;
         if (self.scrollVelocityY < -2800.0f) self.scrollVelocityY = -2800.0f;
         if (fabsf(self.scrollVelocityY) < 120.0f) self.scrollVelocityY = 0.0f;
 
         io.AddMousePosEvent(pt.x, pt.y);
-        self.isScrolling = NO;
     } else {
+        // 原地轻触 (Tap)：抬手下发完整单次点击
         io.AddMousePosEvent(pt.x, pt.y);
+        io.AddMouseButtonEvent(0, true);
         io.AddMouseButtonEvent(0, false);
     }
     self.isItemDrag = NO;
@@ -322,9 +332,12 @@ void ConfigureBackgroundReadableFiles(NSString *documentsDirectory) {
 - (void)touchesCancelled:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
     EQConfigView::setSliderActive(false);
     ImGuiIO& io = ImGui::GetIO();
-    io.AddMouseButtonEvent(0, false);
+    if (self.isItemDrag) {
+        io.AddMouseButtonEvent(0, false);
+    }
     self.isScrolling = NO;
     self.isItemDrag = NO;
+    self.stoppedFling = NO;
     self.scrollVelocityY = 0.0f;
 }
 
