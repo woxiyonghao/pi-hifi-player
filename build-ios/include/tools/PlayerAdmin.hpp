@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <algorithm>
 #include <atomic>
+#include <mutex>
 
 // ==============================================================================
 // 1. 播放引擎核心状态枚举
@@ -64,8 +65,15 @@ public:
     // 载入歌曲列表并从指定索引开始播放
     void playTracks(const std::vector<Track>& tracks, size_t start_index = 0);
     // 获取当前播放队列
-    const std::vector<Track>& getPlaybackQueue() const { return playback_queue_; }
-    size_t getCurrentTrackIndex() const { return current_track_index_; }
+    // 获取当前播放队列
+    std::vector<Track> getPlaybackQueue() const {
+        std::lock_guard<std::recursive_mutex> lock(player_mutex_);
+        return playback_queue_;
+    }
+    size_t getCurrentTrackIndex() const {
+        std::lock_guard<std::recursive_mutex> lock(player_mutex_);
+        return current_track_index_;
+    }
     void playQueueIndex(size_t index);
     void addToQueue(const Track& track);
     void removeTrackFromQueue(size_t index);
@@ -74,6 +82,8 @@ public:
     void next();
     void previous();
     void replayCurrentTrack();
+    // 音频底层播放完毕 (EOF) 回调处理 (支持锁屏后台连贯播放)
+    void handleTrackEof();
     // -------------------------------------------------------------------------
     // [时间与进度控制]
     // -------------------------------------------------------------------------
@@ -93,24 +103,42 @@ public:
     // -------------------------------------------------------------------------
     void setVolume(float volume);
     float getVolume() const;
-    float getRawVolume() const { return volume_; } // 获取静音前的原始音量
+    float getRawVolume() const {
+        std::lock_guard<std::recursive_mutex> lock(player_mutex_);
+        return volume_;
+    } // 获取静音前的原始音量
     void toggleMute();
     bool isMuted() const;
     bool isBitPerfectDirect() const; // 源码直通状态 (100% 音量且未静音)
     // -------------------------------------------------------------------------
     // [播放模式切换]
     // -------------------------------------------------------------------------
-    PlayMode getPlayMode() const { return play_mode_; }
+    PlayMode getPlayMode() const {
+        std::lock_guard<std::recursive_mutex> lock(player_mutex_);
+        return play_mode_;
+    }
     void setPlayMode(PlayMode mode);
     void cyclePlayMode(); // 循环切换模式: 列表循环 -> 单曲循环 -> 随机 -> 顺序
     // -------------------------------------------------------------------------
     // [状态与当前曲目只读查询 (供 BottomBar / VU表头 / 侧边栏读取)]
     // -------------------------------------------------------------------------
-    PlaybackState getState() const { return state_; }
-    bool isPlaying() const { return state_ == PlaybackState::Playing; }
-    bool isPaused() const { return state_ == PlaybackState::Paused; }
-    // 使用 C++17/20 std::optional 优雅表达“可能有歌曲，也可能为空”
-    const std::optional<Track>& getCurrentTrack() const { return current_track_; }
+    PlaybackState getState() const {
+        std::lock_guard<std::recursive_mutex> lock(player_mutex_);
+        return state_;
+    }
+    bool isPlaying() const {
+        std::lock_guard<std::recursive_mutex> lock(player_mutex_);
+        return state_ == PlaybackState::Playing;
+    }
+    bool isPaused() const {
+        std::lock_guard<std::recursive_mutex> lock(player_mutex_);
+        return state_ == PlaybackState::Paused;
+    }
+    // 使用 C++17/20 std::optional 优雅表达“可能有歌曲，也可能为空” (按值返回防竞态拷贝)
+    std::optional<Track> getCurrentTrack() const {
+        std::lock_guard<std::recursive_mutex> lock(player_mutex_);
+        return current_track_;
+    }
 
     // -------------------------------------------------------------------------
     // [10段图形均衡器控制 (RBJ Audio EQ 二阶 IIR 滤波)]
@@ -127,10 +155,18 @@ public:
     // [切歌平滑过渡控制 (淡入淡出)]
     // -------------------------------------------------------------------------
     void setFadeDuration(float sec);
-    float getFadeDuration() const { return fade_duration_sec_; }
-    bool isTransitioning() const { return is_transitioning_; }
+    float getFadeDuration() const {
+        std::lock_guard<std::recursive_mutex> lock(player_mutex_);
+        return fade_duration_sec_;
+    }
+    bool isTransitioning() const {
+        std::lock_guard<std::recursive_mutex> lock(player_mutex_);
+        return is_transitioning_;
+    }
 
 private:
+    mutable std::recursive_mutex player_mutex_;
+
     // 核心状态
     PlaybackState state_ = PlaybackState::Idle;
     PlayMode play_mode_  = PlayMode::LoopList;

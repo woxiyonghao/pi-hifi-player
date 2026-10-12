@@ -8,20 +8,42 @@
 #include <fstream>
 #include <sstream>
 #include <iostream>
+#include <thread>
+#include <chrono>
 
 PlayerAdmin::PlayerAdmin() {
     loadConfig();
 
-    // 注册音频底层 EOF 事件：标记 eof_pending_，交由主线程 update() 驱动切歌，防止音频回调死锁
+    // 注册音频底层 EOF 事件：
+    // 在独立后台异步工作线程中执行切歌，脱离音频实时中断回调 (防死锁)，
+    // 并且彻底摆脱对前台 UI 渲染帧心跳 (update) 的依赖！
+    // 保证在 iPhone、iPad、Android 等移动设备锁屏后，单曲播毕依然自动连贯播放下一首或单曲循环，绝不暂停停顿。
     audio_engine::AudioEngine::getInstance().setEofCallback([this]() {
-        this->eof_pending_.store(true, std::memory_order_release);
+        std::thread([this]() {
+            this->handleTrackEof();
+        }).detach();
     });
+}
+
+void PlayerAdmin::handleTrackEof() {
+    std::lock_guard<std::recursive_mutex> lock(player_mutex_);
+    eof_pending_.store(false, std::memory_order_release);
+
+    if (state_ != PlaybackState::Playing) {
+        return;
+    }
+
+    std::cout << "[PlayerAdmin] handleTrackEof: track finished while playing (lock-screen safe), mode="
+              << static_cast<int>(play_mode_) << ", auto-advancing to next..." << std::endl;
+
+    this->next();
 }
 
 // ==============================================================================
 // 1. 基础播放控制实现
 // ==============================================================================
 void PlayerAdmin::play() {
+    std::lock_guard<std::recursive_mutex> lock(player_mutex_);
     if (!current_track_.has_value()) {
         if (!playback_queue_.empty()) {
             playTrack(playback_queue_[current_track_index_]);
@@ -44,6 +66,7 @@ void PlayerAdmin::play() {
 }
 
 void PlayerAdmin::pause() {
+    std::lock_guard<std::recursive_mutex> lock(player_mutex_);
     if (is_transitioning_) {
         is_transitioning_ = false;
         pending_track_ = std::nullopt;
@@ -55,6 +78,7 @@ void PlayerAdmin::pause() {
 }
 
 void PlayerAdmin::togglePlayPause() {
+    std::lock_guard<std::recursive_mutex> lock(player_mutex_);
     if (state_ == PlaybackState::Playing) {
         pause();
     } else {
@@ -63,6 +87,7 @@ void PlayerAdmin::togglePlayPause() {
 }
 
 void PlayerAdmin::stop() {
+    std::lock_guard<std::recursive_mutex> lock(player_mutex_);
     is_transitioning_ = false;
     pending_track_ = std::nullopt;
     state_ = PlaybackState::Idle;
@@ -74,6 +99,7 @@ void PlayerAdmin::stop() {
 // 2. 曲目与播放队列管理实现
 // ==============================================================================
 void PlayerAdmin::playTrack(const Track& track) {
+    std::lock_guard<std::recursive_mutex> lock(player_mutex_);
     // 如果正是当前正在播放的曲目，不重复重启声卡
     if (current_track_.has_value() && current_track_->id == track.id && state_ == PlaybackState::Playing) {
         return;
@@ -102,6 +128,7 @@ void PlayerAdmin::playTrack(const Track& track) {
 }
 
 void PlayerAdmin::switchTrack(const Track& track) {
+    std::lock_guard<std::recursive_mutex> lock(player_mutex_);
     auto& engine = audio_engine::AudioEngine::getInstance();
 
     // 如果开启了平滑淡入淡出 (时长 > 0.05s) 并且当前正在正常播放且未处于末尾 EOF
@@ -117,6 +144,19 @@ void PlayerAdmin::switchTrack(const Track& track) {
 
         // 音频底层平滑淡出 (Hann 曲线衰减)
         engine.startFadeOut(fade_duration_sec_);
+
+        // 启动独立定时线程，保证即便在锁屏/挂起 (无 UI 渲染帧) 情况下，淡出结束后也能准时接力启播新曲
+        float fade_sec = fade_duration_sec_;
+        std::thread([this, fade_sec]() {
+            std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<int>((fade_sec + 0.06f) * 1000.0f)));
+            std::lock_guard<std::recursive_mutex> lk(this->player_mutex_);
+            if (this->is_transitioning_ && this->pending_track_.has_value()) {
+                Track next_t = this->pending_track_.value();
+                this->is_transitioning_ = false;
+                this->pending_track_ = std::nullopt;
+                this->executeTrackSwitch(next_t);
+            }
+        }).detach();
     } else {
         // 直接执行切换并在启播时平滑淡入
         executeTrackSwitch(track);
@@ -124,6 +164,7 @@ void PlayerAdmin::switchTrack(const Track& track) {
 }
 
 void PlayerAdmin::executeTrackSwitch(const Track& track) {
+    std::lock_guard<std::recursive_mutex> lock(player_mutex_);
     current_track_ = track;
     current_track_->file_path = MusicDatabase::resolveTrackPath(track.file_path);
     duration_sec_ = static_cast<double>(track.duration_sec);
@@ -151,6 +192,7 @@ void PlayerAdmin::executeTrackSwitch(const Track& track) {
 }
 
 void PlayerAdmin::playTracks(const std::vector<Track>& tracks, size_t start_index) {
+    std::lock_guard<std::recursive_mutex> lock(player_mutex_);
     playback_queue_ = tracks;
     if (playback_queue_.empty()) {
         stop();
@@ -161,11 +203,13 @@ void PlayerAdmin::playTracks(const std::vector<Track>& tracks, size_t start_inde
 }
 
 void PlayerAdmin::playPlaylist(const Playlist& playlist, size_t start_index) {
+    std::lock_guard<std::recursive_mutex> lock(player_mutex_);
     current_playlist_ = &playlist;
     playTracks(playlist.getTracks(), start_index);
 }
 
 void PlayerAdmin::playQueueIndex(size_t index) {
+    std::lock_guard<std::recursive_mutex> lock(player_mutex_);
     if (index < playback_queue_.size()) {
         current_track_index_ = index;
         is_transitioning_ = false;
@@ -175,6 +219,7 @@ void PlayerAdmin::playQueueIndex(size_t index) {
 }
 
 void PlayerAdmin::addToQueue(const Track& track) {
+    std::lock_guard<std::recursive_mutex> lock(player_mutex_);
     playback_queue_.push_back(track);
     if (state_ == PlaybackState::Idle && playback_queue_.size() == 1) {
         current_track_index_ = 0;
@@ -183,6 +228,7 @@ void PlayerAdmin::addToQueue(const Track& track) {
 }
 
 void PlayerAdmin::removeTrackFromQueue(size_t index) {
+    std::lock_guard<std::recursive_mutex> lock(player_mutex_);
     if (index >= playback_queue_.size()) return;
     bool was_current = (index == current_track_index_);
     playback_queue_.erase(playback_queue_.begin() + index);
@@ -199,12 +245,14 @@ void PlayerAdmin::removeTrackFromQueue(size_t index) {
 }
 
 void PlayerAdmin::clearQueue() {
+    std::lock_guard<std::recursive_mutex> lock(player_mutex_);
     playback_queue_.clear();
     current_track_index_ = 0;
     stop();
 }
 
 void PlayerAdmin::replayCurrentTrack() {
+    std::lock_guard<std::recursive_mutex> lock(player_mutex_);
     if (!current_track_.has_value()) {
         if (!playback_queue_.empty() && current_track_index_ < playback_queue_.size()) {
             current_track_ = playback_queue_[current_track_index_];
@@ -219,6 +267,7 @@ void PlayerAdmin::replayCurrentTrack() {
 }
 
 void PlayerAdmin::next() {
+    std::lock_guard<std::recursive_mutex> lock(player_mutex_);
     std::cout << "[PlayerAdmin] next() called! queue_size=" << playback_queue_.size()
               << " cur_idx=" << current_track_index_
               << " play_mode=" << static_cast<int>(play_mode_) << std::endl;
@@ -273,6 +322,7 @@ void PlayerAdmin::next() {
 }
 
 void PlayerAdmin::previous() {
+    std::lock_guard<std::recursive_mutex> lock(player_mutex_);
     if (playback_queue_.empty()) {
         return;
     }
@@ -307,17 +357,21 @@ void PlayerAdmin::previous() {
 // 3. 时间轴与进度步进实现
 // ==============================================================================
 void PlayerAdmin::seek(double target_sec) {
+    std::lock_guard<std::recursive_mutex> lock(player_mutex_);
     std::cout << "[PlayerAdmin] seek called: target_sec=" << target_sec << " (cur_dur=" << getDurationSec() << ")" << std::endl;
     current_time_sec_ = std::clamp(target_sec, 0.0, getDurationSec());
     audio_engine::AudioEngine::getInstance().seek(current_time_sec_);
 }
 
 void PlayerAdmin::update(double delta_time) {
+    std::lock_guard<std::recursive_mutex> lock(player_mutex_);
     auto& engine = audio_engine::AudioEngine::getInstance();
 
-    // 异步安全执行 EOF 切歌逻辑 (脱离 CoreAudio 音频回调线程，防止死锁)
+    // 备用兜底：若存在未处理的 EOF 标记
     if (eof_pending_.exchange(false, std::memory_order_acq_rel)) {
-        this->next();
+        if (state_ == PlaybackState::Playing) {
+            this->next();
+        }
     }
 
     // 处理切歌淡出完毕后的新曲载入与平滑淡入接力
@@ -345,6 +399,7 @@ void PlayerAdmin::update(double delta_time) {
 }
 
 double PlayerAdmin::getCurrentTimeSec() const {
+    std::lock_guard<std::recursive_mutex> lock(player_mutex_);
     auto& engine = audio_engine::AudioEngine::getInstance();
     if (engine.isPlaying() || engine.isPaused()) {
         return engine.getCurrentTimeSec();
@@ -353,6 +408,7 @@ double PlayerAdmin::getCurrentTimeSec() const {
 }
 
 double PlayerAdmin::getDurationSec() const {
+    std::lock_guard<std::recursive_mutex> lock(player_mutex_);
     auto& engine = audio_engine::AudioEngine::getInstance();
     if ((engine.isPlaying() || engine.isPaused()) && engine.getDurationSec() > 0.0) {
         return engine.getDurationSec();
@@ -364,22 +420,26 @@ double PlayerAdmin::getDurationSec() const {
 // 4. 音量与发烧硬件控制实现
 // ==============================================================================
 void PlayerAdmin::setVolume(float volume) {
+    std::lock_guard<std::recursive_mutex> lock(player_mutex_);
     volume_ = std::clamp(volume, 0.0f, 1.0f);
     audio_engine::AudioEngine::getInstance().setVolume(volume_);
     saveConfig();
 }
 
 float PlayerAdmin::getVolume() const {
+    std::lock_guard<std::recursive_mutex> lock(player_mutex_);
     return is_muted_ ? 0.0f : volume_;
 }
 
 void PlayerAdmin::toggleMute() {
+    std::lock_guard<std::recursive_mutex> lock(player_mutex_);
     is_muted_ = !is_muted_;
     audio_engine::AudioEngine::getInstance().setMuted(is_muted_);
     saveConfig();
 }
 
 bool PlayerAdmin::isMuted() const {
+    std::lock_guard<std::recursive_mutex> lock(player_mutex_);
     return is_muted_;
 }
 
@@ -407,11 +467,13 @@ std::array<float, 10> PlayerAdmin::getEqBands() const {
 // 5. 循环模式切换实现
 // ==============================================================================
 void PlayerAdmin::setPlayMode(PlayMode mode) {
+    std::lock_guard<std::recursive_mutex> lock(player_mutex_);
     play_mode_ = mode;
     saveConfig();
 }
 
 void PlayerAdmin::cyclePlayMode() {
+    std::lock_guard<std::recursive_mutex> lock(player_mutex_);
     switch (play_mode_) {
         case PlayMode::LoopList:   play_mode_ = PlayMode::LoopSingle; break;
         case PlayMode::LoopSingle: play_mode_ = PlayMode::Shuffle;    break;
@@ -422,6 +484,7 @@ void PlayerAdmin::cyclePlayMode() {
 }
 
 void PlayerAdmin::setFadeDuration(float sec) {
+    std::lock_guard<std::recursive_mutex> lock(player_mutex_);
     fade_duration_sec_ = std::clamp(sec, 0.0f, 3.0f);
     saveConfig();
 }

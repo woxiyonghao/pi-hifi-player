@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <climits>
 #if defined(__APPLE__)
+#include <TargetConditionals.h>
 #include <mach-o/dyld.h>
 #endif
 
@@ -70,7 +71,7 @@ std::string UpdateManager::findRepositoryRoot() {
     }
 
     // 2. 从当前进程可执行文件向上溯源查找 .git 仓库 (支持 build/PiHifiPlayer.app 结构)
-#if defined(__APPLE__)
+#if defined(__APPLE__) && (!defined(TARGET_OS_IPHONE) || !TARGET_OS_IPHONE)
     char exe_buf[PATH_MAX];
     uint32_t size = sizeof(exe_buf);
     if (_NSGetExecutablePath(exe_buf, &size) == 0) {
@@ -366,7 +367,7 @@ void UpdateManager::executeUpdateAsync(std::function<void(bool success, const st
             return;
         }
 
-#if defined(__APPLE__)
+#if defined(__APPLE__) && (!defined(TARGET_OS_IPHONE) || !TARGET_OS_IPHONE)
         // macOS 下若正在运行 /Applications/PiHifiPlayer.app，自动将最新编译产物同步覆盖
         if (Platform::isMac()) {
             char exe_buf[PATH_MAX];
@@ -404,7 +405,7 @@ void UpdateManager::restartApplication() {
         std::exit(42);
     }
 
-#if defined(__APPLE__)
+#if defined(__APPLE__) && (!defined(TARGET_OS_IPHONE) || !TARGET_OS_IPHONE)
     if (Platform::isMac()) {
         char exe_buf[PATH_MAX];
         uint32_t size = sizeof(exe_buf);
