@@ -61,12 +61,14 @@ void MusicItem::drawVinylCdIcon(ImDrawList* dl, ImVec2 center, float radius, ImU
     dl->AddCircleFilled(c2_1, thickness * 0.5f, col, 16);
 }
 
-bool MusicItem::render(ImDrawList* dl, ImVec2 size, const Track& track, const char* category_tag) {
+bool MusicItem::render(ImDrawList* dl, ImVec2 size, const Track& track, const char* category_tag,
+                        bool is_edit_mode, bool is_selected) {
     ImVec2 pos = ImGui::GetCursorScreenPos();
-    return render(dl, pos, size, track, category_tag);
+    return render(dl, pos, size, track, category_tag, is_edit_mode, is_selected);
 }
 
-bool MusicItem::render(ImDrawList* dl, ImVec2 pos, ImVec2 size, const Track& track, const char* category_tag) {
+bool MusicItem::render(ImDrawList* dl, ImVec2 pos, ImVec2 size, const Track& track, const char* category_tag,
+                        bool is_edit_mode, bool is_selected) {
     const float rounding = DefaultRounding;
     const float cover_w = size.x;
     ImVec2 cover_p0 = pos;
@@ -96,24 +98,30 @@ bool MusicItem::render(ImDrawList* dl, ImVec2 pos, ImVec2 size, const Track& tra
     // 1. 封面底板 (液态玻璃深色磨砂与 1px 微光边框)
     ImU32 cover_bg = is_hovered ? IM_COL32(36, 44, 58, 255) : IM_COL32(22, 26, 36, 255);
     dl->AddRectFilled(cover_p0, cover_p1, cover_bg, rounding);
-    dl->AddRect(cover_p0, cover_p1, is_hovered ? UIConfig::Color::GlassBorder : IM_COL32(255, 255, 255, 20),
-                rounding, 0, 1.0f);
+    if (is_edit_mode && is_selected) {
+        // 编辑模式下选中态：高亮主题色发光边框 + 玫瑰红微弱半透底色
+        dl->AddRect(cover_p0, cover_p1, UIConfig::Color::Accent, rounding, 0, 2.0f);
+        dl->AddRectFilled(cover_p0, cover_p1, IM_COL32(250, 45, 72, 35), rounding);
+    } else {
+        dl->AddRect(cover_p0, cover_p1, is_hovered ? UIConfig::Color::GlassBorder : IM_COL32(255, 255, 255, 20),
+                    rounding, 0, 1.0f);
+    }
 
     ImVec2 cover_center((cover_p0.x + cover_p1.x) * 0.5f, (cover_p0.y + cover_p1.y) * 0.5f);
     ImVec2 cd_center(cover_center.x, cover_p0.y + 66.0f);
 
     // 2. 唱片矢量图标：
     // 色彩规则：
-    // Blur 态（未悬停）：保持轻盈通透的灰白磨砂半透质感 IM_COL32(215, 222, 235, 175)（播放中非 hover 态不改变颜色！）
-    // Hover 态：纯正主题色玫瑰红 UIConfig::Color::Accent (IM_COL32(250, 45, 72, 255))
+    // Blur 态（未悬停）：保持轻盈通透的灰白磨砂半透质感 IM_COL32(215, 222, 235, 175)
+    // Hover 态：纯正主题色玫瑰红 UIConfig::Color::Accent
     const ImU32 col_blur = IM_COL32(215, 222, 235, 175);
     const ImU32 col_hover = UIConfig::Color::Accent;
-    const ImU32 cd_col = is_hovered ? col_hover : col_blur;
+    const ImU32 cd_col = (is_hovered && !is_edit_mode) ? col_hover : col_blur;
 
-    const float cd_radius = is_hovered ? 46.0f : 40.0f;
+    const float cd_radius = (is_hovered && !is_edit_mode) ? 46.0f : 40.0f;
 
-    // 动效规则：悬停时播放；播放中的 item 在非 hover 情况下同样平滑旋转，且颜色保持通透灰白 col_blur
-    bool should_rotate = is_hovered || is_track_playing;
+    // 动效规则：非编辑模式悬停或播放中时平滑旋转
+    bool should_rotate = (!is_edit_mode && is_hovered) || is_track_playing;
     float rot = should_rotate ? (static_cast<float>(ImGui::GetTime()) * 1.8f) : 0.0f;
     drawVinylCdIcon(dl, cd_center, cd_radius, cd_col, rot);
 
@@ -132,8 +140,8 @@ bool MusicItem::render(ImDrawList* dl, ImVec2 pos, ImVec2 size, const Track& tra
                 is_hovered ? UIConfig::Color::TextActive : IM_COL32(175, 190, 210, 210), badge.c_str());
     if (Fonts::Small) ImGui::PopFont();
 
-    // 4. 悬停态：在唱片中心直接浮现超圆滑 Apple 质感主题色 ▶ 播放按钮 (无淡入淡出延时)
-    if (is_hovered) {
+    // 4. 悬停态：在唱片中心直接浮现超圆滑 Apple 质感主题色 ▶ 播放按钮 (仅在非编辑模式下显示)
+    if (is_hovered && !is_edit_mode) {
         ImVec2 play_center = cd_center;
         const float btn_radius = 23.5f;
 
@@ -154,6 +162,29 @@ bool MusicItem::render(ImDrawList* dl, ImVec2 pos, ImVec2 size, const Track& tra
         ImVec2 tri_p1(play_center.x + tri_w * 0.5f + opt_x, play_center.y);
         ImVec2 tri_p2(play_center.x - tri_w * 0.5f + opt_x, play_center.y + tri_h);
         DrawRoundedTriangle(dl, tri_p0, tri_p1, tri_p2, r_play, IM_COL32(255, 255, 255, 255));
+    }
+
+    // 4.5 编辑模式：在封面右上角绘制多选选择复选框 (Selection Indicator Circle)
+    if (is_edit_mode) {
+        ImVec2 chk_c(cover_p1.x - 18.0f, cover_p0.y + 18.0f);
+        const float chk_r = 11.0f;
+        if (is_selected) {
+            // 已选中态：主题色实心圆 + 纯白高亮勾选符 ✓
+            dl->AddCircleFilled(chk_c, chk_r, UIConfig::Color::Accent, 32);
+            dl->AddCircle(chk_c, chk_r, IM_COL32(255, 255, 255, 230), 32, 1.5f);
+
+            // 白色对勾
+            dl->AddLine(ImVec2(chk_c.x - 4.5f, chk_c.y),
+                        ImVec2(chk_c.x - 1.2f, chk_c.y + 3.5f),
+                        IM_COL32(255, 255, 255, 255), 2.2f);
+            dl->AddLine(ImVec2(chk_c.x - 1.2f, chk_c.y + 3.5f),
+                        ImVec2(chk_c.x + 4.8f, chk_c.y - 3.8f),
+                        IM_COL32(255, 255, 255, 255), 2.2f);
+        } else {
+            // 未选中态：深色半透明圆底 + 优雅浅灰轮廓
+            dl->AddCircleFilled(chk_c, chk_r, IM_COL32(18, 22, 32, 210), 32);
+            dl->AddCircle(chk_c, chk_r, is_hovered ? IM_COL32(255, 255, 255, 220) : IM_COL32(255, 255, 255, 100), 32, 1.5f);
+        }
     }
 
     // 5. 文字排版区域

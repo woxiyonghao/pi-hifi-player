@@ -4,6 +4,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <unordered_set>
 
 // 音频无损/母带编码格式
 enum class AudioFormat {
@@ -55,12 +56,19 @@ class Playlist {
     const std::string& getCoverPath() const { return cover_path_; }
     void setCoverPath(const std::string& path) { cover_path_ = path; }
     const std::vector<Track>& getTracks() const { return tracks_; }
+    std::vector<Track>& getTracks() { return tracks_; }
     size_t getTrackCount() const { return tracks_.size(); }
     void addTrack(const Track& track) { tracks_.push_back(track); }
     void removeTrack(size_t index) {
         if (index < tracks_.size()) {
             tracks_.erase(tracks_.begin() + index);
         }
+    }
+    void removeTracksByIds(const std::unordered_set<uint64_t>& ids, const std::unordered_set<std::string>& paths) {
+        std::erase_if(tracks_, [&](const Track& t) {
+            return (t.id != 0 && ids.count(t.id) > 0) ||
+                   (!t.file_path.empty() && paths.count(t.file_path) > 0);
+        });
     }
     // 统计整张歌单的总时长
     uint32_t getTotalDurationSec() const {

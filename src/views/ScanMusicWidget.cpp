@@ -281,11 +281,15 @@ void ScanMusicWidget::render(ImDrawList* dl, ImVec2 p_min, ImVec2 p_max, std::ve
 
     // 状态机分发
     if (state == ScanState::Scanning) {
+        is_edit_mode_ = false;
+        selected_track_ids_.clear();
         renderScanningState(dl, p_min, p_max, center);
     } else if (state == ScanState::Completed) {
         renderCompletedState(dl, p_min, p_max, playlists);
     } else {
         // Idle 或 Cancelled/Failed 状态均呈现样式 1 (待机态)
+        is_edit_mode_ = false;
+        selected_track_ids_.clear();
         renderIdleState(dl, center, playlists);
     }
 }
@@ -403,7 +407,7 @@ void drawSmoothSolarSphere(ImDrawList* dl, ImVec2 center, float pulse, ImU32 acc
 }
 
 // 绘制纯矢量 32px 刷新图标 (1:1 还原截图二逆时针带圆头循环箭头)
-void drawRefreshIcon(ImDrawList* dl, ImVec2 center, float size, ImU32 col, float rotation_rad = 0.0f) {
+[[maybe_unused]] void drawRefreshIcon(ImDrawList* dl, ImVec2 center, float size, ImU32 col, float rotation_rad = 0.0f) {
     const float arc_r = size * 0.25f; // 半径约 8px
     const float thickness = 2.2f;
 
@@ -675,15 +679,24 @@ void ScanMusicWidget::renderCompletedState([[maybe_unused]] ImDrawList* dl, ImVe
 
         for (size_t i = 0; i < tracks_in_fmt.size(); ++i) {
             if (i > 0) ImGui::SameLine(0.0f, item_gap_x);
+            bool is_selected = is_edit_mode_ && (selected_track_ids_.count(tracks_in_fmt[i].id) > 0);
             bool clicked = MusicItem::render(ImGui::GetWindowDrawList(), ImVec2(card_w, card_h), tracks_in_fmt[i],
-                                             meta.default_tag);
+                                             meta.default_tag, is_edit_mode_, is_selected);
             const float max_drag_sqr = Platform::isTouchDevice() ? 256.0f : 36.0f;
             if (clicked && (ImGui::GetIO().MouseDragMaxDistanceSqr[0] < max_drag_sqr)) {
-                if (!playlists.empty()) {
-                    playlists[0].addTrack(tracks_in_fmt[i]);
-                    MusicDatabase::getInstance().savePlaylists(playlists);
+                if (is_edit_mode_) {
+                    if (selected_track_ids_.count(tracks_in_fmt[i].id) > 0) {
+                        selected_track_ids_.erase(tracks_in_fmt[i].id);
+                    } else {
+                        selected_track_ids_.insert(tracks_in_fmt[i].id);
+                    }
+                } else {
+                    if (!playlists.empty()) {
+                        playlists[0].addTrack(tracks_in_fmt[i]);
+                        MusicDatabase::getInstance().savePlaylists(playlists);
+                    }
+                    PlayerAdmin::getInstance().playTracks(tracks_in_fmt, i);
                 }
-                PlayerAdmin::getInstance().playTracks(tracks_in_fmt, i);
             }
         }
         ImGui::EndChild();
@@ -699,55 +712,161 @@ void ScanMusicWidget::renderCompletedState([[maybe_unused]] ImDrawList* dl, ImVe
     ImGui::PopStyleVar(2);
 
     // =========================================================================
-    // 7. 右上角发烧级 32px 矢量刷新 (Rescan) 按钮
-    // 距顶 12px，距右 12px，仅在扫描完成界面显示，配色严格适配 App 发烧液态玻璃规范
+    // 7. 右上角工具按钮栏 (重新扫描/删除 + 选择/取消)
+    // 距顶 12px，距右 12px，两按钮水平间距严格设定为 12px
+    // 常规模式：[ 选择 ]  <-- 12px -->  [ ⟳ 重新扫描 ]
+    // 编辑模式：[ 取消 ]  <-- 12px -->  [  删除 (X)  ]
     // =========================================================================
-    const float btn_size = 32.0f;
-    ImVec2 btn_p0(p_max.x - 12.0f - btn_size, p_min.y + 12.0f);
-    ImVec2 btn_p1(btn_p0.x + btn_size, btn_p0.y + btn_size);
-    ImVec2 btn_c(btn_p0.x + btn_size * 0.5f, btn_p0.y + btn_size * 0.5f);
+    const float btn_h = 28.0f;
+    const float btn_y = p_min.y + 12.0f;
+    const float btn_rounding = 14.0f; // 优雅发烧级全圆角胶囊
 
-    // 采用屏幕坐标直接判定，杜绝由于外部 BeginChild 嵌套导致的事件命中丢失
-    bool hov_refresh = ImGui::IsMouseHoveringRect(btn_p0, btn_p1, false);
-    bool act_refresh = hov_refresh && ImGui::IsMouseDown(ImGuiMouseButton_Left);
-    bool clicked_refresh = hov_refresh && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+    // 7.1 右侧按钮 (常规态：重新扫描；编辑态：删除)
+    float right_btn_w = 92.0f;
+    std::string right_btn_text = "重新扫描";
+    if (is_edit_mode_) {
+        if (selected_track_ids_.empty()) {
+            right_btn_text = "删除";
+            right_btn_w = 68.0f;
+        } else {
+            right_btn_text = "删除 (" + std::to_string(selected_track_ids_.size()) + ")";
+            right_btn_w = 84.0f;
+        }
+    }
 
-    if (hov_refresh) {
+    ImVec2 r_btn_p0(p_max.x - 12.0f - right_btn_w, btn_y);
+    ImVec2 r_btn_p1(r_btn_p0.x + right_btn_w, btn_y + btn_h);
+
+    bool hov_right = ImGui::IsMouseHoveringRect(r_btn_p0, r_btn_p1, false);
+    bool act_right = hov_right && ImGui::IsMouseDown(ImGuiMouseButton_Left);
+    bool clicked_right = hov_right && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+
+    if (hov_right) {
         ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
     }
 
-    // 点击刷新图标：弹出二次确认框，询问用户是否重新扫描歌曲
-    if (clicked_refresh) {
+    if (clicked_right) {
         ImGui::GetIO().MouseClicked[0] = false;
-        show_rescan_confirm_modal_ = true;
+        if (!is_edit_mode_) {
+            show_rescan_confirm_modal_ = true;
+        } else {
+            if (!selected_track_ids_.empty()) {
+                show_delete_confirm_modal_ = true;
+            }
+        }
+    }
+
+    // 7.2 左侧按钮 (常规态：选择；编辑态：取消)，严格与右侧按钮间隔 12px
+    const float left_btn_w = 64.0f;
+    const char* left_btn_text = is_edit_mode_ ? "取消" : "选择";
+
+    ImVec2 l_btn_p0(r_btn_p0.x - 12.0f - left_btn_w, btn_y);
+    ImVec2 l_btn_p1(l_btn_p0.x + left_btn_w, btn_y + btn_h);
+
+    bool hov_left = ImGui::IsMouseHoveringRect(l_btn_p0, l_btn_p1, false);
+    bool act_left = hov_left && ImGui::IsMouseDown(ImGuiMouseButton_Left);
+    bool clicked_left = hov_left && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+
+    if (hov_left) {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+    }
+
+    if (clicked_left) {
+        ImGui::GetIO().MouseClicked[0] = false;
+        if (!is_edit_mode_) {
+            is_edit_mode_ = true;
+            selected_track_ids_.clear();
+        } else {
+            is_edit_mode_ = false;
+            selected_track_ids_.clear();
+        }
     }
 
     const ImU32 r = (accent >> IM_COL32_R_SHIFT) & 0xFF;
     const ImU32 g = (accent >> IM_COL32_G_SHIFT) & 0xFF;
     const ImU32 b = (accent >> IM_COL32_B_SHIFT) & 0xFF;
 
-    if (hov_refresh || act_refresh) {
-        // 悬停态：主题色环境光晕 Bloom + 玫瑰红液态玻璃底板 + 1px 折射微光边
-        dl->AddCircleFilled(btn_c, 19.0f, IM_COL32(r, g, b, 45), 32);
-        dl->AddCircleFilled(btn_c, 16.0f, IM_COL32(r, g, b, 85), 32);
-        dl->AddCircleFilled(btn_c, 16.0f, UIConfig::Color::GlassActive, 32);
-        dl->AddCircle(btn_c, 16.0f, accent, 32, 1.0f);
+    // 绘制左侧胶囊按钮 (选择 / 取消)
+    if (is_edit_mode_) {
+        ImU32 l_bg = (hov_left || act_left) ? IM_COL32(52, 60, 78, 230) : IM_COL32(36, 42, 56, 200);
+        dl->AddRectFilled(l_btn_p0, l_btn_p1, l_bg, btn_rounding);
+        dl->AddRect(l_btn_p0, l_btn_p1, (hov_left || act_left) ? UIConfig::Color::GlassBorder : IM_COL32(255, 255, 255, 35),
+                    btn_rounding, 0, 1.0f);
+        if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+        ImVec2 txt_sz = ImGui::CalcTextSize(left_btn_text);
+        dl->AddText(ImVec2(l_btn_p0.x + (left_btn_w - txt_sz.x) * 0.5f, btn_y + (btn_h - txt_sz.y) * 0.5f),
+                    UIConfig::Color::TextActive, left_btn_text);
+        if (Fonts::Small) ImGui::PopFont();
     } else {
-        // Blur 态：深空曜石液态玻璃底板 + 极细通透光边 (适配截图二圆黑底并融入数播暗夜主题)
-        dl->AddCircleFilled(btn_c, 16.0f, IM_COL32(22, 26, 36, 220), 32);
-        dl->AddCircle(btn_c, 16.0f, IM_COL32(255, 255, 255, 35), 32, 1.0f);
+        if (hov_left || act_left) {
+            dl->AddRectFilled(l_btn_p0, l_btn_p1, IM_COL32(r, g, b, 70), btn_rounding);
+            dl->AddRect(l_btn_p0, l_btn_p1, accent, btn_rounding, 0, 1.0f);
+        } else {
+            dl->AddRectFilled(l_btn_p0, l_btn_p1, IM_COL32(22, 26, 36, 220), btn_rounding);
+            dl->AddRect(l_btn_p0, l_btn_p1, IM_COL32(255, 255, 255, 35), btn_rounding, 0, 1.0f);
+        }
+        if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+        ImVec2 txt_sz = ImGui::CalcTextSize(left_btn_text);
+        ImU32 txt_col = (hov_left || act_left) ? IM_COL32(255, 255, 255, 255) : IM_COL32(215, 222, 235, 200);
+        dl->AddText(ImVec2(l_btn_p0.x + (left_btn_w - txt_sz.x) * 0.5f, btn_y + (btn_h - txt_sz.y) * 0.5f),
+                    txt_col, left_btn_text);
+        if (Fonts::Small) ImGui::PopFont();
     }
 
-    ImU32 icon_col = (hov_refresh || act_refresh) ? IM_COL32(255, 255, 255, 255)
-                                                   : IM_COL32(215, 222, 235, 190);
-    float rot = hov_refresh ? -std::fmod(static_cast<float>(ImGui::GetTime()) * 4.0f, 6.2831853f) : 0.0f;
-    drawRefreshIcon(dl, btn_c, btn_size, icon_col, rot);
+    // 绘制右侧胶囊按钮 (重新扫描 / 删除)
+    if (is_edit_mode_) {
+        bool has_selection = !selected_track_ids_.empty();
+        ImU32 del_bg;
+        ImU32 del_border;
+        ImU32 del_txt;
+        if (!has_selection) {
+            del_bg = IM_COL32(140, 35, 45, 120);
+            del_border = IM_COL32(255, 80, 95, 60);
+            del_txt = IM_COL32(220, 170, 175, 160);
+        } else if (hov_right || act_right) {
+            del_bg = IM_COL32(245, 50, 70, 245);
+            del_border = IM_COL32(255, 100, 120, 220);
+            del_txt = IM_COL32(255, 255, 255, 255);
+        } else {
+            del_bg = IM_COL32(215, 40, 55, 210);
+            del_border = IM_COL32(255, 80, 95, 160);
+            del_txt = IM_COL32(255, 255, 255, 245);
+        }
+
+        dl->AddRectFilled(r_btn_p0, r_btn_p1, del_bg, btn_rounding);
+        dl->AddRect(r_btn_p0, r_btn_p1, del_border, btn_rounding, 0, 1.0f);
+
+        if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+        ImVec2 txt_sz = ImGui::CalcTextSize(right_btn_text.c_str());
+        dl->AddText(ImVec2(r_btn_p0.x + (right_btn_w - txt_sz.x) * 0.5f, btn_y + (btn_h - txt_sz.y) * 0.5f),
+                    del_txt, right_btn_text.c_str());
+        if (Fonts::Small) ImGui::PopFont();
+    } else {
+        if (hov_right || act_right) {
+            dl->AddRectFilled(r_btn_p0, r_btn_p1, IM_COL32(r, g, b, 70), btn_rounding);
+            dl->AddRect(r_btn_p0, r_btn_p1, accent, btn_rounding, 0, 1.0f);
+        } else {
+            dl->AddRectFilled(r_btn_p0, r_btn_p1, IM_COL32(22, 26, 36, 220), btn_rounding);
+            dl->AddRect(r_btn_p0, r_btn_p1, IM_COL32(255, 255, 255, 35), btn_rounding, 0, 1.0f);
+        }
+
+        ImU32 txt_col = (hov_right || act_right) ? IM_COL32(255, 255, 255, 255)
+                                                   : IM_COL32(215, 222, 235, 200);
+        if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+        ImVec2 txt_sz = ImGui::CalcTextSize("重新扫描");
+        dl->AddText(ImVec2(r_btn_p0.x + (right_btn_w - txt_sz.x) * 0.5f, btn_y + (btn_h - txt_sz.y) * 0.5f),
+                    txt_col, "重新扫描");
+        if (Fonts::Small) ImGui::PopFont();
+    }
 
     // =========================================================================
-    // 8. 重新扫描二次确认模态弹窗
+    // 8. 模态确认弹窗
     // =========================================================================
     if (show_rescan_confirm_modal_) {
         renderRescanConfirmModal(ImVec2((p_min.x + p_max.x) * 0.5f, (p_min.y + p_max.y) * 0.5f));
+    }
+    if (show_delete_confirm_modal_) {
+        renderDeleteConfirmModal(ImVec2((p_min.x + p_max.x) * 0.5f, (p_min.y + p_max.y) * 0.5f), playlists);
     }
 }
 
@@ -857,4 +976,169 @@ void ScanMusicWidget::renderRescanConfirmModal(ImVec2 center) {
 
     ImGui::PopStyleVar(3);
     ImGui::PopStyleColor(2);
+}
+
+void ScanMusicWidget::renderDeleteConfirmModal(ImVec2 center, std::vector<Playlist>& playlists) {
+    ImGuiIO& io = ImGui::GetIO();
+
+    // 1. 全透明交互遮罩 (拦截底层鼠标点击，底层视觉 100% 通透保留)
+    ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
+    ImGui::SetNextWindowSize(io.DisplaySize);
+    ImGuiWindowFlags backdrop_flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                                      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+                                      ImGuiWindowFlags_NoBackground;
+    if (ImGui::Begin("##DeleteModalBackdrop", nullptr, backdrop_flags)) {
+        ImGui::InvisibleButton("##DeleteBackdropClickBlocker", io.DisplaySize);
+        if (ImGui::IsItemClicked()) {
+            show_delete_confirm_modal_ = false;
+        }
+    }
+    ImGui::End();
+
+    // 2. 居中模态对话框尺寸与几何排版
+    const float modal_w = 420.0f;
+    const float modal_h = 200.0f;
+    const float modal_x = center.x - modal_w * 0.5f;
+    const float modal_y = center.y - modal_h * 0.5f;
+
+    ImGui::SetNextWindowPos(ImVec2(modal_x, modal_y));
+    ImGui::SetNextWindowSize(ImVec2(modal_w, modal_h));
+
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                             ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+                             ImGuiWindowFlags_NoCollapse;
+
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, IM_COL32(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_Border, IM_COL32(0, 0, 0, 0));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 16.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(24.0f, 20.0f));
+
+    if (ImGui::Begin("##DeleteConfirmModalDialog", nullptr, flags)) {
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        ImVec2 p_min = ImGui::GetWindowPos();
+        ImVec2 p_max(p_min.x + modal_w, p_min.y + modal_h);
+
+        // 柔和暗影与毛玻璃底板
+        dl->AddRectFilled(ImVec2(p_min.x - 2.0f, p_min.y + 4.0f),
+                          ImVec2(p_max.x + 2.0f, p_max.y + 14.0f),
+                          IM_COL32(0, 0, 0, 120), 18.0f);
+        GlassCardRenderer::drawFrosted(dl, p_min, p_max, 16.0f);
+
+        // 标题 (带警示红小标记)
+        if (Fonts::Medium) ImGui::PushFont(Fonts::Medium);
+        ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.45f, 1.0f), "删除音乐文件");
+        if (Fonts::Medium) ImGui::PopFont();
+
+        ImGui::Dummy(ImVec2(0.0f, 8.0f));
+
+        // 提示说明文案
+        if (Fonts::Small) ImGui::PushFont(Fonts::Small);
+        char confirm_text[128];
+        std::snprintf(confirm_text, sizeof(confirm_text), "确定要永久删除选中的 %zu 首音乐文件吗？",
+                      selected_track_ids_.size());
+        ImGui::TextColored(ImVec4(0.92f, 0.94f, 0.98f, 0.95f), "%s", confirm_text);
+        ImGui::Spacing();
+        ImGui::TextColored(ImVec4(0.85f, 0.45f, 0.45f, 0.95f),
+                           "注意：此操作将从本地磁盘永久删除音频源文件，该操作不可撤销！");
+        if (Fonts::Small) ImGui::PopFont();
+
+        ImGui::Dummy(ImVec2(0.0f, 16.0f));
+
+        // 底部按钮栏：取消 / 确认删除
+        const float btn_w = 110.0f;
+        const float btn_h = 34.0f;
+        ImGui::SetCursorPosX(modal_w - 24.0f - btn_w * 2.0f - 12.0f);
+
+        // 1. 取消按钮
+        ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(40, 46, 60, 180));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(52, 60, 78, 220));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(65, 75, 96, 250));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
+        if (ImGui::Button("取消", ImVec2(btn_w, btn_h)) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+            show_delete_confirm_modal_ = false;
+        }
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor(3);
+
+        ImGui::SameLine(0.0f, 12.0f);
+
+        // 2. 确认删除按钮 (红色警示色)
+        ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(215, 45, 60, 230));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(245, 55, 75, 255));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(185, 30, 45, 255));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
+
+        if (ImGui::Button("确认删除", ImVec2(btn_w, btn_h)) || ImGui::IsKeyPressed(ImGuiKey_Enter)) {
+            executeDeleteSelectedTracks(playlists);
+        }
+
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor(3);
+    }
+    ImGui::End();
+
+    ImGui::PopStyleVar(3);
+    ImGui::PopStyleColor(2);
+}
+
+void ScanMusicWidget::executeDeleteSelectedTracks(std::vector<Playlist>& playlists) {
+    if (selected_track_ids_.empty()) {
+        show_delete_confirm_modal_ = false;
+        return;
+    }
+
+    auto& scanner = MusicScanManager::getInstance();
+    auto all_tracks = scanner.getScannedTracks();
+    std::unordered_set<uint64_t> ids_to_delete = selected_track_ids_;
+    std::unordered_set<std::string> paths_to_delete;
+    std::vector<Track> to_delete;
+
+    for (const auto& track : all_tracks) {
+        if (ids_to_delete.count(track.id) > 0) {
+            to_delete.push_back(track);
+            if (!track.file_path.empty()) {
+                paths_to_delete.insert(track.file_path);
+            }
+        }
+    }
+
+    // 1. 若当前正在播放即将被删除的曲目，立即停止播放
+    auto& player = PlayerAdmin::getInstance();
+    auto cur_opt = player.getCurrentTrack();
+    if (cur_opt.has_value()) {
+        if (ids_to_delete.count(cur_opt->id) > 0 || paths_to_delete.count(cur_opt->file_path) > 0) {
+            player.stop();
+        }
+    }
+
+    // 2. 物理删除磁盘中的源文件
+    for (const auto& track : to_delete) {
+        if (!track.file_path.empty()) {
+            std::error_code ec;
+            if (std::filesystem::exists(track.file_path, ec)) {
+                std::filesystem::remove(track.file_path, ec);
+                if (ec) {
+                    std::cerr << "[ScanMusicWidget] 删除源文件失败: " << track.file_path
+                              << " (" << ec.message() << ")" << std::endl;
+                } else {
+                    std::cout << "[ScanMusicWidget] 已从磁盘删除源文件: " << track.file_path << std::endl;
+                }
+            }
+        }
+    }
+
+    // 3. 从扫描曲库管理器与 SQLite 数据库中移除
+    scanner.removeTracks(ids_to_delete, paths_to_delete);
+
+    // 4. 同步从所有播放列表中移除该曲目并持久化
+    for (auto& pl : playlists) {
+        pl.removeTracksByIds(ids_to_delete, paths_to_delete);
+    }
+    MusicDatabase::getInstance().savePlaylists(playlists);
+
+    // 5. 退出编辑模式并重置状态
+    selected_track_ids_.clear();
+    is_edit_mode_ = false;
+    show_delete_confirm_modal_ = false;
 }

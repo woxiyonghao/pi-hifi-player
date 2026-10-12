@@ -24,11 +24,13 @@ public:
     // size: 卡片总尺寸 (默认 150 × 225)
     // track: 曲目元数据实体模型
     // category_tag: 可选分类标签 (如 "Studio Master"、"流行热播"，为 nullptr 时自动忽略)
-    // 返回值: 是否被用户点击 (true 代表触发点击播放，内置触控拖拽防误触过滤)
-    static bool render(ImDrawList* dl, ImVec2 pos, ImVec2 size, const Track& track, const char* category_tag = nullptr);
+    // 返回值: 是否被用户点击 (true 代表触发点击，内置触控拖拽防误触过滤)
+    static bool render(ImDrawList* dl, ImVec2 pos, ImVec2 size, const Track& track, const char* category_tag = nullptr,
+                       bool is_edit_mode = false, bool is_selected = false);
 
     // 便捷重载：自动获取当前 ImGui 光标所在屏幕位置 (GetCursorScreenPos)
-    static bool render(ImDrawList* dl, ImVec2 size, const Track& track, const char* category_tag = nullptr);
+    static bool render(ImDrawList* dl, ImVec2 size, const Track& track, const char* category_tag = nullptr,
+                       bool is_edit_mode = false, bool is_selected = false);
 
     // 辅助工具：自动计算文字宽度并生成末尾带 "..." 的截断文本 (支持 UTF-8 多字节安全截断)
     static std::string truncateTextWithEllipsis(const std::string& text, float max_width);

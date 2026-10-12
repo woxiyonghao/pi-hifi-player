@@ -65,7 +65,7 @@ void TerminalView::executeCommand(const std::string& cmd) {
     worker_thread_ = std::thread([this, cmd]() {
         FILE* pipe = popen((cmd + " 2>&1").c_str(), "r");
         if (!pipe) {
-            appendLine("❌ 无法启动子进程执行该指令", TermLineType::Error);
+            appendLine("无法启动子进程执行该指令", TermLineType::Error);
             is_running_ = false;
             return;
         }

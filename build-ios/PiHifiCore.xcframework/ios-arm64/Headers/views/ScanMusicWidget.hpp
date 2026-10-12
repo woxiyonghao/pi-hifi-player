@@ -5,6 +5,7 @@
 #include "tools/MusicScanManager.hpp"
 #include <vector>
 #include <string>
+#include <unordered_set>
 
 #include "widgets/MusicItem.h"
 
@@ -46,6 +47,11 @@ private:
     float anim_timer_ = 0.0f; // 驱动待机呼吸与悬浮的连续时间基准
     void drawSectionHeader(ImDrawList* dl, ImVec2 pos, const char* title, const char* subtitle, size_t track_count);
     void renderRescanConfirmModal(ImVec2 center);
+    void renderDeleteConfirmModal(ImVec2 center, std::vector<Playlist>& playlists);
+    void executeDeleteSelectedTracks(std::vector<Playlist>& playlists);
 
+    bool is_edit_mode_ = false;
+    std::unordered_set<uint64_t> selected_track_ids_;
     bool show_rescan_confirm_modal_ = false;
+    bool show_delete_confirm_modal_ = false;
 };

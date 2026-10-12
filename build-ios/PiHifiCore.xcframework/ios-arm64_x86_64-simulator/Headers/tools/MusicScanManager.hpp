@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <mutex>
 #include <optional>
+#include <unordered_set>
 
 // ==============================================================================
 // 1. 扫描状态枚举
@@ -67,6 +68,9 @@ public:
 
     // 从数据库中恢复上次扫描的曲目
     void loadFromDatabase();
+
+    // 批量移除指定曲目并自动更新持久化数据库
+    void removeTracks(const std::unordered_set<uint64_t>& ids, const std::unordered_set<std::string>& paths);
 
     // -------------------------------------------------------------------------
     // 状态查询接口 (线程安全)

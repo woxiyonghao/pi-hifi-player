@@ -67,6 +67,24 @@ void MusicScanManager::loadFromDatabase() {
     }
 }
 
+void MusicScanManager::removeTracks(const std::unordered_set<uint64_t>& ids,
+                                    const std::unordered_set<std::string>& paths) {
+    std::vector<Track> remaining;
+    {
+        std::lock_guard lock(mutex_);
+        std::erase_if(scanned_tracks_, [&](const Track& t) {
+            return (t.id != 0 && ids.count(t.id) > 0) ||
+                   (!t.file_path.empty() && paths.count(t.file_path) > 0);
+        });
+        if (scanned_tracks_.empty()) {
+            state_ = ScanState::Idle;
+        }
+        remaining = scanned_tracks_;
+    }
+    MusicDatabase::getInstance().saveScannedTracks(remaining);
+    std::cout << "[MusicScanManager] 批量删除曲目完成，剩余曲目: " << remaining.size() << " 首。" << std::endl;
+}
+
 size_t MusicScanManager::getFoundCount() const {
     std::lock_guard lock(mutex_);
     return scanned_tracks_.size();
