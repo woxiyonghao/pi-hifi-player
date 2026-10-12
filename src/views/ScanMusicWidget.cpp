@@ -279,6 +279,19 @@ void ScanMusicWidget::render(ImDrawList* dl, ImVec2 p_min, ImVec2 p_max, std::ve
 
     ScanState state = MusicScanManager::getInstance().getState();
 
+    // 关键自愈：如果当前处于待机状态，但此前已有扫描结果或持久化数据库中存有曲目，自动恢复至已完成展示态
+    if (state == ScanState::Idle) {
+        if (MusicScanManager::getInstance().getFoundCount() > 0) {
+            state = ScanState::Completed;
+        } else {
+            auto cached = MusicDatabase::getInstance().loadScannedTracks();
+            if (!cached.empty()) {
+                MusicScanManager::getInstance().loadFromDatabase();
+                state = MusicScanManager::getInstance().getState();
+            }
+        }
+    }
+
     // 状态机分发
     if (state == ScanState::Scanning) {
         is_edit_mode_ = false;
@@ -579,7 +592,19 @@ void ScanMusicWidget::drawSectionHeader(ImDrawList* dl, ImVec2 pos, const char* 
 void ScanMusicWidget::renderCompletedState([[maybe_unused]] ImDrawList* dl, ImVec2 p_min, ImVec2 p_max,
                                            std::vector<Playlist>& playlists) {
     auto& scanner = MusicScanManager::getInstance();
-    const auto scanned_tracks = scanner.getScannedTracks();
+    auto scanned_tracks = scanner.getScannedTracks();
+    if (scanned_tracks.empty()) {
+        scanned_tracks = MusicDatabase::getInstance().loadScannedTracks();
+        if (!scanned_tracks.empty()) {
+            scanner.loadFromDatabase();
+        }
+    }
+
+    if (scanned_tracks.empty()) {
+        ImVec2 center((p_min.x + p_max.x) * 0.5f, (p_min.y + p_max.y) * 0.5f);
+        renderIdleState(dl, center, playlists);
+        return;
+    }
 
     // 1. 按格式分流曲目
     std::map<AudioFormat, std::vector<Track>> format_buckets;

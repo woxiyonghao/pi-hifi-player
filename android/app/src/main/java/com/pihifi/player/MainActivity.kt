@@ -84,35 +84,28 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun getExternalMusicDir(): String {
-        // 1. 优先使用应用专属外部存储目录 (位于 /storage/emulated/0/Android/data/com.pihifi.player/files/Music)
-        // 该目录拥有设备全部外部存储容量(上百GB)，且在 Android 10/11/12/13/14+ 下原生支持 POSIX C++ 无权限直接创建/写入文件！
+        // 1. 优先使用系统公共音乐目录 (/storage/emulated/0/Music)
+        val pubMusic = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC)
+        if (pubMusic != null && (pubMusic.exists() || pubMusic.mkdirs())) {
+            return pubMusic.absolutePath
+        }
+
+        // 2. 其次使用外部存储根目录 (/storage/emulated/0)
+        val extStorage = Environment.getExternalStorageDirectory()
+        if (extStorage != null && extStorage.exists()) {
+            return extStorage.absolutePath
+        }
+
+        // 3. 再次使用应用专属外部存储目录 (位于 /storage/emulated/0/Android/data/com.pihifi.player/files/Music)
         val appExtMusic = getExternalFilesDir(Environment.DIRECTORY_MUSIC)
         if (appExtMusic != null) {
             if (!appExtMusic.exists()) {
                 appExtMusic.mkdirs()
             }
-            try {
-                val testFile = File(appExtMusic, ".probe_write")
-                if (testFile.createNewFile()) {
-                    testFile.delete()
-                    return appExtMusic.absolutePath
-                }
-            } catch (_: Exception) {}
+            return appExtMusic.absolutePath
         }
 
-        // 2. 检查公共 Music 目录 (/storage/emulated/0/Music) 是否具备写入权限 (例如 Android 9 及以下或已授权 MANAGE_EXTERNAL_STORAGE)
-        val pubMusic = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC)
-        if (pubMusic.exists() || pubMusic.mkdirs()) {
-            try {
-                val testFile = File(pubMusic, ".probe_write")
-                if (testFile.createNewFile()) {
-                    testFile.delete()
-                    return pubMusic.absolutePath
-                }
-            } catch (_: Exception) {}
-        }
-
-        // 3. 保底内部沙盒目录
+        // 4. 保底内部沙盒目录
         val internalMusic = File(filesDir, "Music").apply { mkdirs() }
         return internalMusic.absolutePath
     }

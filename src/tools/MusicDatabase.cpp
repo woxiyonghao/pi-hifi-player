@@ -100,40 +100,58 @@ bool MusicDatabase::init(const std::string& db_path) {
     }
 
     // 检查并升级旧版 scanned_tracks 表结构 (迁移 UNIQUE 约束与无损补齐 CUE 字段)
+    bool needs_unique_migration = false;
     sqlite3_stmt* check_stmt = nullptr;
     if (sqlite3_prepare_v2(db_, "SELECT sql FROM sqlite_master WHERE type='table' AND name='scanned_tracks';", -1, &check_stmt, nullptr) == SQLITE_OK) {
         if (sqlite3_step(check_stmt) == SQLITE_ROW) {
             const unsigned char* sql_text = sqlite3_column_text(check_stmt, 0);
             std::string schema_sql = sql_text ? reinterpret_cast<const char*>(sql_text) : "";
-            if (schema_sql.find("UNIQUE") != std::string::npos || schema_sql.find("start_time_sec") == std::string::npos) {
-                std::cout << "[MusicDatabase] 检测到旧版数据库结构，正在无损升级 scanned_tracks..." << std::endl;
-                const char* migrate_sql = R"(
-                    CREATE TABLE IF NOT EXISTS scanned_tracks_new (
-                        id INTEGER PRIMARY KEY,
-                        title TEXT NOT NULL,
-                        artist TEXT NOT NULL,
-                        album TEXT NOT NULL,
-                        file_path TEXT NOT NULL,
-                        format INTEGER NOT NULL,
-                        sample_rate INTEGER NOT NULL,
-                        bit_depth INTEGER NOT NULL,
-                        duration_sec INTEGER NOT NULL,
-                        start_time_sec REAL DEFAULT 0.0,
-                        end_time_sec REAL DEFAULT 0.0,
-                        cue_path TEXT DEFAULT '',
-                        track_number INTEGER DEFAULT 0,
-                        is_cue_track INTEGER DEFAULT 0
-                    );
-                    INSERT INTO scanned_tracks_new (id, title, artist, album, file_path, format, sample_rate, bit_depth, duration_sec)
-                    SELECT id, title, artist, album, file_path, format, sample_rate, bit_depth, duration_sec FROM scanned_tracks;
-                    DROP TABLE scanned_tracks;
-                    ALTER TABLE scanned_tracks_new RENAME TO scanned_tracks;
-                )";
-                sqlite3_exec(db_, migrate_sql, nullptr, nullptr, nullptr);
+            if (schema_sql.find("UNIQUE") != std::string::npos) {
+                needs_unique_migration = true;
             }
         }
         sqlite3_finalize(check_stmt);
+        check_stmt = nullptr;
     }
+
+    if (needs_unique_migration) {
+        std::cout << "[MusicDatabase] 检测到旧版 UNIQUE 约束，正在无损升级 scanned_tracks..." << std::endl;
+        sqlite3_exec(db_, "DROP TABLE IF EXISTS scanned_tracks_new;", nullptr, nullptr, nullptr);
+        const char* migrate_sql = R"(
+            CREATE TABLE scanned_tracks_new (
+                id INTEGER PRIMARY KEY,
+                title TEXT NOT NULL,
+                artist TEXT NOT NULL,
+                album TEXT NOT NULL,
+                file_path TEXT NOT NULL,
+                format INTEGER NOT NULL,
+                sample_rate INTEGER NOT NULL,
+                bit_depth INTEGER NOT NULL,
+                duration_sec INTEGER NOT NULL,
+                start_time_sec REAL DEFAULT 0.0,
+                end_time_sec REAL DEFAULT 0.0,
+                cue_path TEXT DEFAULT '',
+                track_number INTEGER DEFAULT 0,
+                is_cue_track INTEGER DEFAULT 0
+            );
+            INSERT OR IGNORE INTO scanned_tracks_new (id, title, artist, album, file_path, format, sample_rate, bit_depth, duration_sec)
+            SELECT id, title, artist, album, file_path, format, sample_rate, bit_depth, duration_sec FROM scanned_tracks;
+            DROP TABLE scanned_tracks;
+            ALTER TABLE scanned_tracks_new RENAME TO scanned_tracks;
+        )";
+        char* err = nullptr;
+        if (sqlite3_exec(db_, migrate_sql, nullptr, nullptr, &err) != SQLITE_OK) {
+            std::cerr << "[MusicDatabase] scanned_tracks 迁移异常: " << (err ? err : "未知") << std::endl;
+            sqlite3_free(err);
+        }
+    }
+
+    // 双重安全保障：无损补齐 scanned_tracks 缺失字段 (适用于任何早期版本的数据库)
+    sqlite3_exec(db_, "ALTER TABLE scanned_tracks ADD COLUMN start_time_sec REAL DEFAULT 0.0;", nullptr, nullptr, nullptr);
+    sqlite3_exec(db_, "ALTER TABLE scanned_tracks ADD COLUMN end_time_sec REAL DEFAULT 0.0;", nullptr, nullptr, nullptr);
+    sqlite3_exec(db_, "ALTER TABLE scanned_tracks ADD COLUMN cue_path TEXT DEFAULT '';", nullptr, nullptr, nullptr);
+    sqlite3_exec(db_, "ALTER TABLE scanned_tracks ADD COLUMN track_number INTEGER DEFAULT 0;", nullptr, nullptr, nullptr);
+    sqlite3_exec(db_, "ALTER TABLE scanned_tracks ADD COLUMN is_cue_track INTEGER DEFAULT 0;", nullptr, nullptr, nullptr);
 
     // 升级 playlist_tracks
     sqlite3_exec(db_, "ALTER TABLE playlist_tracks ADD COLUMN start_time_sec REAL DEFAULT 0.0;", nullptr, nullptr, nullptr);
@@ -160,6 +178,11 @@ bool MusicDatabase::saveScannedTracks(const std::vector<Track>& tracks) {
     if (!init()) return false;
     std::lock_guard<std::mutex> lock(mutex_);
 
+    if (tracks.empty()) {
+        std::cout << "[MusicDatabase] 传入扫描曲目列表为空，跳过重写以保护已持久化曲库。" << std::endl;
+        return true;
+    }
+
     sqlite3_exec(db_, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr);
 
     // 清空现有曲目，全量写入最新扫描结果
@@ -172,6 +195,7 @@ bool MusicDatabase::saveScannedTracks(const std::vector<Track>& tracks) {
 
     sqlite3_stmt* stmt = nullptr;
     if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        std::cerr << "[MusicDatabase] saveScannedTracks prepare 失败: " << sqlite3_errmsg(db_) << std::endl;
         sqlite3_exec(db_, "ROLLBACK;", nullptr, nullptr, nullptr);
         return false;
     }
@@ -244,6 +268,7 @@ std::vector<Track> MusicDatabase::loadScannedTracks() {
     const char* sql = "SELECT id, title, artist, album, file_path, format, sample_rate, bit_depth, duration_sec, start_time_sec, end_time_sec, cue_path, track_number, is_cue_track FROM scanned_tracks ORDER BY id ASC;";
     sqlite3_stmt* stmt = nullptr;
     if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        std::cerr << "[MusicDatabase] loadScannedTracks prepare 失败: " << sqlite3_errmsg(db_) << std::endl;
         return tracks;
     }
 

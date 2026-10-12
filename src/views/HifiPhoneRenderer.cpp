@@ -6,7 +6,11 @@
 HifiPhoneRenderer::HifiPhoneRenderer() {}
 
 void HifiPhoneRenderer::init() {
-    cached_tracks_ = MusicDatabase::getInstance().loadScannedTracks();
+    MusicScanManager::getInstance().loadFromDatabase();
+    cached_tracks_ = MusicScanManager::getInstance().getScannedTracks();
+    if (cached_tracks_.empty()) {
+        cached_tracks_ = MusicDatabase::getInstance().loadScannedTracks();
+    }
     cached_playlists_ = MusicDatabase::getInstance().loadPlaylists();
     data_loaded_ = true;
 }
@@ -143,10 +147,26 @@ void HifiPhoneRenderer::renderLibraryTab(float x, float y, float w, float h) {
     ImVec2 card_max(x + w, y + h);
     GlassCardRenderer::drawCard(dl, card_min, card_max, 14.0f, "phone_library");
 
+    // 动态同步最新扫描或数据库曲目
+    auto current_scanned = MusicScanManager::getInstance().getScannedTracks();
+    if (!current_scanned.empty()) {
+        cached_tracks_ = current_scanned;
+    } else if (cached_tracks_.empty()) {
+        cached_tracks_ = MusicDatabase::getInstance().loadScannedTracks();
+        if (!cached_tracks_.empty()) {
+            MusicScanManager::getInstance().loadFromDatabase();
+        }
+    }
+
     // 头部：曲目总数与重新扫描
     float pad = 12.0f;
     char count_str[64];
-    std::snprintf(count_str, sizeof(count_str), "全部曲目 (%zu 首)", cached_tracks_.size());
+    bool is_scanning = MusicScanManager::getInstance().isScanning();
+    if (is_scanning) {
+        std::snprintf(count_str, sizeof(count_str), "正在检索曲库 (%zu 首)...", cached_tracks_.size());
+    } else {
+        std::snprintf(count_str, sizeof(count_str), "全部曲目 (%zu 首)", cached_tracks_.size());
+    }
 
     if (Fonts::Medium) ImGui::PushFont(Fonts::Medium);
     dl->AddText(ImVec2(x + pad, y + pad), UIConfig::Color::TextActive, count_str);
@@ -159,8 +179,9 @@ void HifiPhoneRenderer::renderLibraryTab(float x, float y, float w, float h) {
     float scan_btn_y = y + pad - 2.0f;
     ImGui::SetCursorScreenPos(ImVec2(scan_btn_x, scan_btn_y));
     if (ImGui::InvisibleButton("##PhoneScanBtn", ImVec2(scan_btn_w, scan_btn_h))) {
-        MusicScanManager::getInstance().startScan();
-        cached_tracks_ = MusicDatabase::getInstance().loadScannedTracks();
+        if (!is_scanning) {
+            MusicScanManager::getInstance().startScan();
+        }
     }
     bool hov_scan = ImGui::IsItemHovered();
     dl->AddRectFilled(ImVec2(scan_btn_x, scan_btn_y), ImVec2(scan_btn_x + scan_btn_w, scan_btn_y + scan_btn_h),
@@ -168,9 +189,10 @@ void HifiPhoneRenderer::renderLibraryTab(float x, float y, float w, float h) {
     dl->AddRect(ImVec2(scan_btn_x, scan_btn_y), ImVec2(scan_btn_x + scan_btn_w, scan_btn_y + scan_btn_h),
                 UIConfig::Color::GlassBorder, 13.0f, 0, 1.0f);
     if (Fonts::Small) ImGui::PushFont(Fonts::Small);
-    ImVec2 sb_sz = ImGui::CalcTextSize("扫描");
+    const char* sb_label = is_scanning ? "扫描中" : "扫描";
+    ImVec2 sb_sz = ImGui::CalcTextSize(sb_label);
     dl->AddText(ImVec2(scan_btn_x + (scan_btn_w - sb_sz.x) * 0.5f, scan_btn_y + (scan_btn_h - sb_sz.y) * 0.5f),
-                UIConfig::Color::TextActive, "扫描");
+                UIConfig::Color::TextActive, sb_label);
     if (Fonts::Small) ImGui::PopFont();
 
     // 歌曲滚动列表容器

@@ -61,11 +61,13 @@ void MusicScanManager::clear() {
 
 void MusicScanManager::loadFromDatabase() {
     auto cached = MusicDatabase::getInstance().loadScannedTracks();
+    std::lock_guard lock(mutex_);
     if (!cached.empty()) {
-        std::lock_guard lock(mutex_);
         scanned_tracks_ = std::move(cached);
         state_ = ScanState::Completed;
         std::cout << "[MusicScanManager] 从本地数据库恢复已扫描曲目 " << scanned_tracks_.size() << " 首。" << std::endl;
+    } else {
+        std::cout << "[MusicScanManager] 本地数据库中暂无已保存的扫描曲目。" << std::endl;
     }
 }
 
@@ -212,13 +214,87 @@ Track MusicScanManager::parseBasicMetadata(uint64_t id, const std::filesystem::d
 void MusicScanManager::scanWorker(std::stop_token stop_token, std::filesystem::path root_path) {
     std::error_code ec;
 
-    // 1. 基础路径有效性检查 (若目录不存在则自动尝试创建，确保跨机器兼容)
-    if (!std::filesystem::exists(root_path, ec)) {
-        std::filesystem::create_directories(root_path, ec);
+    // 1. 跨平台多根目录智能收集
+    std::vector<std::filesystem::path> candidate_roots;
+
+    if (!root_path.empty()) {
+        std::error_code dummy_ec;
+        if (!std::filesystem::exists(root_path, dummy_ec)) {
+            std::filesystem::create_directories(root_path, dummy_ec);
+        }
+        if (std::filesystem::is_directory(root_path, dummy_ec)) {
+            candidate_roots.push_back(root_path);
+        }
     }
 
-    if (!std::filesystem::exists(root_path, ec) || !std::filesystem::is_directory(root_path, ec)) {
-        std::cerr << "[MusicScanManager] 目标路径不存在或非目录: " << root_path << std::endl;
+    std::string default_music_dir = AppConfig::Path::getMusicDir();
+    if (!default_music_dir.empty()) {
+        std::error_code dummy_ec;
+        std::filesystem::path dp(default_music_dir);
+        if (!std::filesystem::exists(dp, dummy_ec)) {
+            std::filesystem::create_directories(dp, dummy_ec);
+        }
+        if (std::filesystem::is_directory(dp, dummy_ec)) {
+            candidate_roots.push_back(dp);
+        }
+    }
+
+#if defined(__ANDROID__)
+    const char* android_candidates[] = {
+        "/storage/emulated/0/Music",
+        "/storage/emulated/0/Download",
+        "/sdcard/Music",
+        "/sdcard/Download",
+        "/storage/emulated/0"
+    };
+    for (const char* p : android_candidates) {
+        std::error_code dummy_ec;
+        std::filesystem::path ap(p);
+        if (std::filesystem::exists(ap, dummy_ec) && std::filesystem::is_directory(ap, dummy_ec)) {
+            candidate_roots.push_back(ap);
+        }
+    }
+#elif defined(HIFI_PLATFORM_RPI) || defined(__linux__)
+    const char* linux_candidates[] = {
+        "/home/pi/Music",
+        "/media/pi",
+        "/media",
+        "/mnt"
+    };
+    for (const char* p : linux_candidates) {
+        std::error_code dummy_ec;
+        std::filesystem::path lp(p);
+        if (std::filesystem::exists(lp, dummy_ec) && std::filesystem::is_directory(lp, dummy_ec)) {
+            candidate_roots.push_back(lp);
+        }
+    }
+#elif defined(__APPLE__)
+#if !TARGET_OS_IPHONE
+    const char* home = std::getenv("HOME");
+    if (home) {
+        std::error_code dummy_ec;
+        std::filesystem::path p_music = std::filesystem::path(home) / "Music";
+        std::filesystem::path p_down = std::filesystem::path(home) / "Downloads";
+        if (std::filesystem::exists(p_music, dummy_ec) && std::filesystem::is_directory(p_music, dummy_ec)) candidate_roots.push_back(p_music);
+        if (std::filesystem::exists(p_down, dummy_ec) && std::filesystem::is_directory(p_down, dummy_ec)) candidate_roots.push_back(p_down);
+    }
+#endif
+#endif
+
+    // 目录去重与规范化
+    std::vector<std::filesystem::path> unique_roots;
+    std::unordered_set<std::string> seen_root_paths;
+    for (const auto& r : candidate_roots) {
+        std::error_code dummy_ec;
+        std::string can = std::filesystem::weakly_canonical(r, dummy_ec).string();
+        if (can.empty()) can = r.string();
+        if (seen_root_paths.insert(can).second) {
+            unique_roots.push_back(r);
+        }
+    }
+
+    if (unique_roots.empty()) {
+        std::cerr << "[MusicScanManager] 目标扫描路径不存在或不可读。" << std::endl;
         state_ = ScanState::Failed;
         if (progress_callback_) {
             progress_callback_({root_path.string(), 0, ScanState::Failed});
@@ -226,51 +302,64 @@ void MusicScanManager::scanWorker(std::stop_token stop_token, std::filesystem::p
         return;
     }
 
-    std::cout << "[MusicScanManager] 开始扫描发烧音乐目录: " << root_path << std::endl;
+    std::cout << "[MusicScanManager] 开始扫描发烧音乐目录 (共 " << unique_roots.size() << " 个根目录)" << std::endl;
     auto start_time = std::chrono::steady_clock::now();
 
-    // 2. 递归遍历，分别收集 .cue 分轨描述单与常规音频文件
+    // 2. 递归遍历各个根目录，分别收集 .cue 分轨描述单与常规音频文件
     std::vector<std::filesystem::directory_entry> cue_entries;
     std::vector<std::filesystem::directory_entry> audio_entries;
+    std::unordered_set<std::string> visited_file_paths;
 
     auto options = std::filesystem::directory_options::skip_permission_denied;
-    auto iter = std::filesystem::recursive_directory_iterator(root_path, options, ec);
-    auto end_iter = std::filesystem::recursive_directory_iterator();
+    for (const auto& current_root : unique_roots) {
+        if (stop_token.stop_requested()) break;
 
-    for (; iter != end_iter; iter.increment(ec)) {
-        if (stop_token.stop_requested()) {
-            std::cout << "[MusicScanManager] 扫描被用户中断。" << std::endl;
-            state_ = ScanState::Cancelled;
-            if (progress_callback_) {
-                std::lock_guard lock(mutex_);
-                progress_callback_({"", scanned_tracks_.size(), ScanState::Cancelled});
+        auto iter = std::filesystem::recursive_directory_iterator(current_root, options, ec);
+        auto end_iter = std::filesystem::recursive_directory_iterator();
+
+        for (; iter != end_iter; iter.increment(ec)) {
+            if (stop_token.stop_requested()) {
+                std::cout << "[MusicScanManager] 扫描被用户中断。" << std::endl;
+                state_ = ScanState::Cancelled;
+                if (progress_callback_) {
+                    std::lock_guard lock(mutex_);
+                    progress_callback_({"", scanned_tracks_.size(), ScanState::Cancelled});
+                }
+                return;
             }
-            return;
-        }
 
-        if (ec) {
-            ec.clear();
-            continue;
-        }
-
-        const auto& entry = *iter;
-
-        // 智能剪枝：跳过隐藏目录或系统大仓
-        if (entry.is_directory(ec)) {
-            std::string dir_name = entry.path().filename().string();
-            if ((!dir_name.empty() && dir_name.front() == '.') || dir_name == "Library" || dir_name == "node_modules" ||
-                dir_name == "Applications" || dir_name == "VirtualBox VMs") {
-                iter.disable_recursion_pending();
+            if (ec) {
+                ec.clear();
                 continue;
             }
-        } else if (entry.is_regular_file(ec)) {
-            std::string ext = entry.path().extension().string();
-            std::string ext_lower = ext;
-            std::transform(ext_lower.begin(), ext_lower.end(), ext_lower.begin(), ::tolower);
-            if (ext_lower == ".cue") {
-                cue_entries.push_back(entry);
-            } else if (AudioFormatUtils::isSupported(ext)) {
-                audio_entries.push_back(entry);
+
+            const auto& entry = *iter;
+
+            // 智能剪枝：跳过隐藏目录或系统大仓
+            if (entry.is_directory(ec)) {
+                std::string dir_name = entry.path().filename().string();
+                if ((!dir_name.empty() && dir_name.front() == '.') || dir_name == "Library" || dir_name == "node_modules" ||
+                    dir_name == "Applications" || dir_name == "VirtualBox VMs" || dir_name == "Android") {
+                    iter.disable_recursion_pending();
+                    continue;
+                }
+            } else if (entry.is_regular_file(ec)) {
+                std::string can_path = std::filesystem::weakly_canonical(entry.path(), ec).string();
+                if (can_path.empty()) can_path = entry.path().string();
+                if (visited_file_paths.count(can_path) > 0 || visited_file_paths.count(entry.path().string()) > 0) {
+                    continue;
+                }
+                visited_file_paths.insert(can_path);
+                visited_file_paths.insert(entry.path().string());
+
+                std::string ext = entry.path().extension().string();
+                std::string ext_lower = ext;
+                std::transform(ext_lower.begin(), ext_lower.end(), ext_lower.begin(), ::tolower);
+                if (ext_lower == ".cue") {
+                    cue_entries.push_back(entry);
+                } else if (AudioFormatUtils::isSupported(ext)) {
+                    audio_entries.push_back(entry);
+                }
             }
         }
     }
@@ -295,12 +384,16 @@ void MusicScanManager::scanWorker(std::stop_token stop_token, std::filesystem::p
             if (cue_trk.resolved_audio_path.empty()) continue;
 
             cue_handled_audio_paths.insert(cue_trk.resolved_audio_path);
+            std::error_code dummy_ec;
+            std::string norm_audio = std::filesystem::weakly_canonical(cue_trk.resolved_audio_path, dummy_ec).string();
+            if (!norm_audio.empty()) {
+                cue_handled_audio_paths.insert(norm_audio);
+            }
 
             if (audio_meta_cache.find(cue_trk.resolved_audio_path) == audio_meta_cache.end()) {
                 std::filesystem::path audio_p(cue_trk.resolved_audio_path);
                 std::string a_ext = audio_p.extension().string();
                 auto fmt = AudioFormatUtils::getAudioFormat(a_ext).value_or(AudioFormat::UNKNOWN);
-                std::error_code dummy_ec;
                 std::filesystem::directory_entry d_entry(audio_p, dummy_ec);
                 Track base_meta = parseBasicMetadata(0, d_entry, fmt);
                 audio_meta_cache[cue_trk.resolved_audio_path] = base_meta;
@@ -363,7 +456,10 @@ void MusicScanManager::scanWorker(std::stop_token stop_token, std::filesystem::p
         }
 
         std::string full_path = entry.path().string();
-        if (cue_handled_audio_paths.count(full_path) > 0) {
+        std::error_code dummy_ec;
+        std::string norm_entry = std::filesystem::weakly_canonical(entry.path(), dummy_ec).string();
+        if (cue_handled_audio_paths.count(full_path) > 0 ||
+            (!norm_entry.empty() && cue_handled_audio_paths.count(norm_entry) > 0)) {
             continue;
         }
 

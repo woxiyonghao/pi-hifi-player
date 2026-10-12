@@ -5,6 +5,7 @@
 #include "widgets/GlassCardRenderer.hpp"
 #include "widgets/DrawUtils.hpp"
 #include "tools/MusicScanManager.hpp"
+#include "tools/MusicDatabase.hpp"
 #include "tools/PlayerAdmin.hpp"
 #include <algorithm>
 #include <cmath>
@@ -37,6 +38,12 @@ void AllMusicPlaylistView::render(float x, float y, float w, float h, const std:
     ImVec2 card_max(x + w - margin_x, y + h - UIConfig::Layout::BottomBarOffset);
 
     auto tracks = MusicScanManager::getInstance().getScannedTracks();
+    if (tracks.empty()) {
+        tracks = MusicDatabase::getInstance().loadScannedTracks();
+        if (!tracks.empty()) {
+            MusicScanManager::getInstance().loadFromDatabase();
+        }
+    }
     if (tracks.empty()) {
         for (const auto& pl : playlists) {
             for (const auto& t : pl.getTracks()) {
