@@ -182,22 +182,100 @@ void MusicDatabase::close() {
     is_initialized_ = false;
 }
 
+bool MusicDatabase::deleteDatabase() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (db_) {
+        sqlite3_close(db_);
+        db_ = nullptr;
+    }
+    is_initialized_ = false;
+
+    std::string config_dir = AppConfig::Path::getConfigDir();
+    std::string db_file = config_dir + "/library.db";
+    std::string wal_file = config_dir + "/library.db-wal";
+    std::string shm_file = config_dir + "/library.db-shm";
+
+    std::error_code ec;
+    std::filesystem::remove(db_file, ec);
+    std::filesystem::remove(wal_file, ec);
+    std::filesystem::remove(shm_file, ec);
+
+    std::cout << "[MusicDatabase] 用户重新扫描：已物理彻底删除旧 SQLite 数据库及其缓存 (" << db_file << ")" << std::endl;
+    return true;
+}
+
+bool MusicDatabase::recreateScannedTracksTable() {
+    if (!init()) return false;
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    const char* ddl = R"(
+        DROP TABLE IF EXISTS scanned_tracks;
+        DROP TABLE IF EXISTS scanned_tracks_new;
+        CREATE TABLE scanned_tracks (
+            id INTEGER PRIMARY KEY,
+            title TEXT NOT NULL,
+            artist TEXT NOT NULL,
+            album TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            format INTEGER NOT NULL,
+            sample_rate INTEGER NOT NULL,
+            bit_depth INTEGER NOT NULL,
+            duration_sec INTEGER NOT NULL,
+            start_time_sec REAL DEFAULT 0.0,
+            end_time_sec REAL DEFAULT 0.0,
+            cue_path TEXT DEFAULT '',
+            track_number INTEGER DEFAULT 0,
+            is_cue_track INTEGER DEFAULT 0
+        );
+    )";
+
+    char* err_msg = nullptr;
+    int rc = sqlite3_exec(db_, ddl, nullptr, nullptr, &err_msg);
+    if (rc != SQLITE_OK) {
+        std::cerr << "[MusicDatabase] 重建 scanned_tracks 表失败: " << (err_msg ? err_msg : "未知") << std::endl;
+        sqlite3_free(err_msg);
+        return false;
+    }
+    std::cout << "[MusicDatabase] scanned_tracks 表已全新物理重建。" << std::endl;
+    return true;
+}
+
 bool MusicDatabase::saveScannedTracks(const std::vector<Track>& tracks) {
     if (!init()) return false;
     std::lock_guard<std::mutex> lock(mutex_);
 
+    // 每次全量保存时，直接 DROP & CREATE 全新表，彻底杜绝旧约束或脏数据残留
+    const char* ddl = R"(
+        DROP TABLE IF EXISTS scanned_tracks;
+        DROP TABLE IF EXISTS scanned_tracks_new;
+        CREATE TABLE scanned_tracks (
+            id INTEGER PRIMARY KEY,
+            title TEXT NOT NULL,
+            artist TEXT NOT NULL,
+            album TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            format INTEGER NOT NULL,
+            sample_rate INTEGER NOT NULL,
+            bit_depth INTEGER NOT NULL,
+            duration_sec INTEGER NOT NULL,
+            start_time_sec REAL DEFAULT 0.0,
+            end_time_sec REAL DEFAULT 0.0,
+            cue_path TEXT DEFAULT '',
+            track_number INTEGER DEFAULT 0,
+            is_cue_track INTEGER DEFAULT 0
+        );
+    )";
+    sqlite3_exec(db_, ddl, nullptr, nullptr, nullptr);
+
     if (tracks.empty()) {
-        std::cout << "[MusicDatabase] 传入扫描曲目列表为空，跳过重写以保护已持久化曲库。" << std::endl;
+        std::cout << "[MusicDatabase] 传入扫描曲目列表为空，曲库已重置为空表。" << std::endl;
         return true;
     }
 
     sqlite3_exec(db_, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr);
 
-    // 清空现有曲目，全量写入最新扫描结果
-    sqlite3_exec(db_, "DELETE FROM scanned_tracks;", nullptr, nullptr, nullptr);
-
     const char* sql = R"(
-        INSERT OR REPLACE INTO scanned_tracks (id, title, artist, album, file_path, format, sample_rate, bit_depth, duration_sec, start_time_sec, end_time_sec, cue_path, track_number, is_cue_track)
+        INSERT INTO scanned_tracks (id, title, artist, album, file_path, format, sample_rate, bit_depth, duration_sec, start_time_sec, end_time_sec, cue_path, track_number, is_cue_track)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
     )";
 

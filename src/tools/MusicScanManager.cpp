@@ -33,6 +33,9 @@ bool MusicScanManager::startScan(const std::filesystem::path& root_path) {
         scanned_tracks_.clear();
     }
 
+    // 重新扫描：先彻底物理删除旧数据库及其全部缓存，扫描完成后再全新创建写入
+    MusicDatabase::getInstance().deleteDatabase();
+
     // C++20 std::jthread 使用 lambda 完美接收 stop_token 并调用成员函数
     worker_thread_ =
         std::jthread([this, scan_target](std::stop_token stop_token) { scanWorker(stop_token, scan_target); });
@@ -399,8 +402,10 @@ void MusicScanManager::scanWorker(std::stop_token stop_token, std::filesystem::p
 
             const auto& entry = *iter;
 
-            // 智能剪枝：跳过隐藏目录、系统大仓及非音乐媒体大仓
-            if (entry.is_directory(ec)) {
+            // 智能剪枝：使用独立的 dir_ec，严禁污染外层迭代器的 ec 变量
+            std::error_code dir_ec;
+            bool is_dir = entry.is_directory(dir_ec);
+            if (!dir_ec && is_dir) {
                 std::string dir_name = entry.path().filename().string();
                 if ((!dir_name.empty() && dir_name.front() == '.') ||
                     dir_name == "Android" || dir_name == "DCIM" || dir_name == "Pictures" ||
@@ -411,24 +416,28 @@ void MusicScanManager::scanWorker(std::stop_token stop_token, std::filesystem::p
                     iter.disable_recursion_pending();
                     continue;
                 }
-            } else if (entry.is_regular_file(ec)) {
-                // 关键保护：使用独立的 can_ec，严禁污染外层迭代器的 ec 变量
-                std::error_code can_ec;
-                std::string can_path = std::filesystem::weakly_canonical(entry.path(), can_ec).string();
-                if (can_path.empty()) can_path = entry.path().string();
-                if (visited_file_paths.count(can_path) > 0 || visited_file_paths.count(entry.path().string()) > 0) {
-                    continue;
-                }
-                visited_file_paths.insert(can_path);
-                visited_file_paths.insert(entry.path().string());
+            } else {
+                std::error_code file_ec;
+                bool is_file = entry.is_regular_file(file_ec);
+                if (!file_ec && is_file) {
+                    // 关键保护：使用独立的 can_ec，严禁污染外层迭代器的 ec 变量
+                    std::error_code can_ec;
+                    std::string can_path = std::filesystem::weakly_canonical(entry.path(), can_ec).string();
+                    if (can_path.empty()) can_path = entry.path().string();
+                    if (visited_file_paths.count(can_path) > 0 || visited_file_paths.count(entry.path().string()) > 0) {
+                        continue;
+                    }
+                    visited_file_paths.insert(can_path);
+                    visited_file_paths.insert(entry.path().string());
 
-                std::string ext = entry.path().extension().string();
-                std::string ext_lower = ext;
-                std::transform(ext_lower.begin(), ext_lower.end(), ext_lower.begin(), ::tolower);
-                if (ext_lower == ".cue") {
-                    cue_entries.push_back(entry);
-                } else if (AudioFormatUtils::isSupported(ext)) {
-                    audio_entries.push_back(entry);
+                    std::string ext = entry.path().extension().string();
+                    std::string ext_lower = ext;
+                    std::transform(ext_lower.begin(), ext_lower.end(), ext_lower.begin(), ::tolower);
+                    if (ext_lower == ".cue") {
+                        cue_entries.push_back(entry);
+                    } else if (AudioFormatUtils::isSupported(ext_lower)) {
+                        audio_entries.push_back(entry);
+                    }
                 }
             }
         }

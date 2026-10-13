@@ -298,8 +298,10 @@ std::string CueSheetParser::resolveAudioFile(const std::filesystem::path& cue_di
         std::string clean_lower = clean_name;
         std::transform(clean_lower.begin(), clean_lower.end(), clean_lower.begin(), ::tolower);
 
+        ec.clear();
         for (const auto& entry : std::filesystem::directory_iterator(cue_dir, ec)) {
-            if (!entry.is_regular_file(ec)) continue;
+            std::error_code f_ec;
+            if (!entry.is_regular_file(f_ec)) continue;
             std::string entry_name = entry.path().filename().string();
             std::string entry_lower = entry_name;
             std::transform(entry_lower.begin(), entry_lower.end(), entry_lower.begin(), ::tolower);
@@ -314,8 +316,10 @@ std::string CueSheetParser::resolveAudioFile(const std::filesystem::path& cue_di
         std::string target_stem_lower = target_stem;
         std::transform(target_stem_lower.begin(), target_stem_lower.end(), target_stem_lower.begin(), ::tolower);
 
+        ec.clear();
         for (const auto& entry : std::filesystem::directory_iterator(cue_dir, ec)) {
-            if (!entry.is_regular_file(ec)) continue;
+            std::error_code f_ec;
+            if (!entry.is_regular_file(f_ec)) continue;
             std::string ext = entry.path().extension().string();
             if (AudioFormatUtils::isSupported(ext)) {
                 std::string stem_lower = entry.path().stem().string();
@@ -332,8 +336,10 @@ std::string CueSheetParser::resolveAudioFile(const std::filesystem::path& cue_di
     std::string cue_stem_lower = cue_stem;
     std::transform(cue_stem_lower.begin(), cue_stem_lower.end(), cue_stem_lower.begin(), ::tolower);
 
+    ec.clear();
     for (const auto& entry : std::filesystem::directory_iterator(cue_dir, ec)) {
-        if (!entry.is_regular_file(ec)) continue;
+        std::error_code f_ec;
+        if (!entry.is_regular_file(f_ec)) continue;
         std::string ext = entry.path().extension().string();
         if (AudioFormatUtils::isSupported(ext)) {
             std::string stem_lower = entry.path().stem().string();
@@ -346,8 +352,10 @@ std::string CueSheetParser::resolveAudioFile(const std::filesystem::path& cue_di
 
     // 5. 目录内单一大母带音频自适应匹配 (发烧整轨 CD 经典模式)
     std::vector<std::filesystem::path> supported_audio_files;
+    ec.clear();
     for (const auto& entry : std::filesystem::directory_iterator(cue_dir, ec)) {
-        if (!entry.is_regular_file(ec)) continue;
+        std::error_code f_ec;
+        if (!entry.is_regular_file(f_ec)) continue;
         std::string ext = entry.path().extension().string();
         if (AudioFormatUtils::isSupported(ext)) {
             supported_audio_files.push_back(entry.path());

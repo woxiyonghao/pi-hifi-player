@@ -26,7 +26,9 @@ public:
     // 智能路径自适应与修复 (解决 iOS / iPadOS 每次 Xcode 重新部署导致的 Sandbox UUID 变更)
     static std::string resolveTrackPath(const std::string& path);
 
-    // 扫描曲库持久化接口
+    // 扫描曲库持久化与物理销毁重建接口
+    bool deleteDatabase();
+    bool recreateScannedTracksTable();
     bool saveScannedTracks(const std::vector<Track>& tracks);
     std::vector<Track> loadScannedTracks();
     void clearScannedTracks();
