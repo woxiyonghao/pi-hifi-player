@@ -51,7 +51,10 @@ bool waitForScan(MusicScanManager& scanner) {
 bool containsPhysicalTrack(const std::vector<Track>& tracks, const std::filesystem::path& path,
                            AudioFormat format) {
     for (const auto& track : tracks) {
-        if (!track.is_cue_track && track.file_path == path.string() && track.format == format) {
+        std::error_code ec;
+        bool same_path = (track.file_path == path.string()) ||
+                         std::filesystem::equivalent(track.file_path, path, ec);
+        if (!track.is_cue_track && same_path && track.format == format) {
             return true;
         }
     }
@@ -127,10 +130,15 @@ int main() {
     size_t cue_count = 0;
     size_t physical_wav_count = 0;
     for (const auto& track : tracks) {
-        if (track.is_cue_track && track.cue_path == (cue_dir / "album.cue").string()) {
+        std::error_code ec1, ec2;
+        bool same_cue = (track.cue_path == (cue_dir / "album.cue").string()) ||
+                        std::filesystem::equivalent(track.cue_path, cue_dir / "album.cue", ec1);
+        if (track.is_cue_track && same_cue) {
             ++cue_count;
         }
-        if (!track.is_cue_track && track.file_path == album_wav.string()) {
+        bool same_audio = (track.file_path == album_wav.string()) ||
+                          std::filesystem::equivalent(track.file_path, album_wav, ec2);
+        if (!track.is_cue_track && same_audio) {
             ++physical_wav_count;
         }
     }

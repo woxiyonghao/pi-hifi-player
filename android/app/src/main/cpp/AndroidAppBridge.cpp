@@ -455,3 +455,51 @@ JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* /*reserved*/) {
 }
 
 } // extern "C"
+
+std::vector<std::string> getAndroidMediaStoreAudioPaths() {
+    std::vector<std::string> results;
+    if (!g_android_jvm) return results;
+
+    JNIEnv* env = nullptr;
+    bool need_detach = false;
+    if (g_android_jvm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) {
+        if (g_android_jvm->AttachCurrentThread(&env, nullptr) == JNI_OK && env) {
+            need_detach = true;
+        }
+    }
+    if (!env) return results;
+
+    jclass main_cls = env->FindClass("com/pihifi/player/MainActivity");
+    if (main_cls) {
+        jmethodID mid = env->GetStaticMethodID(main_cls, "queryMediaStoreAudioPaths", "()[Ljava/lang/String;");
+        if (mid) {
+            jobjectArray arr = static_cast<jobjectArray>(env->CallStaticObjectMethod(main_cls, mid));
+            if (arr) {
+                jsize len = env->GetArrayLength(arr);
+                results.reserve(len);
+                for (jsize i = 0; i < len; ++i) {
+                    jstring s = static_cast<jstring>(env->GetObjectArrayElement(arr, i));
+                    if (s) {
+                        const char* c_str = env->GetStringUTFChars(s, nullptr);
+                        if (c_str) {
+                            results.emplace_back(c_str);
+                            env->ReleaseStringUTFChars(s, c_str);
+                        }
+                        env->DeleteLocalRef(s);
+                    }
+                }
+                env->DeleteLocalRef(arr);
+            }
+        }
+        env->DeleteLocalRef(main_cls);
+    }
+
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+    }
+
+    if (need_detach) {
+        g_android_jvm->DetachCurrentThread();
+    }
+    return results;
+}

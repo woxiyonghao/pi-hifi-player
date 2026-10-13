@@ -20,8 +20,38 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var glSurfaceView: HifiGLSurfaceView
 
+    companion object {
+        @JvmStatic
+        var appContext: android.content.Context? = null
+
+        @JvmStatic
+        fun queryMediaStoreAudioPaths(): Array<String> {
+            val paths = LinkedHashSet<String>()
+            val ctx = appContext ?: return emptyArray()
+            try {
+                val uri = android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+                val projection = arrayOf(android.provider.MediaStore.Audio.Media.DATA)
+                ctx.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+                    val dataCol = cursor.getColumnIndex(android.provider.MediaStore.Audio.Media.DATA)
+                    if (dataCol >= 0) {
+                        while (cursor.moveToNext()) {
+                            val p = cursor.getString(dataCol)
+                            if (!p.isNullOrEmpty()) {
+                                paths.add(p)
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            return paths.toTypedArray()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        appContext = applicationContext
 
         // 1. 设置沉浸式全屏
         hideSystemUI()
