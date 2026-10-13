@@ -100,7 +100,21 @@ bool MusicDatabase::init(const std::string& db_path) {
         return false;
     }
 
-    // 检查并升级旧版 scanned_tracks 表结构 (迁移 UNIQUE 约束与无损补齐 CUE 字段)
+    // 1. 无损补齐可能缺失的 CUE 与分轨字段 (兼容任何历史版本数据库)
+    sqlite3_exec(db_, "ALTER TABLE scanned_tracks ADD COLUMN start_time_sec REAL DEFAULT 0.0;", nullptr, nullptr, nullptr);
+    sqlite3_exec(db_, "ALTER TABLE scanned_tracks ADD COLUMN end_time_sec REAL DEFAULT 0.0;", nullptr, nullptr, nullptr);
+    sqlite3_exec(db_, "ALTER TABLE scanned_tracks ADD COLUMN cue_path TEXT DEFAULT '';", nullptr, nullptr, nullptr);
+    sqlite3_exec(db_, "ALTER TABLE scanned_tracks ADD COLUMN track_number INTEGER DEFAULT 0;", nullptr, nullptr, nullptr);
+    sqlite3_exec(db_, "ALTER TABLE scanned_tracks ADD COLUMN is_cue_track INTEGER DEFAULT 0;", nullptr, nullptr, nullptr);
+
+    // 升级 playlist_tracks 字段
+    sqlite3_exec(db_, "ALTER TABLE playlist_tracks ADD COLUMN start_time_sec REAL DEFAULT 0.0;", nullptr, nullptr, nullptr);
+    sqlite3_exec(db_, "ALTER TABLE playlist_tracks ADD COLUMN end_time_sec REAL DEFAULT 0.0;", nullptr, nullptr, nullptr);
+    sqlite3_exec(db_, "ALTER TABLE playlist_tracks ADD COLUMN cue_path TEXT DEFAULT '';", nullptr, nullptr, nullptr);
+    sqlite3_exec(db_, "ALTER TABLE playlist_tracks ADD COLUMN track_number INTEGER DEFAULT 0;", nullptr, nullptr, nullptr);
+    sqlite3_exec(db_, "ALTER TABLE playlist_tracks ADD COLUMN is_cue_track INTEGER DEFAULT 0;", nullptr, nullptr, nullptr);
+
+    // 2. 检查并彻底剥离旧版 scanned_tracks 的 UNIQUE(file_path) 约束 (支持同源文件的多个 CUE 虚拟分轨)
     bool needs_unique_migration = false;
     sqlite3_stmt* check_stmt = nullptr;
     if (sqlite3_prepare_v2(db_, "SELECT sql FROM sqlite_master WHERE type='table' AND name='scanned_tracks';", -1, &check_stmt, nullptr) == SQLITE_OK) {
@@ -140,9 +154,7 @@ bool MusicDatabase::init(const std::string& db_path) {
                 start_time_sec, end_time_sec, cue_path, track_number, is_cue_track
             )
             SELECT id, title, artist, album, file_path, format, sample_rate, bit_depth, duration_sec,
-                   COALESCE(start_time_sec, 0.0), COALESCE(end_time_sec, 0.0),
-                   COALESCE(cue_path, ''), COALESCE(track_number, 0),
-                   COALESCE(is_cue_track, 0)
+                   start_time_sec, end_time_sec, cue_path, track_number, is_cue_track
             FROM scanned_tracks;
             DROP TABLE scanned_tracks;
             ALTER TABLE scanned_tracks_new RENAME TO scanned_tracks;
@@ -151,22 +163,10 @@ bool MusicDatabase::init(const std::string& db_path) {
         if (sqlite3_exec(db_, migrate_sql, nullptr, nullptr, &err) != SQLITE_OK) {
             std::cerr << "[MusicDatabase] scanned_tracks 迁移异常: " << (err ? err : "未知") << std::endl;
             sqlite3_free(err);
+        } else {
+            std::cout << "[MusicDatabase] scanned_tracks 成功升级为无 UNIQUE 约束发烧表结构。" << std::endl;
         }
     }
-
-    // 双重安全保障：无损补齐 scanned_tracks 缺失字段 (适用于任何早期版本的数据库)
-    sqlite3_exec(db_, "ALTER TABLE scanned_tracks ADD COLUMN start_time_sec REAL DEFAULT 0.0;", nullptr, nullptr, nullptr);
-    sqlite3_exec(db_, "ALTER TABLE scanned_tracks ADD COLUMN end_time_sec REAL DEFAULT 0.0;", nullptr, nullptr, nullptr);
-    sqlite3_exec(db_, "ALTER TABLE scanned_tracks ADD COLUMN cue_path TEXT DEFAULT '';", nullptr, nullptr, nullptr);
-    sqlite3_exec(db_, "ALTER TABLE scanned_tracks ADD COLUMN track_number INTEGER DEFAULT 0;", nullptr, nullptr, nullptr);
-    sqlite3_exec(db_, "ALTER TABLE scanned_tracks ADD COLUMN is_cue_track INTEGER DEFAULT 0;", nullptr, nullptr, nullptr);
-
-    // 升级 playlist_tracks
-    sqlite3_exec(db_, "ALTER TABLE playlist_tracks ADD COLUMN start_time_sec REAL DEFAULT 0.0;", nullptr, nullptr, nullptr);
-    sqlite3_exec(db_, "ALTER TABLE playlist_tracks ADD COLUMN end_time_sec REAL DEFAULT 0.0;", nullptr, nullptr, nullptr);
-    sqlite3_exec(db_, "ALTER TABLE playlist_tracks ADD COLUMN cue_path TEXT DEFAULT '';", nullptr, nullptr, nullptr);
-    sqlite3_exec(db_, "ALTER TABLE playlist_tracks ADD COLUMN track_number INTEGER DEFAULT 0;", nullptr, nullptr, nullptr);
-    sqlite3_exec(db_, "ALTER TABLE playlist_tracks ADD COLUMN is_cue_track INTEGER DEFAULT 0;", nullptr, nullptr, nullptr);
 
     is_initialized_ = true;
     std::cout << "[MusicDatabase] SQLite 发烧曲库数据库已成功连接: " << path << std::endl;
@@ -197,7 +197,7 @@ bool MusicDatabase::saveScannedTracks(const std::vector<Track>& tracks) {
     sqlite3_exec(db_, "DELETE FROM scanned_tracks;", nullptr, nullptr, nullptr);
 
     const char* sql = R"(
-        INSERT INTO scanned_tracks (id, title, artist, album, file_path, format, sample_rate, bit_depth, duration_sec, start_time_sec, end_time_sec, cue_path, track_number, is_cue_track)
+        INSERT OR REPLACE INTO scanned_tracks (id, title, artist, album, file_path, format, sample_rate, bit_depth, duration_sec, start_time_sec, end_time_sec, cue_path, track_number, is_cue_track)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
     )";
 

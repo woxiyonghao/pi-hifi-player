@@ -225,4 +225,25 @@ else()
     )
 endif()
 
-
+# 18. 曲库扫描回归测试：保证 CUE/WAV 分轨去重不会误伤普通 FLAC/WAV。
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(MusicScanRegressionTest EXCLUDE_FROM_ALL
+        tests/music_scan_regression_test.cpp
+        src/tools/MusicScanManager.cpp
+        src/tools/MusicDatabase.cpp
+        src/tools/CueSheetParser.cpp
+    )
+    target_include_directories(MusicScanRegressionTest PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/public
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/types
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/tools
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/sqlite3/include
+    )
+    target_link_libraries(MusicScanRegressionTest PRIVATE SQLite3::SQLite3)
+    if(APPLE)
+        target_link_libraries(MusicScanRegressionTest PRIVATE "-framework CoreFoundation")
+    endif()
+    add_test(NAME music_scan_regression COMMAND MusicScanRegressionTest)
+endif()

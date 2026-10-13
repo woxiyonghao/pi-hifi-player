@@ -159,75 +159,79 @@ Track MusicScanManager::parseBasicMetadata(uint64_t id, const std::filesystem::d
     } else if (format == AudioFormat::FLAC) {
         track.sample_rate = 96000;
         track.bit_depth = 24;
-        std::ifstream file(track.file_path, std::ios::binary);
-        if (file) {
-            char magic[4];
-            if (file.read(magic, 4) && std::memcmp(magic, "fLaC", 4) == 0) {
-                unsigned char hdr[4];
-                if (file.read(reinterpret_cast<char*>(hdr), 4) && (hdr[0] & 0x7F) == 0) {
-                    uint32_t len = (static_cast<uint32_t>(hdr[1]) << 16) |
-                                   (static_cast<uint32_t>(hdr[2]) << 8) |
-                                   static_cast<uint32_t>(hdr[3]);
-                    if (len >= 18) {
-                        std::vector<unsigned char> data(len);
-                        if (file.read(reinterpret_cast<char*>(data.data()), len)) {
-                            uint64_t b = 0;
-                            for (int i = 10; i < 18; ++i) {
-                                b = (b << 8) | data[i];
-                            }
-                            uint32_t sr = static_cast<uint32_t>(b >> 44);
-                            uint8_t bps = static_cast<uint8_t>(((b >> 36) & 0x1F) + 1);
-                            uint64_t total_samples = b & 0xFFFFFFFFF;
-                            if (sr > 0) {
-                                track.sample_rate = sr;
-                                track.bit_depth = bps;
-                                track.duration_sec = static_cast<uint32_t>(total_samples / sr);
+        try {
+            std::ifstream file(track.file_path, std::ios::binary);
+            if (file) {
+                char magic[4];
+                if (file.read(magic, 4) && std::memcmp(magic, "fLaC", 4) == 0) {
+                    unsigned char hdr[4];
+                    if (file.read(reinterpret_cast<char*>(hdr), 4) && (hdr[0] & 0x7F) == 0) {
+                        uint32_t len = (static_cast<uint32_t>(hdr[1]) << 16) |
+                                       (static_cast<uint32_t>(hdr[2]) << 8) |
+                                       static_cast<uint32_t>(hdr[3]);
+                        if (len >= 18 && len <= 65536) {
+                            std::vector<unsigned char> data(len);
+                            if (file.read(reinterpret_cast<char*>(data.data()), len)) {
+                                uint64_t b = 0;
+                                for (int i = 10; i < 18; ++i) {
+                                    b = (b << 8) | data[i];
+                                }
+                                uint32_t sr = static_cast<uint32_t>(b >> 44);
+                                uint8_t bps = static_cast<uint8_t>(((b >> 36) & 0x1F) + 1);
+                                uint64_t total_samples = b & 0xFFFFFFFFF;
+                                if (sr > 0) {
+                                    track.sample_rate = sr;
+                                    track.bit_depth = bps;
+                                    track.duration_sec = static_cast<uint32_t>(total_samples / sr);
+                                }
                             }
                         }
                     }
                 }
             }
-        }
+        } catch (...) {}
     } else if (format == AudioFormat::WAV) {
         track.sample_rate = 44100;
         track.bit_depth = 16;
-        std::ifstream file(track.file_path, std::ios::binary);
-        if (file) {
-            char riff[4];
-            if (file.read(riff, 4) && std::memcmp(riff, "RIFF", 4) == 0) {
-                file.seekg(8);
-                char wave[4];
-                if (file.read(wave, 4) && std::memcmp(wave, "WAVE", 4) == 0) {
-                    char chunk_id[4];
-                    uint32_t chunk_sz = 0;
-                    uint32_t byte_rate = 0;
-                    uint32_t data_sz = 0;
-                    while (file.read(chunk_id, 4) && file.read(reinterpret_cast<char*>(&chunk_sz), 4)) {
-                        if (std::memcmp(chunk_id, "fmt ", 4) == 0 && chunk_sz >= 16) {
-                            uint16_t audio_fmt = 0, ch = 0, bps = 0;
-                            uint32_t sr = 0;
-                            file.read(reinterpret_cast<char*>(&audio_fmt), 2);
-                            file.read(reinterpret_cast<char*>(&ch), 2);
-                            file.read(reinterpret_cast<char*>(&sr), 4);
-                            file.read(reinterpret_cast<char*>(&byte_rate), 4);
-                            file.seekg(2, std::ios::cur);
-                            file.read(reinterpret_cast<char*>(&bps), 2);
-                            track.sample_rate = sr;
-                            track.bit_depth = bps;
-                            if (chunk_sz > 16) file.seekg(chunk_sz - 16, std::ios::cur);
-                        } else if (std::memcmp(chunk_id, "data", 4) == 0) {
-                            data_sz = chunk_sz;
-                            break;
-                        } else {
-                            file.seekg(chunk_sz, std::ios::cur);
+        try {
+            std::ifstream file(track.file_path, std::ios::binary);
+            if (file) {
+                char riff[4];
+                if (file.read(riff, 4) && std::memcmp(riff, "RIFF", 4) == 0) {
+                    file.seekg(8);
+                    char wave[4];
+                    if (file.read(wave, 4) && std::memcmp(wave, "WAVE", 4) == 0) {
+                        char chunk_id[4];
+                        uint32_t chunk_sz = 0;
+                        uint32_t byte_rate = 0;
+                        uint32_t data_sz = 0;
+                        while (file.read(chunk_id, 4) && file.read(reinterpret_cast<char*>(&chunk_sz), 4)) {
+                            if (std::memcmp(chunk_id, "fmt ", 4) == 0 && chunk_sz >= 16) {
+                                uint16_t audio_fmt = 0, ch = 0, bps = 0;
+                                uint32_t sr = 0;
+                                file.read(reinterpret_cast<char*>(&audio_fmt), 2);
+                                file.read(reinterpret_cast<char*>(&ch), 2);
+                                file.read(reinterpret_cast<char*>(&sr), 4);
+                                file.read(reinterpret_cast<char*>(&byte_rate), 4);
+                                file.seekg(2, std::ios::cur);
+                                file.read(reinterpret_cast<char*>(&bps), 2);
+                                track.sample_rate = sr;
+                                track.bit_depth = bps;
+                                if (chunk_sz > 16) file.seekg(chunk_sz - 16, std::ios::cur);
+                            } else if (std::memcmp(chunk_id, "data", 4) == 0) {
+                                data_sz = chunk_sz;
+                                break;
+                            } else {
+                                file.seekg(chunk_sz + (chunk_sz & 1), std::ios::cur);
+                            }
                         }
-                    }
-                    if (byte_rate > 0 && data_sz > 0) {
-                        track.duration_sec = data_sz / byte_rate;
+                        if (byte_rate > 0 && data_sz > 0) {
+                            track.duration_sec = data_sz / byte_rate;
+                        }
                     }
                 }
             }
-        }
+        } catch (...) {}
     } else {
         track.sample_rate = 44100;
         track.bit_depth = 16;
@@ -265,17 +269,44 @@ void MusicScanManager::scanWorker(std::stop_token stop_token, std::filesystem::p
     }
 
 #if defined(__ANDROID__)
+    // 覆盖常见音乐公共目录、大小写变体、用户自定义目录与整机存储根目录
     const char* android_candidates[] = {
         "/storage/emulated/0/Music",
+        "/storage/emulated/0/music",
         "/storage/emulated/0/Download",
+        "/storage/emulated/0/download",
+        "/storage/emulated/0/HiFi",
+        "/storage/emulated/0/hifi",
+        "/storage/emulated/0/Audio",
+        "/storage/emulated/0/audio",
         "/sdcard/Music",
-        "/sdcard/Download"
+        "/sdcard/music",
+        "/sdcard/Download",
+        "/sdcard/download",
+        "/storage/emulated/0",
+        "/sdcard"
     };
     for (const char* p : android_candidates) {
         std::error_code dummy_ec;
         std::filesystem::path ap(p);
         if (std::filesystem::exists(ap, dummy_ec) && std::filesystem::is_directory(ap, dummy_ec)) {
             candidate_roots.push_back(ap);
+        }
+    }
+
+    // 动态探测外置 TF/SD 卡或 USB OTG 存储设备挂载点 (/storage/XXXX-XXXX)
+    {
+        std::error_code dummy_ec;
+        std::filesystem::path storage_root("/storage");
+        if (std::filesystem::exists(storage_root, dummy_ec) && std::filesystem::is_directory(storage_root, dummy_ec)) {
+            for (const auto& dev : std::filesystem::directory_iterator(storage_root, dummy_ec)) {
+                if (dev.is_directory(dummy_ec)) {
+                    std::string dname = dev.path().filename().string();
+                    if (dname != "emulated" && dname != "self" && !dname.empty() && dname.front() != '.') {
+                        candidate_roots.push_back(dev.path());
+                    }
+                }
+            }
         }
     }
 #elif defined(HIFI_PLATFORM_RPI) || defined(__linux__)
@@ -305,7 +336,7 @@ void MusicScanManager::scanWorker(std::stop_token stop_token, std::filesystem::p
 #endif
 #endif
 
-    // 目录去重与规范化 (过滤裸 $HOME 与 /storage/emulated/0，避免遍历整机系统庞大文件树)
+    // 目录去重与规范化
     const char* home_env = std::getenv("HOME");
     std::string home_norm = (home_env && home_env[0] != '\0') ? std::filesystem::weakly_canonical(home_env, ec).string() : "";
 
@@ -368,16 +399,22 @@ void MusicScanManager::scanWorker(std::stop_token stop_token, std::filesystem::p
 
             const auto& entry = *iter;
 
-            // 智能剪枝：跳过隐藏目录或系统大仓
+            // 智能剪枝：跳过隐藏目录、系统大仓及非音乐媒体大仓
             if (entry.is_directory(ec)) {
                 std::string dir_name = entry.path().filename().string();
-                if ((!dir_name.empty() && dir_name.front() == '.') || dir_name == "Library" || dir_name == "node_modules" ||
-                    dir_name == "Applications" || dir_name == "VirtualBox VMs" || dir_name == "Android") {
+                if ((!dir_name.empty() && dir_name.front() == '.') ||
+                    dir_name == "Android" || dir_name == "DCIM" || dir_name == "Pictures" ||
+                    dir_name == "Movies" || dir_name == "Library" || dir_name == "node_modules" ||
+                    dir_name == "Applications" || dir_name == "VirtualBox VMs" ||
+                    dir_name == "Alarms" || dir_name == "Ringtones" || dir_name == "Notifications" ||
+                    dir_name == "Podcasts") {
                     iter.disable_recursion_pending();
                     continue;
                 }
             } else if (entry.is_regular_file(ec)) {
-                std::string can_path = std::filesystem::weakly_canonical(entry.path(), ec).string();
+                // 关键保护：使用独立的 can_ec，严禁污染外层迭代器的 ec 变量
+                std::error_code can_ec;
+                std::string can_path = std::filesystem::weakly_canonical(entry.path(), can_ec).string();
                 if (can_path.empty()) can_path = entry.path().string();
                 if (visited_file_paths.count(can_path) > 0 || visited_file_paths.count(entry.path().string()) > 0) {
                     continue;
@@ -399,7 +436,6 @@ void MusicScanManager::scanWorker(std::stop_token stop_token, std::filesystem::p
 
     uint64_t current_id = 1;
     std::unordered_set<std::string> cue_handled_audio_paths;
-    std::unordered_set<std::string> cue_handled_dir_stems;
 
     // 2.1 优先解析 CUE 分轨表，按音轨拆分虚拟单曲
     for (const auto& cue_entry : cue_entries) {
@@ -412,33 +448,7 @@ void MusicScanManager::scanWorker(std::stop_token stop_token, std::filesystem::p
                   << " (专辑: " << sheet.album_title << ", 艺术家: " << sheet.album_performer
                   << ", 包含 " << sheet.tracks.size() << " 个音轨)" << std::endl;
 
-        std::filesystem::path cue_p = cue_entry.path();
-        std::string cue_dir_str = cue_p.parent_path().string();
         std::error_code dummy_ec;
-        std::string norm_cue_dir = std::filesystem::weakly_canonical(cue_p.parent_path(), dummy_ec).string();
-        std::string cue_stem = cue_p.stem().string();
-        std::string cue_stem_lower = cue_stem;
-        std::transform(cue_stem_lower.begin(), cue_stem_lower.end(), cue_stem_lower.begin(), ::tolower);
-
-        cue_handled_dir_stems.insert(cue_dir_str + "/" + cue_stem);
-        cue_handled_dir_stems.insert(cue_dir_str + "/" + cue_stem_lower);
-        if (!norm_cue_dir.empty()) {
-            cue_handled_dir_stems.insert(norm_cue_dir + "/" + cue_stem);
-            cue_handled_dir_stems.insert(norm_cue_dir + "/" + cue_stem_lower);
-        }
-
-        for (const auto& ref : sheet.referenced_audio_files) {
-            std::filesystem::path ref_p(ref);
-            std::string r_stem = ref_p.stem().string();
-            std::string r_stem_lower = r_stem;
-            std::transform(r_stem_lower.begin(), r_stem_lower.end(), r_stem_lower.begin(), ::tolower);
-            cue_handled_dir_stems.insert(cue_dir_str + "/" + r_stem);
-            cue_handled_dir_stems.insert(cue_dir_str + "/" + r_stem_lower);
-            if (!norm_cue_dir.empty()) {
-                cue_handled_dir_stems.insert(norm_cue_dir + "/" + r_stem);
-                cue_handled_dir_stems.insert(norm_cue_dir + "/" + r_stem_lower);
-            }
-        }
 
         std::unordered_map<std::string, Track> audio_meta_cache;
 
@@ -450,14 +460,6 @@ void MusicScanManager::scanWorker(std::stop_token stop_token, std::filesystem::p
             if (!norm_audio.empty()) {
                 cue_handled_audio_paths.insert(norm_audio);
             }
-
-            std::filesystem::path ap(cue_trk.resolved_audio_path);
-            std::string a_dir = ap.parent_path().string();
-            std::string a_stem = ap.stem().string();
-            std::string a_stem_lower = a_stem;
-            std::transform(a_stem_lower.begin(), a_stem_lower.end(), a_stem_lower.begin(), ::tolower);
-            cue_handled_dir_stems.insert(a_dir + "/" + a_stem);
-            cue_handled_dir_stems.insert(a_dir + "/" + a_stem_lower);
 
             if (audio_meta_cache.find(cue_trk.resolved_audio_path) == audio_meta_cache.end()) {
                 std::filesystem::path audio_p(cue_trk.resolved_audio_path);
@@ -512,7 +514,8 @@ void MusicScanManager::scanWorker(std::stop_token stop_token, std::filesystem::p
         }
     }
 
-    // 2.2 解析普通音频文件 (绝对跳过已被 CUE 拆解的整轨大文件，防止重复收录)
+    // 2.2 解析普通音频文件。只跳过 CUE 已成功解析到的那个物理源文件，
+    // 不再按目录或文件主干名模糊过滤，避免误伤普通 FLAC/WAV。
     for (const auto& entry : audio_entries) {
         if (stop_token.stop_requested()) {
             std::cout << "[MusicScanManager] 扫描被用户中断。" << std::endl;
@@ -527,19 +530,9 @@ void MusicScanManager::scanWorker(std::stop_token stop_token, std::filesystem::p
         std::string full_path = entry.path().string();
         std::error_code dummy_ec;
         std::string norm_entry = std::filesystem::weakly_canonical(entry.path(), dummy_ec).string();
-        std::string entry_dir = entry.path().parent_path().string();
-        std::string norm_dir = std::filesystem::weakly_canonical(entry.path().parent_path(), dummy_ec).string();
-        std::string entry_stem = entry.path().stem().string();
-        std::string entry_stem_lower = entry_stem;
-        std::transform(entry_stem_lower.begin(), entry_stem_lower.end(), entry_stem_lower.begin(), ::tolower);
-
         if (cue_handled_audio_paths.count(full_path) > 0 ||
-            (!norm_entry.empty() && cue_handled_audio_paths.count(norm_entry) > 0) ||
-            cue_handled_dir_stems.count(entry_dir + "/" + entry_stem) > 0 ||
-            cue_handled_dir_stems.count(entry_dir + "/" + entry_stem_lower) > 0 ||
-            (!norm_dir.empty() && cue_handled_dir_stems.count(norm_dir + "/" + entry_stem) > 0) ||
-            (!norm_dir.empty() && cue_handled_dir_stems.count(norm_dir + "/" + entry_stem_lower) > 0)) {
-            std::cout << "[MusicScanManager] 严格屏蔽已被 CUE 拆解的整轨大文件: " << full_path << std::endl;
+            (!norm_entry.empty() && cue_handled_audio_paths.count(norm_entry) > 0)) {
+            std::cout << "[MusicScanManager] 精准屏蔽已被 CUE 拆解的整轨大文件: " << full_path << std::endl;
             continue;
         }
 

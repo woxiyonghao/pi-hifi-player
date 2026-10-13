@@ -44,13 +44,6 @@ void AllMusicPlaylistView::render(float x, float y, float w, float h, const std:
             MusicScanManager::getInstance().loadFromDatabase();
         }
     }
-    if (tracks.empty()) {
-        for (const auto& pl : playlists) {
-            for (const auto& t : pl.getTracks()) {
-                tracks.push_back(t);
-            }
-        }
-    }
 
     // 行业标准：如果已被 CUE 拆解为分轨，绝对不在全景树中展示整轨大文件
     std::unordered_set<std::string> cue_audio_files;

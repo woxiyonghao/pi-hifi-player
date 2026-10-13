@@ -2,6 +2,7 @@
 #include "widgets/GlassCardRenderer.hpp"
 #include <algorithm>
 #include <cmath>
+#include <unordered_set>
 
 HifiPhoneRenderer::HifiPhoneRenderer() {}
 
@@ -158,17 +159,25 @@ void HifiPhoneRenderer::renderLibraryTab(float x, float y, float w, float h) {
         }
     }
 
-    // 行业标准：如果已被 CUE 拆解为分轨，绝对不在曲目列表中展示整轨大文件
-    std::unordered_set<std::string> cue_audio_files;
-    for (const auto& t : cached_tracks_) {
-        if (t.is_cue_track && !t.file_path.empty()) {
-            cue_audio_files.insert(t.file_path);
+    // CUE 整轨去重：只在显示时过滤，不修改 cached_tracks_ 成员变量
+    std::vector<Track> display_tracks;
+    {
+        std::unordered_set<std::string> cue_audio_files;
+        for (const auto& t : cached_tracks_) {
+            if (t.is_cue_track && !t.file_path.empty()) {
+                cue_audio_files.insert(t.file_path);
+            }
         }
-    }
-    if (!cue_audio_files.empty()) {
-        std::erase_if(cached_tracks_, [&](const Track& t) {
-            return !t.is_cue_track && cue_audio_files.count(t.file_path) > 0;
-        });
+        if (cue_audio_files.empty()) {
+            display_tracks = cached_tracks_;
+        } else {
+            display_tracks.reserve(cached_tracks_.size());
+            for (const auto& t : cached_tracks_) {
+                if (t.is_cue_track || cue_audio_files.count(t.file_path) == 0) {
+                    display_tracks.push_back(t);
+                }
+            }
+        }
     }
 
     // 头部：曲目总数与重新扫描
@@ -176,9 +185,9 @@ void HifiPhoneRenderer::renderLibraryTab(float x, float y, float w, float h) {
     char count_str[64];
     bool is_scanning = MusicScanManager::getInstance().isScanning();
     if (is_scanning) {
-        std::snprintf(count_str, sizeof(count_str), "正在检索曲库 (%zu 首)...", cached_tracks_.size());
+        std::snprintf(count_str, sizeof(count_str), "正在检索曲库 (%zu 首)...", display_tracks.size());
     } else {
-        std::snprintf(count_str, sizeof(count_str), "全部曲目 (%zu 首)", cached_tracks_.size());
+        std::snprintf(count_str, sizeof(count_str), "全部曲目 (%zu 首)", display_tracks.size());
     }
 
     if (Fonts::Medium) ImGui::PushFont(Fonts::Medium);
@@ -238,8 +247,8 @@ void HifiPhoneRenderer::renderLibraryTab(float x, float y, float w, float h) {
     uint64_t cur_id = cur_opt.has_value() ? cur_opt->id : 0;
 
     const float item_h = 52.0f;
-    for (size_t i = 0; i < cached_tracks_.size(); ++i) {
-        const auto& track = cached_tracks_[i];
+    for (size_t i = 0; i < display_tracks.size(); ++i) {
+        const auto& track = display_tracks[i];
         bool is_cur = (track.id == cur_id);
 
         ImVec2 p0 = ImGui::GetCursorScreenPos();
@@ -247,7 +256,7 @@ void HifiPhoneRenderer::renderLibraryTab(float x, float y, float w, float h) {
 
         std::string btn_id = "##phone_track_" + std::to_string(track.id);
         if (ImGui::InvisibleButton(btn_id.c_str(), ImVec2(w - 8.0f, item_h))) {
-            player.playTracks(cached_tracks_, i);
+            player.playTracks(display_tracks, i);
         }
         bool hov = ImGui::IsItemHovered();
         bool act = ImGui::IsItemActive();
