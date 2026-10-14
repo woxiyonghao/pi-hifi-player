@@ -28,6 +28,11 @@ class MainActivity : AppCompatActivity() {
         fun queryMediaStoreAudioPaths(): Array<String> {
             val paths = LinkedHashSet<String>()
             val ctx = appContext ?: return emptyArray()
+            val supportedExts = setOf(
+                "flac", "wav", "dsf", "dff", "cue", "mp3", "m4a", "alac", "aac", "aiff", "aif", "caf"
+            )
+
+            // 1. 查询系统 MediaStore 音频数据表
             try {
                 val uri = android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
                 val projection = arrayOf(android.provider.MediaStore.Audio.Media.DATA)
@@ -45,6 +50,97 @@ class MainActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 e.printStackTrace()
             }
+
+            // 2. 查询 MediaStore.Files 全局文件数据表 (全面捕获未被系统媒体扫描器标记为 Audio 的 FLAC, WAV, DSF, DFF, CUE 等)
+            try {
+                val filesUri = android.provider.MediaStore.Files.getContentUri("external")
+                val projection = arrayOf(android.provider.MediaStore.Files.FileColumns.DATA)
+                val selSb = StringBuilder()
+                val selArgs = ArrayList<String>()
+                for (ext in supportedExts) {
+                    if (selSb.isNotEmpty()) selSb.append(" OR ")
+                    selSb.append("${android.provider.MediaStore.Files.FileColumns.DATA} LIKE ?")
+                    selArgs.add("%.$ext")
+                }
+                ctx.contentResolver.query(filesUri, projection, selSb.toString(), selArgs.toTypedArray(), null)?.use { cursor ->
+                    val dataCol = cursor.getColumnIndex(android.provider.MediaStore.Files.FileColumns.DATA)
+                    if (dataCol >= 0) {
+                        while (cursor.moveToNext()) {
+                            val p = cursor.getString(dataCol)
+                            if (!p.isNullOrEmpty()) {
+                                paths.add(p)
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
+            // 3. Kotlin 框架级物理深度递归检索 (直接突破 MediaStore 尚未建立索引或格式未识别的限制)
+            fun scanDir(dir: File, depth: Int) {
+                if (depth > 12 || !dir.exists() || !dir.canRead()) return
+                val files = dir.listFiles() ?: return
+                for (f in files) {
+                    val name = f.name
+                    if (name.startsWith(".") || name.equals("Android", ignoreCase = true) ||
+                        name.equals("DCIM", ignoreCase = true) || name.equals("Pictures", ignoreCase = true) ||
+                        name.equals("Movies", ignoreCase = true) || name.equals("cache", ignoreCase = true)) {
+                        continue
+                    }
+                    if (f.isDirectory) {
+                        scanDir(f, depth + 1)
+                    } else if (f.isFile) {
+                        val dotIdx = name.lastIndexOf('.')
+                        if (dotIdx > 0 && dotIdx < name.length - 1) {
+                            val ext = name.substring(dotIdx + 1).lowercase()
+                            if (supportedExts.contains(ext)) {
+                                paths.add(f.absolutePath)
+                            }
+                        }
+                    }
+                }
+            }
+
+            val scannedRoots = HashSet<String>()
+            val candidateDirs = listOfNotNull(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC),
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                Environment.getExternalStorageDirectory(),
+                File("/storage/emulated/0/Music"),
+                File("/storage/emulated/0/Download"),
+                File("/storage/emulated/0/HiFi"),
+                File("/storage/emulated/0/Audio"),
+                File("/storage/emulated/0/QQMusic"),
+                File("/storage/emulated/0/CloudMusic"),
+                File("/storage/emulated/0/KuGou"),
+                File("/storage/emulated/0/BaiduNetdisk"),
+                ctx.getExternalFilesDir(Environment.DIRECTORY_MUSIC)
+            )
+
+            for (d in candidateDirs) {
+                if (d.exists() && scannedRoots.add(d.absolutePath.lowercase())) {
+                    scanDir(d, 0)
+                }
+            }
+
+            // 4. 外置 SD/TF 卡与 USB OTG 存储扫描
+            try {
+                val storageRoot = File("/storage")
+                if (storageRoot.exists() && storageRoot.canRead()) {
+                    storageRoot.listFiles()?.forEach { dev ->
+                        if (dev.isDirectory && dev.name != "emulated" && dev.name != "self" && !dev.name.startsWith(".")) {
+                            if (scannedRoots.add(dev.absolutePath.lowercase())) {
+                                scanDir(dev, 0)
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
+            android.util.Log.i("PiHifiScanner", "queryMediaStoreAudioPaths 总计汇集音频项: ${paths.size}")
             return paths.toTypedArray()
         }
     }
@@ -146,6 +242,11 @@ class MainActivity : AppCompatActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             if (!Environment.isExternalStorageManager()) {
                 try {
+                    android.widget.Toast.makeText(
+                        this,
+                        "请在设置中开启「授予所有文件管理权限」，以便检索与播放本地无损 FLAC / WAV / DSD 发烧音乐",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
                     val intent = android.content.Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
                         data = android.net.Uri.parse("package:$packageName")
                     }
@@ -165,6 +266,10 @@ class MainActivity : AppCompatActivity() {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_AUDIO)
                 != PackageManager.PERMISSION_GRANTED) {
                 permissionsToRequest.add(Manifest.permission.READ_MEDIA_AUDIO)
+            }
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES)
+                != PackageManager.PERMISSION_GRANTED) {
+                permissionsToRequest.add(Manifest.permission.READ_MEDIA_IMAGES)
             }
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
                 != PackageManager.PERMISSION_GRANTED) {
