@@ -39,6 +39,11 @@ public:
     void resetAll();
     void resetParam(size_t index);
 
+    // 触控支持 (让 Android / iOS 触控拖拽识别滑块区域)
+    static bool isSliderTouch(float x, float y);
+    static bool isAnySliderActive();
+    static void setSliderActive(bool active);
+
 private:
     void loadConfig();
     void saveConfig();

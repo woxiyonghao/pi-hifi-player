@@ -10,6 +10,7 @@
 #include "imgui_impl_opengl3.h"
 #include "views/HifiPadRenderer.hpp"
 #include "views/EQConfigView.hpp"
+#include "views/MagicTuningView.hpp"
 #include "tools/PlayerAdmin.hpp"
 #include "tools/MusicDatabase.hpp"
 #include "tools/MusicScanManager.hpp"
@@ -273,11 +274,14 @@ Java_com_pihifi_player_HifiGLSurfaceView_nativeOnTouchEvent(
             g_touch.is_scrolling = false;
             g_touch.stopped_fling = was_flinging;
 
-            // 若手指触控命中 EQ 推子滑块区域或底部控制栏滑块，允许直接按键拖拽
+            // 若手指触控命中 EQ 推子滑块区域、调音魔棒水平滑块或底部控制栏滑块，允许直接按键拖拽
             bool is_eq = EQConfigView::isSliderTouch(lx, ly);
+            bool is_magic = MagicTuningView::isSliderTouch(lx, ly);
             bool is_bottom = (ly >= (g_logical_h - 75.0f));
-            if (is_eq || is_bottom) {
+            if (is_eq || is_magic || is_bottom) {
                 g_touch.is_slider_drag = true;
+                LOGI("nativeOnTouchEvent: Slider touch detected! is_magic=%d, is_eq=%d, is_bottom=%d at (%.1f, %.1f)",
+                     is_magic ? 1 : 0, is_eq ? 1 : 0, is_bottom ? 1 : 0, lx, ly);
                 io.AddMousePosEvent(lx, ly);
                 io.AddMouseButtonEvent(0, true);
             } else {
@@ -325,6 +329,7 @@ Java_com_pihifi_player_HifiGLSurfaceView_nativeOnTouchEvent(
         }
         case 1: { // ACTION_UP
             EQConfigView::setSliderActive(false);
+            MagicTuningView::setSliderActive(false);
 
             if (g_touch.is_slider_drag) {
                 io.AddMousePosEvent(lx, ly);
@@ -351,6 +356,7 @@ Java_com_pihifi_player_HifiGLSurfaceView_nativeOnTouchEvent(
         }
         case 3: { // ACTION_CANCEL
             EQConfigView::setSliderActive(false);
+            MagicTuningView::setSliderActive(false);
             if (g_touch.is_slider_drag) {
                 io.AddMouseButtonEvent(0, false);
             }

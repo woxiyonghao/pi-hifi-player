@@ -10,6 +10,12 @@
 #include <cstdio>
 #include <fstream>
 #include <filesystem>
+#if defined(__ANDROID__)
+#include <android/log.h>
+#define LOG_MSEB(...) __android_log_print(ANDROID_LOG_INFO, "PiHifiMSEB", __VA_ARGS__)
+#else
+#define LOG_MSEB(...)
+#endif
 
 const std::array<MagicTuningView::ParamDef, MagicTuningView::NUM_PARAMS>& MagicTuningView::getParamDefs() {
     static const std::array<ParamDef, NUM_PARAMS> kDefs = {{
@@ -29,8 +35,38 @@ const std::array<MagicTuningView::ParamDef, MagicTuningView::NUM_PARAMS>& MagicT
 
 static MagicTuningView* s_magic_instance = nullptr;
 
+struct MagicSliderHitBox {
+    float min_x, min_y, max_x, max_y;
+};
+static std::vector<MagicSliderHitBox> s_magic_slider_hitboxes;
+static uint64_t s_magic_slider_render_frame_count = 0;
+static bool s_is_any_magic_slider_active = false;
+
 MagicTuningView* MagicTuningView::getInstance() {
     return s_magic_instance;
+}
+
+bool MagicTuningView::isSliderTouch(float x, float y) {
+    if (s_is_any_magic_slider_active) return true;
+    if (ImGui::GetCurrentContext() == nullptr) return false;
+    int cur_frame = ImGui::GetFrameCount();
+    if (static_cast<uint64_t>(cur_frame) > s_magic_slider_render_frame_count + 1) {
+        return false;
+    }
+    for (const auto& box : s_magic_slider_hitboxes) {
+        if (x >= box.min_x && x <= box.max_x && y >= box.min_y && y <= box.max_y) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool MagicTuningView::isAnySliderActive() {
+    return s_is_any_magic_slider_active;
+}
+
+void MagicTuningView::setSliderActive(bool active) {
+    s_is_any_magic_slider_active = active;
 }
 
 MagicTuningView::MagicTuningView() {
@@ -212,17 +248,29 @@ bool MagicTuningView::renderHorizontalSlider(ImDrawList* dl, ImVec2 track_min, I
     float track_h = track_max.y - track_min.y;
     float track_y = track_min.y + track_h * 0.5f;
 
-    ImGui::SetCursorScreenPos(track_min);
-    ImGui::InvisibleButton(str_id, ImVec2(track_w, track_h));
+    // 触控热区扩展：加大高度与宽度，确保手指点击或滑动时 100% 捕获
+    const float pad_y = 12.0f;
+    const float pad_x = 14.0f;
+    ImVec2 hit_min(track_min.x - pad_x, track_min.y - pad_y);
+    ImVec2 hit_max(track_max.x + pad_x, track_max.y + pad_y);
+
+    s_magic_slider_hitboxes.push_back({hit_min.x, hit_min.y, hit_max.x, hit_max.y});
+
+    ImGui::SetCursorScreenPos(hit_min);
+    ImGui::InvisibleButton(str_id, ImVec2(hit_max.x - hit_min.x, hit_max.y - hit_min.y));
 
     bool is_hovered = ImGui::IsItemHovered();
     bool is_active = ImGui::IsItemActive();
+    if (is_active) {
+        s_is_any_magic_slider_active = true;
+    }
     bool changed = false;
 
-    if (is_active) {
+    if (is_active && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
         float mouse_x = ImGui::GetIO().MousePos.x;
         float norm = std::clamp((mouse_x - track_min.x) / track_w, 0.0f, 1.0f);
         float new_val = min_val + norm * (max_val - min_val);
+        new_val = std::round(new_val * 10.0f) * 0.1f;
         // 原点吸附机制 (在 0 附近自动吸附至绝对零点)
         if (std::abs(new_val) < 0.25f) new_val = 0.0f;
         if (std::abs(new_val - val) > 0.02f) {
@@ -233,6 +281,7 @@ bool MagicTuningView::renderHorizontalSlider(ImDrawList* dl, ImVec2 track_min, I
         float mouse_x = ImGui::GetIO().MousePos.x;
         float norm = std::clamp((mouse_x - track_min.x) / track_w, 0.0f, 1.0f);
         float new_val = min_val + norm * (max_val - min_val);
+        new_val = std::round(new_val * 10.0f) * 0.1f;
         if (std::abs(new_val) < 0.25f) new_val = 0.0f;
         val = new_val;
         changed = true;
@@ -431,6 +480,7 @@ float MagicTuningView::renderTuningGroupCard(ImDrawList* dl, size_t idx, float x
     if (renderHorizontalSlider(dl, ImVec2(track_x0, slider_row_y), ImVec2(track_x1, slider_row_y + track_h),
                                v, -10.0f, +10.0f, slider_id.c_str())) {
         params_[idx] = v;
+        LOG_MSEB("MSEB 滑块[%zu] '%s' 实时拖动 -> %.1f", idx, def.name_zh, v);
         syncToAudioEngine();
         saveConfig();
     }
@@ -439,6 +489,10 @@ float MagicTuningView::renderTuningGroupCard(ImDrawList* dl, size_t idx, float x
 }
 
 void MagicTuningView::render(float x, float y, float w, float h) {
+    s_magic_slider_hitboxes.clear();
+    s_magic_slider_render_frame_count = ImGui::GetFrameCount();
+    s_is_any_magic_slider_active = false;
+
     float margin_x = UIConfig::Layout::ContainerMarginX;
     float margin_y = UIConfig::Layout::ContainerMarginY;
     ImVec2 card_min(x + margin_x, y + margin_y);

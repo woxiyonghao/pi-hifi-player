@@ -7,6 +7,7 @@
 #include "themes/ThemeManager.hpp"
 #include "services/WebService.hpp"
 #include "views/EQConfigView.hpp"
+#include "views/MagicTuningView.hpp"
 #include <iostream>
 #include <cmath>
 #include <algorithm>
@@ -327,10 +328,11 @@ void Application::pollEvents() {
                 touch_accum_dy_ = 0.0f;
                 is_touch_scrolling_ = false;
 
-                // 判断是否落在特定滑动条控件区 (如 EQ 调音台各频段垂直推子、桌面版底部 Seek/Volume 胶囊条)
+                // 判断是否落在特定滑动条控件区 (如 EQ 调音台各频段垂直推子、MSEB 调音魔棒水平滑块、桌面版底部 Seek/Volume 胶囊条)
                 bool is_eq_slider = EQConfigView::isSliderTouch(x, y);
+                bool is_magic_slider = MagicTuningView::isSliderTouch(x, y);
                 bool is_bottom_bar_slider = (!Platform::isPhone() && y >= (touch_h - 75.0f));
-                if (is_eq_slider || is_bottom_bar_slider) {
+                if (is_eq_slider || is_magic_slider || is_bottom_bar_slider) {
                     touch_in_slider_ = true;
                     io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
                     io.AddMousePosEvent(x, y);
@@ -371,6 +373,8 @@ void Application::pollEvents() {
             resetIdle();
 
             if (active_fingers_.empty()) {
+                EQConfigView::setSliderActive(false);
+                MagicTuningView::setSliderActive(false);
                 // 所有手指均已离开屏幕
                 if (was_in_slider) {
                     // 滑块推子拖拽结束，释放按键
