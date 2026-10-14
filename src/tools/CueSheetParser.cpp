@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <cstring>
 #include <cmath>
+#include <unistd.h>
+#include <sys/stat.h>
 
 #if defined(__APPLE__)
 #include <CoreFoundation/CoreFoundation.h>
@@ -283,14 +285,25 @@ static std::string cleanAudioFilename(const std::string& raw) {
     return trimWhitespace(s);
 }
 
-std::string CueSheetParser::resolveAudioFile(const std::filesystem::path& cue_dir, const std::string& filename) {
+static bool isRegularOrReadableFile(const std::filesystem::path& p) {
+    std::error_code ec;
+    if (std::filesystem::is_regular_file(p, ec)) return true;
+    if (std::filesystem::exists(p, ec) && !std::filesystem::is_directory(p, ec)) return true;
+    if (access(p.string().c_str(), R_OK) == 0) {
+        struct stat st;
+        if (stat(p.string().c_str(), &st) == 0 && !S_ISDIR(st.st_mode)) return true;
+    }
+    return false;
+}
+
+std::string CueSheetParser::resolveAudioFile(const std::filesystem::path& cue_dir, const std::string& filename, const std::string& cue_stem) {
     std::error_code ec;
     std::string clean_name = cleanAudioFilename(filename);
 
     if (!clean_name.empty()) {
         // 1. 同级目录下完全匹配
         std::filesystem::path direct = cue_dir / clean_name;
-        if (std::filesystem::exists(direct, ec) && std::filesystem::is_regular_file(direct, ec)) {
+        if (isRegularOrReadableFile(direct)) {
             return direct.string();
         }
 
@@ -300,8 +313,7 @@ std::string CueSheetParser::resolveAudioFile(const std::filesystem::path& cue_di
 
         ec.clear();
         for (const auto& entry : std::filesystem::directory_iterator(cue_dir, ec)) {
-            std::error_code f_ec;
-            if (!entry.is_regular_file(f_ec)) continue;
+            if (!isRegularOrReadableFile(entry.path())) continue;
             std::string entry_name = entry.path().filename().string();
             std::string entry_lower = entry_name;
             std::transform(entry_lower.begin(), entry_lower.end(), entry_lower.begin(), ::tolower);
@@ -318,8 +330,7 @@ std::string CueSheetParser::resolveAudioFile(const std::filesystem::path& cue_di
 
         ec.clear();
         for (const auto& entry : std::filesystem::directory_iterator(cue_dir, ec)) {
-            std::error_code f_ec;
-            if (!entry.is_regular_file(f_ec)) continue;
+            if (!isRegularOrReadableFile(entry.path())) continue;
             std::string ext = entry.path().extension().string();
             if (AudioFormatUtils::isSupported(ext)) {
                 std::string stem_lower = entry.path().stem().string();
@@ -332,14 +343,13 @@ std::string CueSheetParser::resolveAudioFile(const std::filesystem::path& cue_di
     }
 
     // 4. 目录内同名 CUE 关联匹配 (如 CDImage.cue 关联同目录 CDImage.wav)
-    std::string cue_stem = cue_dir.filename().string();
-    std::string cue_stem_lower = cue_stem;
+    std::string cue_stem_target = cue_stem.empty() ? cue_dir.filename().string() : cue_stem;
+    std::string cue_stem_lower = cue_stem_target;
     std::transform(cue_stem_lower.begin(), cue_stem_lower.end(), cue_stem_lower.begin(), ::tolower);
 
     ec.clear();
     for (const auto& entry : std::filesystem::directory_iterator(cue_dir, ec)) {
-        std::error_code f_ec;
-        if (!entry.is_regular_file(f_ec)) continue;
+        if (!isRegularOrReadableFile(entry.path())) continue;
         std::string ext = entry.path().extension().string();
         if (AudioFormatUtils::isSupported(ext)) {
             std::string stem_lower = entry.path().stem().string();
@@ -354,8 +364,7 @@ std::string CueSheetParser::resolveAudioFile(const std::filesystem::path& cue_di
     std::vector<std::filesystem::path> supported_audio_files;
     ec.clear();
     for (const auto& entry : std::filesystem::directory_iterator(cue_dir, ec)) {
-        std::error_code f_ec;
-        if (!entry.is_regular_file(f_ec)) continue;
+        if (!isRegularOrReadableFile(entry.path())) continue;
         std::string ext = entry.path().extension().string();
         if (AudioFormatUtils::isSupported(ext)) {
             supported_audio_files.push_back(entry.path());
@@ -471,7 +480,7 @@ std::optional<CueSheet> CueSheetParser::parse(const std::filesystem::path& cue_p
             t.title = "Track " + std::to_string(t.track_number);
         }
         std::string ref = t.file_reference.empty() ? current_file : t.file_reference;
-        t.resolved_audio_path = resolveAudioFile(cue_dir, ref);
+        t.resolved_audio_path = resolveAudioFile(cue_dir, ref, cue_path.stem().string());
     }
 
     // 业内核心算法：依据 CUE 的 INDEX 精准切分 WAV 区间

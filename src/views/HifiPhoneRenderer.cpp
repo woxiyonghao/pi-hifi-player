@@ -159,13 +159,18 @@ void HifiPhoneRenderer::renderLibraryTab(float x, float y, float w, float h) {
         }
     }
 
-    // CUE 整轨去重：只在显示时过滤，不修改 cached_tracks_ 成员变量
+    // CUE 整轨去重：只在显示时过滤，不修改 cached_tracks_ 成员变量 (全小写归一化比对)
     std::vector<Track> display_tracks;
     {
         std::unordered_set<std::string> cue_audio_files;
+        auto toLowerPath = [](std::string_view s) {
+            std::string res(s);
+            for (char& c : res) if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
+            return res;
+        };
         for (const auto& t : cached_tracks_) {
             if (t.is_cue_track && !t.file_path.empty()) {
-                cue_audio_files.insert(t.file_path);
+                cue_audio_files.insert(toLowerPath(t.file_path));
             }
         }
         if (cue_audio_files.empty()) {
@@ -173,7 +178,7 @@ void HifiPhoneRenderer::renderLibraryTab(float x, float y, float w, float h) {
         } else {
             display_tracks.reserve(cached_tracks_.size());
             for (const auto& t : cached_tracks_) {
-                if (t.is_cue_track || cue_audio_files.count(t.file_path) == 0) {
+                if (t.is_cue_track || cue_audio_files.count(toLowerPath(t.file_path)) == 0) {
                     display_tracks.push_back(t);
                 }
             }

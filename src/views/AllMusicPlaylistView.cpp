@@ -45,16 +45,21 @@ void AllMusicPlaylistView::render(float x, float y, float w, float h, const std:
         }
     }
 
-    // 行业标准：如果已被 CUE 拆解为分轨，绝对不在全景树中展示整轨大文件
+    // 行业标准：如果已被 CUE 拆解为分轨，绝对不在全景树中展示整轨大文件 (全小写归一化比对)
     std::unordered_set<std::string> cue_audio_files;
+    auto toLowerPath = [](std::string_view s) {
+        std::string res(s);
+        for (char& c : res) if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
+        return res;
+    };
     for (const auto& t : tracks) {
         if (t.is_cue_track && !t.file_path.empty()) {
-            cue_audio_files.insert(t.file_path);
+            cue_audio_files.insert(toLowerPath(t.file_path));
         }
     }
     if (!cue_audio_files.empty()) {
         std::erase_if(tracks, [&](const Track& t) {
-            return !t.is_cue_track && cue_audio_files.count(t.file_path) > 0;
+            return !t.is_cue_track && cue_audio_files.count(toLowerPath(t.file_path)) > 0;
         });
     }
 

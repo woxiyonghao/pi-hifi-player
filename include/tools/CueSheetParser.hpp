@@ -44,5 +44,5 @@ public:
     static double parseTimestamp(const std::string& time_str);
 
     // 在 CUE 文件同级目录下解析音频物理文件绝对路径 (支持大小写自愈与同名格式匹配)
-    static std::string resolveAudioFile(const std::filesystem::path& cue_dir, const std::string& filename);
+    static std::string resolveAudioFile(const std::filesystem::path& cue_dir, const std::string& filename, const std::string& cue_stem = "");
 };

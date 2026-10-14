@@ -59,8 +59,9 @@ class MainActivity : AppCompatActivity() {
                 val selArgs = ArrayList<String>()
                 for (ext in supportedExts) {
                     if (selSb.isNotEmpty()) selSb.append(" OR ")
-                    selSb.append("${android.provider.MediaStore.Files.FileColumns.DATA} LIKE ?")
+                    selSb.append("${android.provider.MediaStore.Files.FileColumns.DATA} LIKE ? OR ${android.provider.MediaStore.Files.FileColumns.DATA} LIKE ?")
                     selArgs.add("%.$ext")
+                    selArgs.add("%.${ext.uppercase()}")
                 }
                 ctx.contentResolver.query(filesUri, projection, selSb.toString(), selArgs.toTypedArray(), null)?.use { cursor ->
                     val dataCol = cursor.getColumnIndex(android.provider.MediaStore.Files.FileColumns.DATA)
@@ -79,8 +80,8 @@ class MainActivity : AppCompatActivity() {
 
             // 3. Kotlin 框架级物理深度递归检索 (直接突破 MediaStore 尚未建立索引或格式未识别的限制)
             fun scanDir(dir: File, depth: Int) {
-                if (depth > 12 || !dir.exists() || !dir.canRead()) return
-                val files = dir.listFiles() ?: return
+                if (depth > 12 || !dir.exists()) return
+                val files = try { dir.listFiles() } catch (e: Exception) { null } ?: return
                 for (f in files) {
                     val name = f.name
                     if (name.startsWith(".") || name.equals("Android", ignoreCase = true) ||
