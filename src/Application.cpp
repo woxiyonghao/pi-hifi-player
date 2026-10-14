@@ -322,26 +322,14 @@ void Application::pollEvents() {
             touch_stopped_fling_ = was_flinging;
 
             if (active_fingers_.size() == 1) {
-                // 单指初次触屏：
-                // 核心关键：绝不立即下发 MouseButtonEvent(0, true)！
-                // 仅更新虚拟鼠标指针位置，避免触碰瞬间直接误激活底层按钮/歌曲行
                 touch_accum_dy_ = 0.0f;
                 is_touch_scrolling_ = false;
 
-                // 判断是否落在特定滑动条控件区 (如 EQ 调音台各频段垂直推子、MSEB 调音魔棒水平滑块、桌面版底部 Seek/Volume 胶囊条)
-                bool is_eq_slider = EQConfigView::isSliderTouch(x, y);
-                bool is_magic_slider = MagicTuningView::isSliderTouch(x, y);
-                bool is_bottom_bar_slider = (!Platform::isPhone() && y >= (touch_h - 75.0f));
-                if (is_eq_slider || is_magic_slider || is_bottom_bar_slider) {
-                    touch_in_slider_ = true;
-                    io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
-                    io.AddMousePosEvent(x, y);
-                    io.AddMouseButtonEvent(0, true);
-                } else {
-                    touch_in_slider_ = false;
-                    io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
-                    io.AddMousePosEvent(x, y);
-                }
+                // 立即下发触摸源与按键按下，激活所有滑块、推子拉拽与曲目列表拖拽
+                touch_in_slider_ = true;
+                io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
+                io.AddMousePosEvent(x, y);
+                io.AddMouseButtonEvent(0, true);
             } else {
                 // 多指触屏 (如双指滚动或多指手势)：进入多指平滑滚动
                 if (touch_in_slider_) {
@@ -363,9 +351,6 @@ void Application::pollEvents() {
 
             auto it = std::find_if(active_fingers_.begin(), active_fingers_.end(),
                                    [fid](const TouchFinger& f) { return f.id == fid; });
-            bool was_scrolling = is_touch_scrolling_;
-            bool was_in_slider = touch_in_slider_;
-
             if (it != active_fingers_.end()) {
                 active_fingers_.erase(it);
             }
@@ -375,28 +360,12 @@ void Application::pollEvents() {
             if (active_fingers_.empty()) {
                 EQConfigView::setSliderActive(false);
                 MagicTuningView::setSliderActive(false);
-                // 所有手指均已离开屏幕
-                if (was_in_slider) {
-                    // 滑块推子拖拽结束，释放按键
-                    io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
-                    io.AddMousePosEvent(x, y);
-                    io.AddMouseButtonEvent(0, false);
-                    touch_in_slider_ = false;
-                    is_touch_scrolling_ = false;
-                    touch_stopped_fling_ = false;
-                } else if (!was_scrolling && !touch_stopped_fling_) {
-                    // 核心关键：手指未发生有效位移且未在刹停列表，判定为用户明确的轻触点击 (Tap)！
-                    // 在抬手瞬间下发一次完整的模拟点击 (Down -> Up)，精准触发控件点击
-                    io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
-                    io.AddMousePosEvent(x, y);
-                    io.AddMouseButtonEvent(0, true);
-                    io.AddMouseButtonEvent(0, false);
-                } else {
-                    // 刚才处于手势拖拽滚动中或轻触刹停列表，抬手直接结束手势，绝不派发任何鼠标按键事件！
-                    // 彻底根除拖拽列表时抬指误点进歌曲或误触按钮的顽疾
-                    is_touch_scrolling_ = false;
-                    touch_stopped_fling_ = false;
-                }
+                io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
+                io.AddMousePosEvent(x, y);
+                io.AddMouseButtonEvent(0, false);
+                touch_in_slider_ = false;
+                is_touch_scrolling_ = false;
+                touch_stopped_fling_ = false;
             } else {
                 // 仍有其它手指留在屏幕上 (例如两指抬起了一指)
                 for (auto& f : active_fingers_) {

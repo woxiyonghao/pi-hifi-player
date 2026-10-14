@@ -245,8 +245,13 @@ void AllMusicPlaylistView::render(float x, float y, float w, float h, const std:
                 cur_dl->AddLine(ImVec2(left_x + 9.0f, cy + b3 * 0.5f), ImVec2(left_x + 9.0f, cy - b3 * 0.5f), accent, 2.0f);
                 left_x += 18.0f;
             } else if (is_current) {
-                // 暂停状态下显示发光主题角标
-                cur_dl->AddText(ImVec2(left_x, text_y), accent, "▶");
+                // 暂停状态下显示发光主题角标 (纯矢量圆润播放小三角，杜绝系统字库缺失显示为问号)
+                float cy = row_pos.y + row_h * 0.5f;
+                float tri_sz = 4.5f;
+                ImVec2 p1(left_x + 1.0f, cy - tri_sz);
+                ImVec2 p2(left_x + 1.0f, cy + tri_sz);
+                ImVec2 p3(left_x + 1.0f + tri_sz * 1.732f, cy);
+                cur_dl->AddTriangleFilled(p1, p2, p3, accent);
                 left_x += 16.0f;
             } else {
                 char num_buf[32];
@@ -280,7 +285,7 @@ void AllMusicPlaylistView::render(float x, float y, float w, float h, const std:
             float btn_x = right_x - btn_w;
             float btn_y = row_pos.y + 5.0f;
             bool btn_hov = ImGui::IsMouseHoveringRect(ImVec2(btn_x, btn_y), ImVec2(btn_x + btn_w, btn_y + btn_h));
-            bool btn_click = btn_hov && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+            bool btn_click = btn_hov && ImGui::IsMouseReleased(ImGuiMouseButton_Left);
 
             cur_dl->AddRectFilled(ImVec2(btn_x, btn_y), ImVec2(btn_x + btn_w, btn_y + btn_h),
                                   btn_hov ? IM_COL32(r, g, b, 90) : IM_COL32(40, 48, 66, 170), 4.0f);

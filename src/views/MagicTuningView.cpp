@@ -570,6 +570,16 @@ void MagicTuningView::render(float x, float y, float w, float h) {
 
     if (ImGui::BeginChild("##MagicTuningScroll", ImVec2(scroll_w, scroll_h), false,
                           ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar)) {
+        // 触控与鼠标拖拽平滑滚动：在滑块外部上下滑动时自然滚动整个卡片列表
+        if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem) &&
+            !s_is_any_magic_slider_active &&
+            ImGui::IsMouseDragging(ImGuiMouseButton_Left, 4.0f)) {
+            float drag_dy = std::clamp(ImGui::GetIO().MouseDelta.y, -40.0f, 40.0f);
+            if (drag_dy != 0.0f) {
+                ImGui::SetScrollY(ImGui::GetScrollY() - drag_dy);
+            }
+        }
+
         ImDrawList* cdl = ImGui::GetWindowDrawList();
         float cur_card_y = ImGui::GetCursorScreenPos().y;
 

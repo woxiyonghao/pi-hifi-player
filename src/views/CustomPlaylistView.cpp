@@ -202,7 +202,12 @@ void CustomPlaylistView::render(uint64_t pid, std::vector<Playlist>& playlists, 
                     cur_dl->AddLine(ImVec2(left_x + 9.0f, cy + b3 * 0.5f), ImVec2(left_x + 9.0f, cy - b3 * 0.5f), accent, 2.0f);
                     left_x += 18.0f;
                 } else if (is_current) {
-                    cur_dl->AddText(ImVec2(left_x, text_y), accent, "▶");
+                    float cy = row_pos.y + row_h * 0.5f;
+                    float tri_sz = 4.5f;
+                    ImVec2 p1(left_x + 1.0f, cy - tri_sz);
+                    ImVec2 p2(left_x + 1.0f, cy + tri_sz);
+                    ImVec2 p3(left_x + 1.0f + tri_sz * 1.732f, cy);
+                    cur_dl->AddTriangleFilled(p1, p2, p3, accent);
                     left_x += 16.0f;
                 } else {
                     char num_buf[16];
@@ -237,7 +242,7 @@ void CustomPlaylistView::render(uint64_t pid, std::vector<Playlist>& playlists, 
                 float del_x = right_x - del_w;
                 float del_y = row_pos.y + 6.0f;
                 bool del_hov = ImGui::IsMouseHoveringRect(ImVec2(del_x, del_y), ImVec2(del_x + del_w, del_y + del_h));
-                bool del_click = del_hov && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+                bool del_click = del_hov && ImGui::IsMouseReleased(ImGuiMouseButton_Left);
 
                 cur_dl->AddRectFilled(ImVec2(del_x, del_y), ImVec2(del_x + del_w, del_y + del_h),
                                       del_hov ? IM_COL32(200, 45, 55, 150) : IM_COL32(40, 48, 66, 170), 4.0f);
@@ -255,7 +260,7 @@ void CustomPlaylistView::render(uint64_t pid, std::vector<Playlist>& playlists, 
                 float play_x = right_x - play_w;
                 float play_y = row_pos.y + 6.0f;
                 bool play_hov = ImGui::IsMouseHoveringRect(ImVec2(play_x, play_y), ImVec2(play_x + play_w, play_y + play_h));
-                bool play_click = play_hov && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+                bool play_click = play_hov && ImGui::IsMouseReleased(ImGuiMouseButton_Left);
 
                 cur_dl->AddRectFilled(ImVec2(play_x, play_y), ImVec2(play_x + play_w, play_y + play_h),
                                       play_hov ? IM_COL32(r, g, b, 90) : IM_COL32(40, 48, 66, 170), 4.0f);
