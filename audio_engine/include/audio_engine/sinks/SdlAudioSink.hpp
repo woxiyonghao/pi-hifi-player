@@ -20,6 +20,7 @@ public:
     void pause() override;
     void stop() override;
     void close() override;
+    void flush() override;
 
     double getHardwareLatencySec() const override;
     bool isOpen() const override;

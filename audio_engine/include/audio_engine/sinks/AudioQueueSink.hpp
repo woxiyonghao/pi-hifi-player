@@ -20,6 +20,7 @@ public:
     void pause() override;
     void stop() override;
     void close() override;
+    void flush() override;
 
     double getHardwareLatencySec() const override;
     bool isOpen() const override;
@@ -27,6 +28,7 @@ public:
 
     void setBufferSize(uint32_t samples) override { buffer_size_samples_ = samples; }
     uint32_t getBufferSize() const override { return buffer_size_samples_; }
+    std::string getDeviceName() const override { return "Apple AudioQueue (CoreAudio)"; }
 
 private:
     static void outputCallbackThunk(void* inUserData, AudioQueueRef inAQ, AudioQueueBufferRef inBuffer);

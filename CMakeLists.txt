@@ -242,8 +242,26 @@ if(BUILD_TESTING)
         ${CMAKE_CURRENT_SOURCE_DIR}/third_party/sqlite3/include
     )
     target_link_libraries(MusicScanRegressionTest PRIVATE SQLite3::SQLite3)
-    if(APPLE)
-        target_link_libraries(MusicScanRegressionTest PRIVATE "-framework CoreFoundation")
-    endif()
     add_test(NAME music_scan_regression COMMAND MusicScanRegressionTest)
+
+    add_executable(AuditAudioLibrary EXCLUDE_FROM_ALL
+        tests/audit_audio_library.cpp
+    )
+    target_include_directories(AuditAudioLibrary PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/audio_engine/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/audio_engine/third_party
+    )
+    target_link_libraries(AuditAudioLibrary PRIVATE
+        audio_engine
+        SQLite3::SQLite3
+    )
+    if(APPLE)
+        target_link_libraries(AuditAudioLibrary PRIVATE
+            "-framework CoreAudio"
+            "-framework AudioToolbox"
+            "-framework CoreFoundation"
+        )
+    endif()
+    add_test(NAME audit_audio_library COMMAND AuditAudioLibrary)
 endif()
+

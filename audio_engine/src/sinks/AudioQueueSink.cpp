@@ -146,6 +146,17 @@ void AudioQueueSink::close() {
     }
 }
 
+void AudioQueueSink::flush() {
+    if (audio_queue_) {
+        // 重置 AudioQueue，清空硬件底层所有残留排队缓冲帧
+        AudioQueueReset(audio_queue_);
+        is_stopped_ = true;
+        if (is_running_.load(std::memory_order_acquire)) {
+            start();
+        }
+    }
+}
+
 double AudioQueueSink::getHardwareLatencySec() const {
     return buffer_latency_sec_;
 }

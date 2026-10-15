@@ -37,6 +37,7 @@ private:
     uint64_t data_offset_ = 0;           // data payload 起始文件偏移
     uint64_t data_size_ = 0;             // data payload 字节总大小
     uint64_t current_sample_idx_ = 0;    // 当前已读取的 DSD 样点序号
+    bool is_dff_ = false;                // 是否为 DSDIFF (DFF) 格式
 
     // 声道交错读取缓冲区 (双声道各分配 block_size_ 大小)
     std::vector<uint8_t> block_buffer_left_;

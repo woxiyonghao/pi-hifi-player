@@ -11,17 +11,19 @@
 
 #if defined(__ANDROID__)
 #include "audio_engine/sinks/AAudioSink.hpp"
-#elif !defined(TARGET_OS_IPHONE) || !TARGET_OS_IPHONE
-#include "audio_engine/sinks/SdlAudioSink.hpp"
-#include "audio_engine/sinks/AlsaAudioSink.hpp"
-#else
+#elif defined(__APPLE__)
 #include "audio_engine/sinks/AudioQueueSink.hpp"
+#if TARGET_OS_IPHONE
 #include "audio_engine/sinks/RemoteIOSink.hpp"
 
 // 由 iPad 宿主实现。返回 true 表示该设置已作为 AVAudioSession 的
 // 硬件 I/O 缓冲偏好处理，不能再改写已经分配好的 AudioQueue 缓冲区。
 extern "C" bool HifiPadSetPreferredIOBufferFrames(uint32_t frames) __attribute__((weak_import));
 extern "C" uint32_t HifiPadGetBluetoothOutputSampleRate() __attribute__((weak_import));
+#endif
+#else
+#include "audio_engine/sinks/SdlAudioSink.hpp"
+#include "audio_engine/sinks/AlsaAudioSink.hpp"
 #endif
 
 #include <iostream>
@@ -78,15 +80,16 @@ AudioEngine::AudioEngine() : ring_buffer_(1048576) {
 #if defined(__ANDROID__)
     // Android 原生高保真 AAudio 独占/低延迟推流驱动
     sink_ = std::make_unique<AAudioSink>();
-#elif !defined(TARGET_OS_IPHONE) || !TARGET_OS_IPHONE
-    // 默认输出驱动：使用跨平台低延迟 SdlAudioSink
-    sink_ = std::make_unique<SdlAudioSink>();
-#if defined(__APPLE__) && TARGET_OS_OSX
+#elif defined(__APPLE__)
+    // Apple 平台 (macOS / iOS / iPadOS) 统一使用原生高保真 AudioQueueSink
+    // 原生支持 AirPods Pro / 蓝牙无线耳机热插拔、立体声/空间音频、自动采样率自适应
+    sink_ = std::make_unique<AudioQueueSink>();
+#if TARGET_OS_OSX
     last_active_device_id_ = getDefaultOutputDeviceID();
 #endif
 #else
-    // iOS / iPadOS 原生低延迟推流驱动
-    sink_ = std::make_unique<AudioQueueSink>();
+    // Linux / 树莓派平台：使用低延迟 SdlAudioSink
+    sink_ = std::make_unique<SdlAudioSink>();
 #endif
     registerDeviceListener();
 }
@@ -441,6 +444,9 @@ void AudioEngine::seek(double target_seconds) {
 
     if (decoder_->seek(abs_target)) {
         ring_buffer_.reset();
+        if (sink_) {
+            sink_->flush();
+        }
         constexpr size_t SEEK_PREBUFFER = 32768;
         uint32_t rate = (current_spec_.sample_rate > 0) ? current_spec_.sample_rate : 44100;
         uint64_t new_read_frames = static_cast<uint64_t>(clamped * rate);
@@ -551,6 +557,22 @@ AudioEngine::DeviceTransportType AudioEngine::getCurrentDeviceTransport() const 
             return DeviceTransportType::HDMI;
         }
     }
+
+    // 关键特征名称保底：如果 transport 汇报为 AutoAggregate 或 0，但设备名称带有蓝牙特征 (AirPods, Bluetooth, Beats 等)，判定为 Bluetooth
+    std::string name = getActiveHardwareDeviceName();
+    std::string lower = name;
+    std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) { return std::tolower(c); });
+    if (lower.find("airpod") != std::string::npos ||
+        lower.find("bluetooth") != std::string::npos ||
+        lower.find("beats") != std::string::npos ||
+        lower.find("wireless") != std::string::npos ||
+        lower.find("buds") != std::string::npos ||
+        lower.find("headphone") != std::string::npos ||
+        name.find("蓝牙") != std::string::npos ||
+        name.find("耳机") != std::string::npos) {
+        return DeviceTransportType::Bluetooth;
+    }
+
     return DeviceTransportType::Other;
 #elif defined(__APPLE__) && TARGET_OS_IPHONE
     return DeviceTransportType::BuiltIn;
@@ -723,9 +745,10 @@ void AudioEngine::applyHogMode(bool enable) {
         return;
     }
 
-    // 蓝牙或 HDMI 绝不可申请物理 Hog Mode (否则会剔除 bluetoothd 导致蓝牙耳机掉线静音)
+    // 关键防护：绝不可对 HDMI、DisplayPort、蓝牙或内置扬声器申请 Hog Mode！
+    // 只有在检测到外接物理 USB DAC 且用户主动开启独占模式时，才允许申请硬件独占
     DeviceTransportType transport = getCurrentDeviceTransport();
-    if (transport == DeviceTransportType::Bluetooth || transport == DeviceTransportType::HDMI) {
+    if (transport != DeviceTransportType::USB) {
         releaseHogMode();
         return;
     }
@@ -791,8 +814,8 @@ void AudioEngine::applyHardwareSampleRate(uint32_t sample_rate) {
 #if defined(__APPLE__) && TARGET_OS_OSX
     if (sample_rate == 0) return;
 
-    if (isCurrentDeviceBluetooth()) {
-        std::cout << "[AudioEngine] 当前为蓝牙无线设备，跳过硬件时钟切换，保持原生蓝牙协议最佳采样率" << std::endl;
+    if (isCurrentDeviceBluetooth() || getCurrentDeviceTransport() != DeviceTransportType::USB) {
+        std::cout << "[AudioEngine] 当前为无线/内置/HDMI设备，保持系统原生最佳采样率，由系统级高品质音频引擎自动对齐" << std::endl;
         return;
     }
 
@@ -1165,6 +1188,7 @@ void AudioEngine::onSinkDataNeeded(float* output, size_t frame_count) {
     if (is_eof_.load(std::memory_order_acquire) && ring_buffer_.available_read() == 0) {
         if (!eof_reported_.exchange(true, std::memory_order_acq_rel)) {
             std::cout << "[AudioEngine] onSinkDataNeeded: EOF and buffer drained, triggering eof_callback" << std::endl;
+            is_playing_.store(false, std::memory_order_release);
             if (eof_callback_) {
                 eof_callback_();
             }

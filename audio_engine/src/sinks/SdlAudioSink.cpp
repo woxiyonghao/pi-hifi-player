@@ -26,6 +26,7 @@ bool SdlAudioSink::open(const AudioFormatSpec& requested_spec, AudioCallback cal
     std::memset(&desired, 0, sizeof(desired));
     desired.freq = static_cast<int>(requested_spec.sample_rate);
     desired.format = AUDIO_F32SYS; // 原生 32-bit Float
+    desired.channels = static_cast<Uint8>((requested_spec.channels > 0) ? requested_spec.channels : 2);
 #if defined(__linux__) && !defined(HIFI_PLATFORM_MAC)
     // 树莓派 Linux ALSA 平台默认使用 2048 帧 (~46ms)，彻底杜绝 USB 声卡周期欠载 (Underrun) 导致的"滴滴"杂音
     desired.samples = (buffer_size_samples_ > 0) ? static_cast<Uint16>(buffer_size_samples_) : 2048;
@@ -134,6 +135,12 @@ void SdlAudioSink::close() {
         device_id_ = 0;
     }
     is_running_.store(false, std::memory_order_release);
+}
+
+void SdlAudioSink::flush() {
+    if (device_id_ > 0) {
+        SDL_ClearQueuedAudio(device_id_);
+    }
 }
 
 double SdlAudioSink::getHardwareLatencySec() const {

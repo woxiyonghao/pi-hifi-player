@@ -51,6 +51,11 @@ public:
     virtual void close() = 0;
 
     /**
+     * @brief 清空硬件队列中的已排队缓冲帧 (用于精准 Seek)
+     */
+    virtual void flush() {}
+
+    /**
      * @brief 获取声卡硬件缓冲区当前的物理延迟 (秒)
      * 用于驱动高精度、晶振级的毫秒播放时钟
      */

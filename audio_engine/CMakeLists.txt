@@ -28,7 +28,10 @@ else()
 endif()
 
 if(APPLE)
-    list(APPEND AUDIO_ENGINE_SOURCES src/decoders/AppleAudioDecoder.cpp)
+    list(APPEND AUDIO_ENGINE_SOURCES
+        src/decoders/AppleAudioDecoder.cpp
+        src/sinks/AudioQueueSink.cpp
+    )
 endif()
 
 # 生成发烧音频引擎静态库

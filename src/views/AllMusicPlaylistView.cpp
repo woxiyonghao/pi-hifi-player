@@ -198,12 +198,27 @@ void AllMusicPlaylistView::render(float x, float y, float w, float h, const std:
         // 通用曲目行渲染器
         auto renderTrackRow = [&](const Track& track, size_t row_idx, const std::vector<Track>& queue_context,
                                   size_t index_in_queue, float indent) {
-            bool is_current = current_track.has_value() && (
-                (track.id != 0 && current_track->id == track.id) ||
-                ((current_track->is_cue_track || track.is_cue_track) ?
-                    (current_track->file_path == track.file_path && current_track->title == track.title && current_track->start_time_sec == track.start_time_sec) :
-                    (current_track->file_path == track.file_path))
-            );
+            // 物理级发烧比对：当且仅当底层音频路径与分轨特征完全吻合时，才判定为当前曲目 (彻底消除跨格式/多曲目同时高亮)
+            auto isSameTrack = [](const Track& a, const Track& b) -> bool {
+                if (a.file_path.empty() || b.file_path.empty()) return false;
+                if (a.file_path.size() != b.file_path.size()) return false;
+                for (size_t i = 0; i < a.file_path.size(); ++i) {
+                    char c1 = a.file_path[i];
+                    char c2 = b.file_path[i];
+                    if (c1 >= 'A' && c1 <= 'Z') c1 = static_cast<char>(c1 - 'A' + 'a');
+                    if (c2 >= 'A' && c2 <= 'Z') c2 = static_cast<char>(c2 - 'A' + 'a');
+                    if (c1 != c2) return false;
+                }
+                if (a.is_cue_track || b.is_cue_track) {
+                    if (a.track_number != 0 && b.track_number != 0 && a.track_number != b.track_number) {
+                        return false;
+                    }
+                    return std::abs(a.start_time_sec - b.start_time_sec) < 0.08;
+                }
+                return true;
+            };
+
+            bool is_current = current_track.has_value() && isSameTrack(*current_track, track);
             bool is_playing = is_current && player.isPlaying();
 
             ImGui::PushID(static_cast<int>(track.id * 1000 + row_idx));
@@ -262,11 +277,23 @@ void AllMusicPlaylistView::render(float x, float y, float w, float h, const std:
                 left_x += 24.0f;
             }
 
-            // 曲目标题
-            ImU32 title_color = (is_current || hovered) ? UIConfig::Color::TextActive : IM_COL32(215, 225, 238, 230);
-            cur_dl->AddText(ImVec2(left_x, text_y), title_color, track.title.c_str());
+            // 曲目标题：确保哪怕数据库或扫描时 title 偶发为空，也绝不显示空白
+            std::string display_title = track.title;
+            if (display_title.empty()) {
+                if (!track.file_path.empty()) {
+                    display_title = std::filesystem::path(track.file_path).stem().string();
+                }
+                if (display_title.empty()) {
+                    display_title = "音轨 " + std::to_string(row_idx + 1);
+                }
+            }
 
-            float title_w = ImGui::CalcTextSize(track.title.c_str()).x;
+            ImU32 title_color = (is_current || hovered) ? UIConfig::Color::TextActive : IM_COL32(215, 225, 238, 230);
+            if (Fonts::Regular) ImGui::PushFont(Fonts::Regular);
+            cur_dl->AddText(ImVec2(left_x, text_y), title_color, display_title.c_str());
+            float title_w = ImGui::CalcTextSize(display_title.c_str()).x;
+            if (Fonts::Regular) ImGui::PopFont();
+
             left_x += title_w + 10.0f;
 
             // 艺术家 (Small 字号)
