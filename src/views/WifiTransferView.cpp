@@ -8,6 +8,7 @@
 #include "public/Platform.hpp"
 #include <cmath>
 #include <cstdio>
+#include <algorithm>
 
 namespace {
 
